@@ -7,6 +7,7 @@ openai_api_key: str = ""
 verbose: bool = False
 raw_responses: bool = False
 esbmc_params: list[str] = ["--z3", "--unwind", "5"]
+chat_temperature: float = 1.0
 
 
 def load_args(args) -> None:
@@ -22,8 +23,10 @@ def load_args(args) -> None:
 
 
 def load_envs() -> None:
-    global openai_api_key
-
     load_dotenv()
 
+    global openai_api_key
     openai_api_key = str(os.getenv("OPENAI_API_KEY"))
+
+    global chat_temperature
+    chat_temperature = float(str(os.getenv("CHAT_TEMPERATURE")))

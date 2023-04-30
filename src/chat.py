@@ -29,16 +29,20 @@ def num_tokens_from_messages(messages, model="gpt-3.5-turbo"):
         encoding = encoding_for_model(model)
     except KeyError:
         encoding = get_encoding("cl100k_base")
-    if model.startswith("gpt-3.5-turbo"):  # note: future models may deviate from this
+    # note: future models may deviate from this
+    if model.startswith("gpt-3.5-turbo"):
         num_tokens = 0
         for message in messages:
             # every message follows <im_start>{role/name}\n{content}<im_end>\n
             num_tokens += 4
             for key, value in message.items():
                 num_tokens += len(encoding.encode(value))
-                if key == "name":  # if there's a name, the role is omitted
-                    num_tokens += -1  # role is always required and always 1 token
-        num_tokens += 2  # every reply is primed with <im_start>assistant
+                # if there's a name, the role is omitted
+                if key == "name":
+                    # role is always required and always 1 token
+                    num_tokens += -1
+        # every reply is primed with <im_start>assistant
+        num_tokens += 2
         return num_tokens
     else:
         # See https://github.com/openai/openai-python/blob/main/chatml.md for
@@ -53,16 +57,19 @@ class ChatInterface(object):
     messages: list = []
     model_name: str = "gpt-3.5-turbo"
     max_tokens = MAX_TOKENS_GPT3TURBO
+    temperature = 1.0
 
     def __init__(
         self,
         system_messages: list = SYSTEM_MSG_DEFAULT,
         model: str = "gpt-3.5-turbo",
+        temperature: float = 1.0,
     ) -> None:
         super().__init__()
         self.system_messages = system_messages
         self.messages = self.system_messages
         self.model_name = model
+        self.temperature = temperature
 
     def push_to_message_stack(self, role: str, message: str) -> None:
         self.messages.append({"role": role, "content": message})
@@ -79,6 +86,7 @@ class ChatInterface(object):
         completion = openai.ChatCompletion.create(
             model=self.model_name,
             messages=self.messages,
+            temperature=self.temperature,
         )
 
         response_role = completion.choices[0].message.role
