@@ -2,7 +2,7 @@
 
 AI Augmented ESBMC processing. Passes the output from ESBMC to an AI model that allows the user to use
 natural language to understand the output. As the output from ESBMC can be quite technical in nature.
-The AI can also be asked other questions, such as suggestions on how to fix the problem outputed by ESBMC,
+The AI can also be asked other questions, such as suggestions on how to fix the problem outputted by ESBMC,
 and to offer further explanations.
 
 This is an area of research. From the ESBMC GitHub:
