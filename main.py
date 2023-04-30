@@ -12,10 +12,21 @@ from src.loading_widget import LoadingWidget
 import src.config as config
 from src.chat import ChatInterface, SYSTEM_MSG_DEFAULT
 
+HELP_MESSAGE: str = """Tool that passes ESBMC output into ChatGPT and allows for natural language
+explanations. Type /help in order to view available commands."""
+
 
 def printv(m) -> None:
     if config.verbose:
         print(m)
+
+
+def print_help() -> None:
+    print()
+    print("Commands:")
+    print("/help: Print this help message.")
+    print("/exit: Exit the program.")
+    print()
 
 
 def check_health() -> None:
@@ -74,7 +85,7 @@ def print_assistant_response(chat: ChatInterface, response) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="ESBMC-ChatGPT",
-        description="Tool that passes ESBMC output into ChatGPT and allows for natural language explanations.",
+        description=HELP_MESSAGE,
         epilog="Made by Yiannis Charalambous",
     )
 
@@ -170,6 +181,9 @@ def main() -> None:
         if user_message == "/exit":
             print("exiting...")
             exit(0)
+        elif user_message == "/help":
+            print_help()
+            continue
         elif user_message == "":
             continue
         else:
