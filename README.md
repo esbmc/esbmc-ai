@@ -9,6 +9,8 @@ This is an area of research. From the ESBMC GitHub:
 
 > The efficient SMT-based context-bounded model checker (ESBMC)
 
+[demo.webm](https://user-images.githubusercontent.com/9535618/235352993-b54c47ef-a1c6-422c-aa5b-07edc2988521.webm)
+
 ## Initial Setup
 
 1. ESBMC-AI does not come with the original ESBMC software. In order to use ESBMC-AI you must provide ESBMC. Download [ESBMC](http://esbmc.org/) executable or build from [source](https://github.com/esbmc/esbmc).
