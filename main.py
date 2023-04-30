@@ -12,19 +12,19 @@ from src.loading_widget import LoadingWidget
 import src.config as config
 from src.chat import ChatInterface, SYSTEM_MSG_DEFAULT
 
-EXIT_CMD: str = "/exit"
-
-
-def check_health() -> None:
-    if not os.path.exists("./esbmc"):
-        print("Error: ESBMC could not be found...")
-        print("Place ESBMC in the folder current working directory.")
-        exit(3)
-
 
 def printv(m) -> None:
     if config.verbose:
         print(m)
+
+
+def check_health() -> None:
+    if os.path.exists("./esbmc"):
+        printv("ESBMC has been located")
+    else:
+        print("Error: ESBMC could not be found...")
+        print("Place ESBMC in the folder current working directory.")
+        exit(3)
 
 
 def get_src(path: str) -> str:
@@ -59,7 +59,7 @@ def print_assistant_response(chat: ChatInterface, response) -> None:
         max_tokens: int = chat.max_tokens
         finish_reason: str = response.choices[0].finish_reason
         print(
-            "\nstats:",
+            "stats:",
             f"total tokens: {total_tokens},",
             f"max tokens: {max_tokens}",
             f"finish reason: {finish_reason}\n",
@@ -104,6 +104,9 @@ def main() -> None:
 
     config.load_envs()
     config.load_args(args)
+
+    print("ESBMC-AI")
+    print()
 
     check_health()
 
@@ -155,7 +158,7 @@ def main() -> None:
     # Show the initial output.
     anim.start("Model is parsing ESBMC output... Please Wait")
     response = chat.send_message(
-        "Walk me through the source code, while also explaining the output of ESBMC at the relevant parts. Do not start the reply with an aknowledgement message such as 'Certainly'."
+        "Walk me through the source code, while also explaining the output of ESBMC at the relevant parts. You shall not start the reply with an acknowledgement message such as 'Certainly'."
     )
     anim.stop()
 
@@ -163,11 +166,13 @@ def main() -> None:
 
     while True:
         user_message = input(">: ")
-        if user_message == EXIT_CMD:
+        if user_message == "/exit":
             print("exiting...")
             exit(0)
         elif user_message == "":
             continue
+        else:
+            print()
 
         anim.start("Generating response... Please Wait")
         response = chat.send_message(user_message)
