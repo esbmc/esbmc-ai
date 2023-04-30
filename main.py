@@ -164,7 +164,11 @@ def main() -> None:
         ]
     )
 
-    chat = ChatInterface(system_messages=system_messages)
+    chat = ChatInterface(
+        system_messages=system_messages,
+        model=config.ai_model,
+        temperature=config.chat_temperature,
+    )
     printv(f"Using AI Model: {chat.model_name}\n")
 
     # Show the initial output.

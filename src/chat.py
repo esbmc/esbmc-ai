@@ -30,7 +30,7 @@ def num_tokens_from_messages(messages, model="gpt-3.5-turbo"):
     except KeyError:
         encoding = get_encoding("cl100k_base")
     # note: future models may deviate from this
-    if model.startswith("gpt-3.5-turbo"):
+    if model.startswith("gpt-3.5-turbo") or model.startswith("gpt-4"):
         num_tokens = 0
         for message in messages:
             # every message follows <im_start>{role/name}\n{content}<im_end>\n
