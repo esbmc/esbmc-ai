@@ -53,11 +53,12 @@ def num_tokens_from_messages(messages, model="gpt-3.5-turbo"):
 
 
 class ChatInterface(object):
-    system_messages: list = []
-    messages: list = []
-    model_name: str = "gpt-3.5-turbo"
     max_tokens = MAX_TOKENS_GPT3TURBO
-    temperature = 1.0
+
+    system_messages: list
+    messages: list
+    model_name: str
+    temperature: float
 
     def __init__(
         self,

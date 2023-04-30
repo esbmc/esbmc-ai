@@ -31,11 +31,10 @@ def print_help() -> None:
 
 def check_health() -> None:
     printv("Performing health check...")
-    if os.path.exists("./esbmc"):
+    if os.path.exists(config.esbmc_path):
         printv("ESBMC has been located")
     else:
-        print("Error: ESBMC could not be found...")
-        print("Place ESBMC in the folder current working directory.")
+        print(f"Error: ESBMC could not be found in {config.esbmc_path}")
         exit(3)
 
 
@@ -47,7 +46,7 @@ def get_src(path: str) -> str:
 
 def esbmc(path: str, esbmc_params: list = config.esbmc_params):
     # Build parameters
-    esbmc_cmd = ["./esbmc"]
+    esbmc_cmd = [config.esbmc_path]
     esbmc_cmd.extend(esbmc_params)
     esbmc_cmd.append(path)
 
@@ -110,6 +109,13 @@ def main() -> None:
         action="store_true",
         default=False,
         help="Responses from AI model will be shown raw.",
+    )
+
+    parser.add_argument(
+        "-m",
+        "--ai-model",
+        default="",
+        help="Which AI model to use.",
     )
 
     args = parser.parse_args()
