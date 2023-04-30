@@ -2,6 +2,8 @@
 
 # Author: Yiannis Charalambous 2023
 
+import os
+
 import argparse
 import openai
 from subprocess import Popen, PIPE
@@ -11,6 +13,13 @@ import src.config as config
 from src.chat import ChatInterface, SYSTEM_MSG_DEFAULT
 
 EXIT_CMD: str = "/exit"
+
+
+def check_health() -> None:
+    if not os.path.exists("./esbmc"):
+        print("Error: ESBMC could not be found...")
+        print("Place ESBMC in the folder current working directory.")
+        exit(3)
 
 
 def printv(m) -> None:
@@ -95,6 +104,8 @@ def main() -> None:
 
     config.load_envs()
     config.load_args(args)
+
+    check_health()
 
     anim: LoadingWidget = LoadingWidget()
 
