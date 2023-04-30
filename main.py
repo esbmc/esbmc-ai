@@ -19,6 +19,7 @@ def printv(m) -> None:
 
 
 def check_health() -> None:
+    printv("Performing health check...")
     if os.path.exists("./esbmc"):
         printv("ESBMC has been located")
     else:
@@ -153,7 +154,7 @@ def main() -> None:
     )
 
     chat = ChatInterface(system_messages=system_messages)
-    printv(f"Using AI Model: {chat.model_name}")
+    printv(f"Using AI Model: {chat.model_name}\n")
 
     # Show the initial output.
     anim.start("Model is parsing ESBMC output... Please Wait")
