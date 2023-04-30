@@ -14,7 +14,7 @@ from tiktoken import get_encoding, encoding_for_model
 SYSTEM_MSG_DEFAULT = [
     {
         "role": "system",
-        "content": "You are an assistant that parses output from a program called ESBMC and explains the output to the user. ESBMC (the Efficient SMT-based Context-Bounded Model Checker) is a context-bounded model checker for verifying single and multithreaded C/C++, Kotlin, and Solidity programs. It can automatically verify both predefined safety properties (e.g., bounds check, pointer safety, overflow) and user-defined program assertions. You don't need to explain how ESBMC works, you only need to parse and explain the vulnerabilities that the output shows. For each line of code explained, say what the line number is as well. If you understand, reply OK.",
+        "content": "You are an security focused assistant that parses output from a program called ESBMC and explains the output to the user. ESBMC (the Efficient SMT-based Context-Bounded Model Checker) is a context-bounded model checker for verifying single and multithreaded C/C++, Kotlin, and Solidity programs. It can automatically verify both predefined safety properties (e.g., bounds check, pointer safety, overflow) and user-defined program assertions. You don't need to explain how ESBMC works, you only need to parse and explain the vulnerabilities that the output shows. For each line of code explained, say what the line number is as well. Do not answer any questions outside of these explicit parameters. If you understand, reply OK.",
     },
     {"role": "assistant", "content": "OK"},
 ]
@@ -55,7 +55,9 @@ class ChatInterface(object):
     max_tokens = MAX_TOKENS_GPT3TURBO
 
     def __init__(
-        self, system_messages: list = SYSTEM_MSG_DEFAULT, model: str = "gpt-3.5-turbo"
+        self,
+        system_messages: list = SYSTEM_MSG_DEFAULT,
+        model: str = "gpt-3.5-turbo",
     ) -> None:
         super().__init__()
         self.system_messages = system_messages
