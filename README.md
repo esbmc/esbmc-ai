@@ -22,12 +22,15 @@ This is an area of research. From the ESBMC GitHub:
 
 ## Settings
 
-The following settings are adjustable in the .env file, this list may be incomplete:
+The following settings are adjustable in the .env file. **Some settings are allowed to be omitted, however, the
+program will display a warning when done so as it is not recommended**. This list may be incomplete:
 
-1. `OPENAI_API_KEY`: **This is required**. Your OpenAI API key.
+1. `OPENAI_API_KEY`: Your OpenAI API key.
 2. `CHAT_TEMPERATURE`: The temperature parameter used when calling the chat completion API. This controls the temperature sampling that the model uses. Higher values like 0.8 and above will make the output more random, on the other hand, lower values like 0.2 will be more deterministic. **Allowed values are between 0.0 to 2.0**. Default is 1.0.
 3. `AI_MODEL`: The model to use. Options: `gpt-3.5-turbo`, `gpt-4` (under API key conditions).
 4. `ESBMC_PATH`: Override the default ESBMC path. Leave blank to use the default ("./esbmc").
+5. `CFG_SYS_PATH`: Path to JSON file that contains initial prompt messages for the AI model that give it instructions on how to function.
+6. `CFG_INITIAL_PROMPT_PATH`: Text file that contains the instructions to initiate the initial prompt, where the AI is asked to walk through the code and explain the ESBMC output.
 
 ## Usage
 

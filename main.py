@@ -10,15 +10,13 @@ from subprocess import Popen, PIPE
 
 from src.loading_widget import LoadingWidget
 import src.config as config
+from src.config import printv
 from src.chat import ChatInterface, SYSTEM_MSG_DEFAULT
 
 HELP_MESSAGE: str = """Tool that passes ESBMC output into ChatGPT and allows for natural language
 explanations. Type /help in order to view available commands."""
 
-
-def printv(m) -> None:
-    if config.verbose:
-        print(m)
+DEFAULT_PROMPT: str = "Walk me through the source code, while also explaining the output of ESBMC at the relevant parts. You shall not start the reply with an acknowledgement message such as 'Certainly'."
 
 
 def print_help() -> None:
@@ -96,6 +94,34 @@ def print_assistant_response(chat: ChatInterface, response) -> None:
     print(f"{response_role}: {response_message}\n")
 
 
+def build_system_messages(source_code: str, esbmc_output: str) -> list:
+    """Build the setup messages from either the provided default settings or from
+    the loaded files."""
+    printv("Loading system messages")
+    system_messages: list = []
+    if config.cfg_sys_msg != "":
+        system_messages.extend(config.cfg_sys_msg)
+    else:
+        system_messages.extend(SYSTEM_MSG_DEFAULT)
+
+    system_messages.extend(
+        [
+            {
+                "role": "system",
+                "content": f"Reply OK if you understand that the following text is the program source code: {source_code}",
+            },
+            {"role": "assistant", "content": "OK"},
+            {
+                "role": "system",
+                "content": f"Reply OK if you understand that the following text is the output from ESBMC after reading the program source code: {esbmc_output}",
+            },
+            {"role": "assistant", "content": "OK"},
+        ]
+    )
+
+    return system_messages
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="ESBMC-ChatGPT",
@@ -145,6 +171,8 @@ def main() -> None:
 
     check_health()
 
+    config.init_ai_data()
+
     anim: LoadingWidget = LoadingWidget()
 
     # Read the source code and esbmc output.
@@ -171,35 +199,27 @@ def main() -> None:
     openai.api_key = config.openai_api_key
 
     # Inject output for ai.
-    system_messages: list = SYSTEM_MSG_DEFAULT.copy()
-    system_messages.extend(
-        [
-            {
-                "role": "system",
-                "content": f"Reply OK if you understand that the following text is the program source code: {source_code}",
-            },
-            {"role": "assistant", "content": "OK"},
-            {
-                "role": "system",
-                "content": f"Reply OK if you understand that the following text is the output from ESBMC after reading the program source code: {esbmc_output}",
-            },
-            {"role": "assistant", "content": "OK"},
-        ]
-    )
+    system_messages: list = build_system_messages(source_code, esbmc_output)
 
     chat = ChatInterface(
         system_messages=system_messages,
         model=config.ai_model,
         temperature=config.chat_temperature,
     )
-    printv(f"Using AI Model: {chat.model_name}\n")
+    printv(f"Using AI Model: {chat.model_name}")
 
     # Show the initial output.
-    anim.start("Model is parsing ESBMC output... Please Wait")
-    response = chat.send_message(
-        "Walk me through the source code, while also explaining the output of ESBMC at the relevant parts. You shall not start the reply with an acknowledgement message such as 'Certainly'."
-    )
-    anim.stop()
+    response = {}
+    if config.cfg_initial_prompt:
+        printv("Using initial prompt from file...\n")
+        anim.start("Model is parsing ESBMC output... Please Wait")
+        response = chat.send_message(config.cfg_initial_prompt)
+        anim.stop()
+    else:
+        printv("Using default initial prompts...\n")
+        anim.start("Model is parsing ESBMC output... Please Wait")
+        response = chat.send_message(DEFAULT_PROMPT)
+        anim.stop()
 
     print_assistant_response(chat, response)
 

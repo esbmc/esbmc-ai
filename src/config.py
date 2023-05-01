@@ -1,6 +1,7 @@
 # Author: Yiannis Charalambous 2023
 
 import os
+import json
 from dotenv import load_dotenv
 
 from src.ai_models import *
@@ -13,12 +14,41 @@ esbmc_params: list[str] = ["--z3", "--incremental-bmc"]
 chat_temperature: float = 1.0
 ai_model: str = "gpt-3.5-turbo"
 
+cfg_sys_path: str = ""
+cfg_sys_msg: dict
+
+cfg_initial_prompt_path: str = ""
+cfg_initial_prompt = []
+
+
+def printv(m) -> None:
+    if verbose:
+        print(m)
+
 
 def load_envs() -> None:
     load_dotenv()
 
     global openai_api_key
     openai_api_key = str(os.getenv("OPENAI_API_KEY"))
+
+    global cfg_sys_path
+    value = os.getenv("CFG_SYS_PATH")
+    if value != None:
+        if os.path.exists(value):
+            cfg_sys_path = str(value)
+        else:
+            print(f"Error: Invalid .env CFG_SYS_PATH value: {value}")
+            exit(4)
+
+    global cfg_initial_prompt_path
+    value = os.getenv("CFG_INITIAL_PROMPT_PATH")
+    if value != None:
+        if os.path.exists(value):
+            cfg_initial_prompt_path = str(value)
+        else:
+            print(f"Error: Invalid .env CFG_INITIAL_PROMPT_PATH value: {value}")
+            exit(4)
 
     global chat_temperature
     value = os.getenv("CHAT_TEMPERATURE")
@@ -69,3 +99,17 @@ def load_args(args) -> None:
     global esbmc_params
     if len(args.remaining) != 0:
         esbmc_params = args.remaining
+
+
+def init_ai_data() -> None:
+    printv("Initializing AI data")
+    # Will not be "" if valid. Checked already in load_envs()
+    global cfg_sys_msg
+    if cfg_sys_path != "":
+        with open(cfg_sys_path, mode="r") as file:
+            cfg_sys_msg = json.load(file)
+
+    global cfg_initial_prompt
+    if cfg_initial_prompt_path != "":
+        with open(cfg_initial_prompt_path, mode="r") as file:
+            cfg_initial_prompt = str(file.read())
