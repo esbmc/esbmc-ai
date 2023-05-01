@@ -15,7 +15,7 @@ This is an area of research. From the ESBMC GitHub:
 
 1. Install required Python modules: `pip3 install -r requirements.txt`. Alternatively use `pipenv shell` to go into a virtual envrionment and run `pipenv lock`.
 2. ESBMC-AI does not come with the original ESBMC software. In order to use ESBMC-AI you must provide ESBMC. Download [ESBMC](http://esbmc.org/) executable or build from [source](https://github.com/esbmc/esbmc).
-3. Create a `.env` file using the provided `.env.example` as a template, and, insert your OpenAI API key.
+3. Create a `.env` file using the provided `.env.example` as a template. Make sure to insert your OpenAI API key inside the `.env` file you just created!
 4. Enter the ESBMC executable location in the .env `ESBMC_PATH`.
 5. Further adjust .env settings as required.
 6. You can now run ESBMC-AI.
