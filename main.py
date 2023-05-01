@@ -29,8 +29,23 @@ def print_help() -> None:
     print()
 
 
+def init_check_health(verbose: bool) -> None:
+    def printv(m) -> None:
+        if verbose:
+            print(m)
+
+    printv("Performing init health check...")
+    # Check that the .env file exists.
+    if os.path.exists(".env"):
+        printv("Environment file has been located")
+    else:
+        print("Error: .env file is not found in project directory")
+        exit(3)
+
+
 def check_health() -> None:
     printv("Performing health check...")
+    # Check that ESBMC exists.
     if os.path.exists(config.esbmc_path):
         printv("ESBMC has been located")
     else:
@@ -120,11 +135,13 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    config.load_envs()
-    config.load_args(args)
-
     print("ESBMC-AI")
     print()
+
+    init_check_health(args.verbose)
+
+    config.load_envs()
+    config.load_args(args)
 
     check_health()
 
