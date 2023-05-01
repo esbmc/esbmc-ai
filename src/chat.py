@@ -81,7 +81,9 @@ class ChatInterface(object):
         # Check if necessary to shorten.
         msg_tokens: int = num_tokens_from_messages(self.messages, self.model_name)
         if msg_tokens > self.max_tokens:
-            print("Max tokens reached... Exiting...")
+            print(
+                f"Max tokens reached... Conversation too long {msg_tokens}/{self.max_tokens}. Exiting..."
+            )
             exit(2)
 
         completion = openai.ChatCompletion.create(
