@@ -7,7 +7,7 @@ openai_api_key: str = ""
 esbmc_path: str = "./esbmc"
 verbose: bool = False
 raw_responses: bool = False
-esbmc_params: list[str] = ["--z3", "--unwind", "5"]
+esbmc_params: list[str] = ["--z3", "--incremental-bmc"]
 chat_temperature: float = 1.0
 ai_model: str = "gpt-3.5-turbo"
 
