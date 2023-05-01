@@ -14,10 +14,9 @@ esbmc_params: list[str] = ["--z3", "--incremental-bmc"]
 chat_temperature: float = 1.0
 ai_model: str = "gpt-3.5-turbo"
 
-cfg_sys_path: str = ""
-cfg_sys_msg: dict
+cfg_path: str = "./config.json"
 
-cfg_initial_prompt_path: str = ""
+cfg_sys_msg: dict
 cfg_initial_prompt = []
 
 
@@ -32,31 +31,41 @@ def load_envs() -> None:
     global openai_api_key
     openai_api_key = str(os.getenv("OPENAI_API_KEY"))
 
-    global cfg_sys_path
-    value = os.getenv("CFG_SYS_PATH")
+    global cfg_path
+    value = os.getenv("ESBMC_AI_CFG_PATH")
     if value != None:
         if os.path.exists(value):
-            cfg_sys_path = str(value)
+            cfg_path = str(value)
         else:
-            print(f"Error: Invalid .env CFG_SYS_PATH value: {value}")
+            print(f"Error: Invalid .env ESBMC_AI_CFG_PATH value: {value}")
             exit(4)
+    else:
+        print(
+            f"Warning: ESBMC_AI_CFG_PATH not found in .env file... Defaulting to {cfg_path}"
+        )
 
-    global cfg_initial_prompt_path
-    value = os.getenv("CFG_INITIAL_PROMPT_PATH")
-    if value != None:
-        if os.path.exists(value):
-            cfg_initial_prompt_path = str(value)
-        else:
-            print(f"Error: Invalid .env CFG_INITIAL_PROMPT_PATH value: {value}")
-            exit(4)
+
+def load_config(file_path: str) -> None:
+    if not os.path.exists(file_path):
+        print(f"Error: Config not found: {file_path}")
+        exit(4)
+
+    config_file = None
+    with open(file_path, mode="r") as file:
+        config_file = json.load(file)
 
     global chat_temperature
-    value = os.getenv("CHAT_TEMPERATURE")
-    if value != None:
-        try:
-            chat_temperature = float(str(value))
-        except ValueError:
-            print(f"Error: Invalid .env CHAT_TEMPERATURE value: {value}")
+    if "chat_temperature" in config_file:
+        if (
+            type(config_file["chat_temperature"]) is float
+            or type(config_file["chat_temperature"]) is int
+        ):
+            chat_temperature = config_file["chat_temperature"]
+        else:
+            print(
+                f"Error: Invalid .env CHAT_TEMPERATURE value: {config_file['chat_temperature']}"
+            )
+            print("Make sure it is a float or int...")
             exit(4)
     else:
         print(
@@ -64,10 +73,10 @@ def load_envs() -> None:
         )
 
     global ai_model
-    value = os.getenv("AI_MODEL")
-    if value != None:
-        if type(value) is str and is_valid_ai_model(str(value)):
-            ai_model = str(value)
+    if "ai_model" in config_file:
+        value = config_file["ai_model"]
+        if type(value) is str and is_valid_ai_model(value):
+            ai_model = value
         else:
             print(f"Error: .env invalid AI_MODEL value: {ai_model}")
             exit(4)
@@ -76,9 +85,16 @@ def load_envs() -> None:
 
     global esbmc_path
     # Health check verifies this.
-    value = os.getenv("ESBMC_PATH")
-    if value != None and value != "":
-        esbmc_path = str(value)
+    if "esbmc_path" in config_file and config_file["esbmc_path"] != "":
+        esbmc_path = config_file["esbmc_path"]
+
+    printv("Initializing AI data")
+    # Will not be "" if valid. Checked already in load_envs()
+    global cfg_sys_msg
+    cfg_sys_msg = config_file["prompts"]["system"]
+
+    global cfg_initial_prompt
+    cfg_initial_prompt = config_file["prompts"]["initial"]
 
 
 def load_args(args) -> None:
@@ -99,17 +115,3 @@ def load_args(args) -> None:
     global esbmc_params
     if len(args.remaining) != 0:
         esbmc_params = args.remaining
-
-
-def init_ai_data() -> None:
-    printv("Initializing AI data")
-    # Will not be "" if valid. Checked already in load_envs()
-    global cfg_sys_msg
-    if cfg_sys_path != "":
-        with open(cfg_sys_path, mode="r") as file:
-            cfg_sys_msg = json.load(file)
-
-    global cfg_initial_prompt
-    if cfg_initial_prompt_path != "":
-        with open(cfg_initial_prompt_path, mode="r") as file:
-            cfg_initial_prompt = str(file.read())

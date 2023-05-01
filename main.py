@@ -25,6 +25,13 @@ def print_help() -> None:
     print("/help: Print this help message.")
     print("/exit: Exit the program.")
     print()
+    print("Useful AI Questions:")
+    print("1) How can I correct this code?")
+    print("2) Show me the corrected code.")
+    # TODO This needs to be uncommented as soon as ESBMC-AI can detect this query
+    # and trigger ESBMC to verify the code.
+    # print("3) Can you verify this corrected code with ESBMC again?")
+    print()
 
 
 def init_check_health(verbose: bool) -> None:
@@ -78,20 +85,19 @@ def print_assistant_response(chat: ChatInterface, response) -> None:
         print(response)
         return
 
-    if config.verbose:
-        total_tokens: int = response.usage.total_tokens
-        max_tokens: int = chat.max_tokens
-        finish_reason: str = response.choices[0].finish_reason
-        print(
-            "stats:",
-            f"total tokens: {total_tokens},",
-            f"max tokens: {max_tokens}",
-            f"finish reason: {finish_reason}\n",
-        )
-
     response_role = response.choices[0].message.role
     response_message = response.choices[0].message.content
-    print(f"{response_role}: {response_message}\n")
+    print(f"{response_role}: {response_message}\n\n")
+
+    total_tokens: int = response.usage.total_tokens
+    max_tokens: int = chat.max_tokens
+    finish_reason: str = response.choices[0].finish_reason
+    print(
+        "Stats:",
+        f"total tokens: {total_tokens},",
+        f"max tokens: {max_tokens}",
+        f"finish reason: {finish_reason}",
+    )
 
 
 def build_system_messages(source_code: str, esbmc_output: str) -> list:
@@ -167,11 +173,10 @@ def main() -> None:
     init_check_health(args.verbose)
 
     config.load_envs()
+    config.load_config(config.cfg_path)
     config.load_args(args)
 
     check_health()
-
-    config.init_ai_data()
 
     anim: LoadingWidget = LoadingWidget()
 
@@ -222,6 +227,10 @@ def main() -> None:
         anim.stop()
 
     print_assistant_response(chat, response)
+    print(
+        "ESBMC-AI: Type '/help' to view the available in-chat commands, along",
+        "with useful prompts to ask the AI model...",
+    )
 
     while True:
         user_message = input(">: ")

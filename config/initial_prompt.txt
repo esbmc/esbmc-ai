@@ -1,3 +1,0 @@
-Walk me through the source code, while also explaining the output of ESBMC at
-the relevant parts. You shall not start the reply with an acknowledgement
-message such as 'Certainly'.

@@ -13,24 +13,35 @@ This is an area of research. From the ESBMC GitHub:
 
 ## Initial Setup
 
-1. Install required Python modules: `pip install -r requirements.txt`.
+1. Install required Python modules: `pip3 install -r requirements.txt`. Alternatively use `pipenv shell` to go into a virtual envrionment and run `pipenv lock`.
 2. ESBMC-AI does not come with the original ESBMC software. In order to use ESBMC-AI you must provide ESBMC. Download [ESBMC](http://esbmc.org/) executable or build from [source](https://github.com/esbmc/esbmc).
-3. Create a .env file using the provided .env.example as a template, and, insert your OpenAI API key.
+3. Create a `.env` file using the provided `.env.example` as a template, and, insert your OpenAI API key.
 4. Enter the ESBMC executable location in the .env `ESBMC_PATH`.
 5. Further adjust .env settings as required.
 6. You can now run ESBMC-AI.
 
 ## Settings
 
-The following settings are adjustable in the .env file. **Some settings are allowed to be omitted, however, the
-program will display a warning when done so as it is not recommended**. This list may be incomplete:
+### .env
+
+The following settings are adjustable in the .env file. **Some settings are allowed to be omitted, however, the program will display a warning when done so as it is not a recommended practice**. This list may be incomplete:
 
 1. `OPENAI_API_KEY`: Your OpenAI API key.
-2. `CHAT_TEMPERATURE`: The temperature parameter used when calling the chat completion API. This controls the temperature sampling that the model uses. Higher values like 0.8 and above will make the output more random, on the other hand, lower values like 0.2 will be more deterministic. **Allowed values are between 0.0 to 2.0**. Default is 1.0.
-3. `AI_MODEL`: The model to use. Options: `gpt-3.5-turbo`, `gpt-4` (under API key conditions).
-4. `ESBMC_PATH`: Override the default ESBMC path. Leave blank to use the default ("./esbmc").
-5. `CFG_SYS_PATH`: Path to JSON file that contains initial prompt messages for the AI model that give it instructions on how to function.
-6. `CFG_INITIAL_PROMPT_PATH`: Text file that contains the instructions to initiate the initial prompt, where the AI is asked to walk through the code and explain the ESBMC output.
+2. `ESBMC_AI_CFG_PATH`: ESBMC AI requires a path to a JSON config file, the default path is `./config.json`. This can be changed to another path, if there is a preference for multiple files.
+
+### config.json
+
+The following settings are adjustable in the config.json file. **Some settings are allowed to be omitted, however, the program will display a warning when done so as it is not a recommended practice**. This list may be incomplete:
+
+1. `chat_temperature`: The temperature parameter used when calling the chat completion API. This controls the temperature sampling that the model uses. Higher values like 0.8 and above will make the output more random, on the other hand, lower values like 0.2 will be more deterministic. **Allowed values are between 0.0 to 2.0**. Default is 1.0
+2. `ai_model`: The model to use. Options: `gpt-3.5-turbo`, `gpt-4` (under API key conditions).
+3. `esbmc_path`: Override the default ESBMC path. Leave blank to use the default ("./esbmc").
+4. `cfg_sys_path`: Path to JSON file that contains initial prompt messages for the AI model that give it instructions on how to function.
+5. `cfg_initial_prompt_path`: Text file that contains the instructions to initiate the initial prompt, where the AI is asked to walk through the code and explain the ESBMC output.
+6. `esbmc_params`: Array of strings. This represents the default ESBMC parameters to use when calling ESBMC, these will be used only when no parameters are specified after the filename. **Do not specify a source file to scan in here as ESBMC-AI will inject that in the ESBMC parameters itself**.
+7. `prompts`: Contains the prompts that will be used when setting up/interacting with the AI.
+   1. `system`: Array of initial system messages that instruct the AI what its function is. Each element in the array is a struct that contains a `role` field (should ideally be system/assistant) and a `content` field that describes what that role's message content are. This should be a conversation between system and assistant.
+   2. `initial`: String that describes the initial prompt given to the AI, after it has read the source code, and the ESBMC output. This field should ask the AI model to explain the source code and ESBMC output.
 
 ## Usage
 
@@ -47,6 +58,8 @@ program will display a warning when done so as it is not recommended**. This lis
 ```
 
 ### In-Chat Commands Help
+
+Type the following command when inside the chat:
 
 ```
 /help
