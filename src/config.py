@@ -6,11 +6,24 @@ from dotenv import load_dotenv
 
 from src.ai_models import *
 
-openai_api_key: str = ""
-esbmc_path: str = "./esbmc"
 verbose: bool = False
+openai_api_key: str = ""
 raw_responses: bool = False
-esbmc_params: list[str] = ["--z3", "--incremental-bmc"]
+
+esbmc_path: str = "./esbmc"
+esbmc_params: list[str] = [
+    "--interval-analysis",
+    "--goto-unwind",
+    "--unlimited-goto-unwind",
+    "--k-induction",
+    "--state-hashing",
+    "--add-symex-value-sets",
+    "--k-step",
+    "2",
+    "--floatbv",
+    "--unlimited-k-steps",
+]
+
 chat_temperature: float = 1.0
 ai_model: str = "gpt-3.5-turbo"
 
