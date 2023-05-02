@@ -7,6 +7,8 @@ and to offer further explanations.
 
 This is an area of research.
 
+[demo.webm](https://user-images.githubusercontent.com/9535618/235352993-b54c47ef-a1c6-422c-aa5b-07edc2988521.webm)
+
 ## ESBMC
 
 From the [ESBMC website](http://esbmc.org):
@@ -23,8 +25,6 @@ From the [ESBMC website](http://esbmc.org):
 From the [ESBMC GitHub repo](https://github.com/esbmc/esbmc)
 
 > The efficient SMT-based context-bounded model checker (ESBMC)
-
-[demo.webm](https://user-images.githubusercontent.com/9535618/235352993-b54c47ef-a1c6-422c-aa5b-07edc2988521.webm)
 
 ## Initial Setup
 
