@@ -5,10 +5,14 @@ natural language to understand the output. As the output from ESBMC can be quite
 The AI can also be asked other questions, such as suggestions on how to fix the problem outputted by ESBMC,
 and to offer further explanations.
 
-This is an area of research. From the [ESBMC website](http://esbmc.org):
+This is an area of research.
+
+## ESBMC
+
+From the [ESBMC website](http://esbmc.org):
 
 > ESBMC is an open source, permissively licensed, context-bounded model checker
-> based on satisfiability modulo theories for the verification of single- and
+> based on satisfiability modulo theories for the verification of single and
 > multi-threaded C/C++ programs. It does not require the user to annotate the
 > programs with pre- or postconditions, but allows the user to state additional
 > properties using assert-statements, that are then checked as well. Furthermore,
