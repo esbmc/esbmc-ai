@@ -39,7 +39,7 @@ def printv(m) -> None:
 
 
 def load_envs() -> None:
-    load_dotenv()
+    load_dotenv(dotenv_path="./.env", override=True, verbose=True)
 
     global openai_api_key
     openai_api_key = str(os.getenv("OPENAI_API_KEY"))
