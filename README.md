@@ -62,8 +62,20 @@ The following settings are adjustable in the config.json file. **Some settings a
 
 ### Basic
 
+ESBMC-AI can be used to scan a file with default parameters like this:
+
 ```bash
 ./main.py /path/to/source_code.c
+```
+
+### ESBMC-AI Parameters
+
+Any parameters before the filename will be processed and consumed by ESBMC-AI.
+So in this case `-vr` will be consumed by ESBMC-AI, and ESBMC will not get any
+arguments.
+
+```bash
+./main.py -vr /path/to/source_code.c
 ```
 
 ### Help
@@ -71,6 +83,46 @@ The following settings are adjustable in the config.json file. **Some settings a
 ```bash
 ./main.py -h
 ```
+
+### ESBMC Arguments
+
+Below are some very useful arguments that can be passed to ESBMC:
+
+```
+Property checking:
+  --no-assertions                  ignore assertions
+  --no-bounds-check                do not do array bounds check
+  --no-div-by-zero-check           do not do division by zero check
+  --no-pointer-check               do not do pointer check
+  --no-align-check                 do not check pointer alignment
+  --no-pointer-relation-check      do not check pointer relations
+  --no-unlimited-scanf-check       do not do overflow check for scanf/fscanf
+                                   with unlimited character width.
+  --nan-check                      check floating-point for NaN
+  --memory-leak-check              enable memory leak check
+  --overflow-check                 enable arithmetic over- and underflow check
+  --ub-shift-check                 enable undefined behaviour check on shift
+                                   operations
+  --struct-fields-check            enable over-sized read checks for struct
+                                   fields
+  --deadlock-check                 enable global and local deadlock check with
+                                   mutex
+  --data-races-check               enable data races check
+  --lock-order-check               enable for lock acquisition ordering check
+  --atomicity-check                enable atomicity check at visible
+                                   assignments
+  --stack-limit bits (=-1)         check if stack limit is respected
+  --error-label label              check if label is unreachable
+  --force-malloc-success           do not check for malloc/new failure
+```
+
+Some examples of passing parameters to ESBMC:
+
+```
+./main.py /path/to/source_code.c --force-malloc-success --no-assertions --unwind 5
+```
+
+Basically, any arguments **after** the filename are passed directly to ESBMC.
 
 ### In-Chat Commands Help
 
