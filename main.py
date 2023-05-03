@@ -3,6 +3,7 @@
 # Author: Yiannis Charalambous 2023
 
 import os
+from time import sleep
 
 import argparse
 import openai
@@ -12,11 +13,41 @@ from src.loading_widget import LoadingWidget
 import src.config as config
 from src.config import printv
 from src.chat import ChatInterface, SYSTEM_MSG_DEFAULT
+from src.solution_generator import SolutionGenerator
 
 HELP_MESSAGE: str = """Tool that passes ESBMC output into ChatGPT and allows for natural language
 explanations. Type /help in order to view available commands."""
 
 DEFAULT_PROMPT: str = "Walk me through the source code, while also explaining the output of ESBMC at the relevant parts. You shall not start the reply with an acknowledgement message such as 'Certainly'."
+
+# TODO Need to include this in help message, problem is that argparse removes
+# the new lines.
+ESBMC_HELP: str = """Property checking:
+  --no-assertions                  ignore assertions
+  --no-bounds-check                do not do array bounds check
+  --no-div-by-zero-check           do not do division by zero check
+  --no-pointer-check               do not do pointer check
+  --no-align-check                 do not check pointer alignment
+  --no-pointer-relation-check      do not check pointer relations
+  --no-unlimited-scanf-check       do not do overflow check for scanf/fscanf
+                                   with unlimited character width.
+  --nan-check                      check floating-point for NaN
+  --memory-leak-check              enable memory leak check
+  --overflow-check                 enable arithmetic over- and underflow check
+  --ub-shift-check                 enable undefined behaviour check on shift
+                                   operations
+  --struct-fields-check            enable over-sized read checks for struct
+                                   fields
+  --deadlock-check                 enable global and local deadlock check with
+                                   mutex
+  --data-races-check               enable data races check
+  --lock-order-check               enable for lock acquisition ordering check
+  --atomicity-check                enable atomicity check at visible
+                                   assignments
+  --stack-limit bits (=-1)         check if stack limit is respected
+  --error-label label              check if label is unreachable
+  --force-malloc-success           do not check for malloc/new failure
+"""
 
 
 def print_help() -> None:
@@ -24,6 +55,9 @@ def print_help() -> None:
     print("Commands:")
     print("/help: Print this help message.")
     print("/exit: Exit the program.")
+    print(
+        "/fix-code: Generates a solution for this code, and reevaluates it with ESBMC."
+    )
     print()
     print("Useful AI Questions:")
     print("1) How can I correct this code?")
@@ -80,8 +114,37 @@ def esbmc(path: str, esbmc_params: list = config.esbmc_params):
     return exit_code, output, err
 
 
-def print_assistant_response(chat: ChatInterface, response) -> None:
-    if config.raw_responses:
+def esbmc_load_source_code(
+    source_code: str,
+    esbmc_params: list = config.esbmc_params,
+    auto_clean: bool = True,
+):
+    # Make temp folder
+    if not os.path.exists("temp"):
+        os.mkdir("temp")
+
+    # Save to temporary folder.
+    with open("temp/tempfile.c", "w") as file:
+        file.write(source_code)
+
+    # Call ESBMC to temporary folder.
+    results = esbmc("temp/tempfile.c", esbmc_params)
+
+    # Delete temporary file.
+    if auto_clean:
+        os.remove("temp/tempfile.c")
+
+    # Return
+    return results
+
+
+def print_assistant_response(
+    chat: ChatInterface,
+    response,
+    raw_responses: bool = False,
+    hide_stats: bool = False,
+) -> None:
+    if raw_responses:
         print(response)
         return
 
@@ -92,12 +155,13 @@ def print_assistant_response(chat: ChatInterface, response) -> None:
     total_tokens: int = response.usage.total_tokens
     max_tokens: int = chat.max_tokens
     finish_reason: str = response.choices[0].finish_reason
-    print(
-        "Stats:",
-        f"total tokens: {total_tokens},",
-        f"max tokens: {max_tokens}",
-        f"finish reason: {finish_reason}",
-    )
+    if not hide_stats:
+        print(
+            "Stats:",
+            f"total tokens: {total_tokens},",
+            f"max tokens: {max_tokens}",
+            f"finish reason: {finish_reason}",
+        )
 
 
 def build_system_messages(source_code: str, esbmc_output: str) -> list:
@@ -105,11 +169,13 @@ def build_system_messages(source_code: str, esbmc_output: str) -> list:
     the loaded files."""
     printv("Loading system messages")
     system_messages: list = []
-    if config.cfg_sys_msg != "":
-        system_messages.extend(config.cfg_sys_msg)
+    if len(config.chat_prompt_user_mode.system_messages) > 0:
+        system_messages.extend(config.chat_prompt_user_mode.system_messages)
     else:
         system_messages.extend(SYSTEM_MSG_DEFAULT)
 
+    # Add the introduction of code prompts. TODO Make these loaded from config
+    # too in the future.
     system_messages.extend(
         [
             {
@@ -215,10 +281,10 @@ def main() -> None:
 
     # Show the initial output.
     response = {}
-    if config.cfg_initial_prompt:
+    if len(config.chat_prompt_user_mode.initial_prompt) > 0:
         printv("Using initial prompt from file...\n")
         anim.start("Model is parsing ESBMC output... Please Wait")
-        response = chat.send_message(config.cfg_initial_prompt)
+        response = chat.send_message(config.chat_prompt_user_mode.initial_prompt)
         anim.stop()
     else:
         printv("Using default initial prompts...\n")
@@ -226,7 +292,7 @@ def main() -> None:
         response = chat.send_message(DEFAULT_PROMPT)
         anim.stop()
 
-    print_assistant_response(chat, response)
+    print_assistant_response(chat, response, config.raw_responses)
     print(
         "ESBMC-AI: Type '/help' to view the available in-chat commands, along",
         "with useful prompts to ask the AI model...",
@@ -240,16 +306,83 @@ def main() -> None:
         elif user_message == "/help":
             print_help()
             continue
+        elif user_message == "/fix-code":
+            print("ESBMC-AI will generate a fix for the code...")
+            print("Warning: This is very experimental and will most likely fail...")
+
+            solution_generator = SolutionGenerator(
+                system_messages=config.chat_prompt_generator_mode.system_messages,
+                initial_prompt=config.chat_prompt_generator_mode.initial_prompt,
+                source_code=source_code,
+                esbmc_output=esbmc_output,
+                model=config.ai_model,
+                # TODO Make this loadable from config file.
+                temperature=1.6,
+            )
+
+            max_retries: int = 10
+            for idx in range(max_retries):
+                # Generate AI solution
+                anim.start("Generating Solution... Please Wait")
+                response = solution_generator.generate_solution()
+                anim.stop()
+
+                # Pass to ESBMC, a workaround is used where the file is saved
+                # to a temporary location since ESBMC needs it in file format.
+                anim.start("Verifying with ESBMC... Please Wait")
+                exit_code, esbmc_output, esbmc_err = esbmc_load_source_code(
+                    str(response),
+                    config.esbmc_params,
+                    False,
+                )
+                anim.stop()
+
+                if exit_code == 0:
+                    print(
+                        "\n\nassistant: Here is the corrected code, verified with ESBMC:"
+                    )
+                    print(f"```\n{response}\n```")
+
+                    # Let the AI model know about the corrected code.
+                    chat.push_to_message_stack(
+                        "user",
+                        f"Here is the corrected code:\n\n{response}",
+                    )
+                    chat.push_to_message_stack("assistant", "Understood.")
+                    break
+                elif exit_code != 1:
+                    print(
+                        "Error: AI model has probably output text in the source code..."
+                    )
+                    print(f"ESBMC Error: {esbmc_output}")
+                    exit(5)
+
+                # Failure case
+                print(f"Failure {idx+1}/{max_retries}: Retrying...")
+                anim.start(
+                    f"Sleeping {config.consecutive_prompt_delay} seconds due to rate limit..."
+                )
+                sleep(config.consecutive_prompt_delay)
+                anim.stop()
+            continue
+        elif user_message.startswith("/"):
+            print("Error: Unknown command...")
+            continue
         elif user_message == "":
             continue
         else:
             print()
 
+        # Send user message to AI model and process.
         anim.start("Generating response... Please Wait")
         response = chat.send_message(user_message)
         anim.stop()
 
-        print_assistant_response(chat, response)
+        print_assistant_response(
+            chat,
+            response,
+            config.raw_responses,
+        )
 
 
 if __name__ == "__main__":

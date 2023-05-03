@@ -75,7 +75,8 @@ class ChatInterface(object):
     def push_to_message_stack(self, role: str, message: str) -> None:
         self.messages.append({"role": role, "content": message})
 
-    def send_message(self, message: str) -> str:
+    # Returns an OpenAI object back.
+    def send_message(self, message: str):
         self.push_to_message_stack("user", message)
 
         # Check if necessary to shorten.
