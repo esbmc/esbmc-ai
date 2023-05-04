@@ -4,6 +4,9 @@
 
 import os
 
+# Enables arrow key functionality for input(). Do not remove import.
+import readline
+
 import argparse
 import openai
 
@@ -29,8 +32,6 @@ explanations. Type /help in order to view available commands."""
 
 DEFAULT_PROMPT: str = "Walk me through the source code, while also explaining the output of ESBMC at the relevant parts. You shall not start the reply with an acknowledgement message such as 'Certainly'."
 
-# TODO Need to include this in help message, problem is that argparse removes
-# the new lines.
 ESBMC_HELP: str = """Additional ESBMC Arguments - The following are useful
 arguments that can be added after the filename to modify ESBMC functionality.
 For all the options, run ESBMC with -h as a parameter:
