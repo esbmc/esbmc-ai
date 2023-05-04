@@ -3,17 +3,26 @@
 # Author: Yiannis Charalambous 2023
 
 import os
-from time import sleep
 
 import argparse
 import openai
-from subprocess import Popen, PIPE
+
+import src.config as config
+
+from src.commands.fix_code_command import FixCodeCommand
+from src.commands.help_command import HelpCommand
+from src.commands.exit_command import ExitCommand
 
 from src.loading_widget import LoadingWidget
-import src.config as config
 from src.config import printv
 from src.chat import ChatInterface, SYSTEM_MSG_DEFAULT
-from src.solution_generator import SolutionGenerator
+from src.esbmc import esbmc
+
+
+# help_command is initialized in init_commands()
+help_command: HelpCommand
+fix_code_command: FixCodeCommand = FixCodeCommand()
+exit_command: ExitCommand = ExitCommand()
 
 HELP_MESSAGE: str = """Tool that passes ESBMC output into ChatGPT and allows for natural language
 explanations. Type /help in order to view available commands."""
@@ -50,24 +59,6 @@ ESBMC_HELP: str = """Property checking:
 """
 
 
-def print_help() -> None:
-    print()
-    print("Commands:")
-    print("/help: Print this help message.")
-    print("/exit: Exit the program.")
-    print(
-        "/fix-code: Generates a solution for this code, and reevaluates it with ESBMC."
-    )
-    print()
-    print("Useful AI Questions:")
-    print("1) How can I correct this code?")
-    print("2) Show me the corrected code.")
-    # TODO This needs to be uncommented as soon as ESBMC-AI can detect this query
-    # and trigger ESBMC to verify the code.
-    # print("3) Can you verify this corrected code with ESBMC again?")
-    print()
-
-
 def init_check_health(verbose: bool) -> None:
     def printv(m) -> None:
         if verbose:
@@ -98,46 +89,6 @@ def get_src(path: str) -> str:
         return str(content)
 
 
-def esbmc(path: str, esbmc_params: list = config.esbmc_params):
-    # Build parameters
-    esbmc_cmd = [config.esbmc_path]
-    esbmc_cmd.extend(esbmc_params)
-    esbmc_cmd.append(path)
-
-    # Run ESBMC and get output
-    process = Popen(esbmc_cmd, stdout=PIPE)
-    (output_bytes, err_bytes) = process.communicate()
-    # Return
-    exit_code = process.wait()
-    output: str = str(output_bytes).replace("\\n", "\n")
-    err: str = str(err_bytes).replace("\\n", "\n")
-    return exit_code, output, err
-
-
-def esbmc_load_source_code(
-    source_code: str,
-    esbmc_params: list = config.esbmc_params,
-    auto_clean: bool = True,
-):
-    # Make temp folder
-    if not os.path.exists("temp"):
-        os.mkdir("temp")
-
-    # Save to temporary folder.
-    with open("temp/tempfile.c", "w") as file:
-        file.write(source_code)
-
-    # Call ESBMC to temporary folder.
-    results = esbmc("temp/tempfile.c", esbmc_params)
-
-    # Delete temporary file.
-    if auto_clean:
-        os.remove("temp/tempfile.c")
-
-    # Return
-    return results
-
-
 def print_assistant_response(
     chat: ChatInterface,
     response,
@@ -162,6 +113,16 @@ def print_assistant_response(
             f"max tokens: {max_tokens}",
             f"finish reason: {finish_reason}",
         )
+
+
+def init_commands() -> None:
+    global help_command
+    help_command = HelpCommand(
+        commands=[
+            exit_command,
+            fix_code_command,
+        ]
+    )
 
 
 def build_system_messages(source_code: str, esbmc_output: str) -> list:
@@ -244,6 +205,8 @@ def main() -> None:
 
     check_health()
 
+    init_commands()
+
     anim: LoadingWidget = LoadingWidget()
 
     # Read the source code and esbmc output.
@@ -299,75 +262,36 @@ def main() -> None:
     )
 
     while True:
+        # Get user input.
         user_message = input(">: ")
-        if user_message == "/exit":
-            print("exiting...")
-            exit(0)
-        elif user_message == "/help":
-            print_help()
-            continue
-        elif user_message == "/fix-code":
-            print("ESBMC-AI will generate a fix for the code...")
-            print("Warning: This is very experimental and will most likely fail...")
-
-            solution_generator = SolutionGenerator(
-                system_messages=config.chat_prompt_generator_mode.system_messages,
-                initial_prompt=config.chat_prompt_generator_mode.initial_prompt,
-                source_code=source_code,
-                esbmc_output=esbmc_output,
-                model=config.ai_model,
-                # TODO Make this loadable from config file.
-                temperature=1.6,
-            )
-
-            max_retries: int = 10
-            for idx in range(max_retries):
-                # Generate AI solution
-                anim.start("Generating Solution... Please Wait")
-                response = solution_generator.generate_solution()
-                anim.stop()
-
-                # Pass to ESBMC, a workaround is used where the file is saved
-                # to a temporary location since ESBMC needs it in file format.
-                anim.start("Verifying with ESBMC... Please Wait")
-                exit_code, esbmc_output, esbmc_err = esbmc_load_source_code(
-                    str(response),
-                    config.esbmc_params,
-                    False,
+        # Check if it is a command, if not, then pass it to the chat interface.
+        if user_message.startswith("/"):
+            command: str = user_message[1:]
+            if command == exit_command.command_name:
+                exit_command.execute()
+                return
+            elif command == help_command.command_name:
+                help_command.execute()
+                continue
+            elif command == fix_code_command.command_name:
+                print("ESBMC-AI will generate a fix for the code...")
+                print("Warning: This is very experimental and will most likely fail...")
+                error, solution = fix_code_command.execute(
+                    source_code=source_code,
+                    esbmc_output=esbmc_output,
                 )
-                anim.stop()
 
-                if exit_code == 0:
-                    print(
-                        "\n\nassistant: Here is the corrected code, verified with ESBMC:"
-                    )
-                    print(f"```\n{response}\n```")
-
+                if not error:
                     # Let the AI model know about the corrected code.
                     chat.push_to_message_stack(
                         "user",
-                        f"Here is the corrected code:\n\n{response}",
+                        f"Here is the corrected code:\n\n{solution}",
                     )
                     chat.push_to_message_stack("assistant", "Understood.")
-                    break
-                elif exit_code != 1:
-                    print(
-                        "Error: AI model has probably output text in the source code..."
-                    )
-                    print(f"ESBMC Error: {esbmc_output}")
-                    exit(5)
-
-                # Failure case
-                print(f"Failure {idx+1}/{max_retries}: Retrying...")
-                anim.start(
-                    f"Sleeping {config.consecutive_prompt_delay} seconds due to rate limit..."
-                )
-                sleep(config.consecutive_prompt_delay)
-                anim.stop()
-            continue
-        elif user_message.startswith("/"):
-            print("Error: Unknown command...")
-            continue
+                continue
+            else:
+                print("Error: Unknown command...")
+                continue
         elif user_message == "":
             continue
         else:

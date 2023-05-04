@@ -46,6 +46,16 @@ class SolutionGenerator(ChatInterface):
         solution: str = (
             self.send_message(self.initial_prompt).choices[0].message.content
         )
+
+        # Strip the source code of any leftover text as sometimes the AI model
+        # will generate text and formatting despite being told not to.
+        try:
+            code_start: int = solution.index("```") + 3
+            code_end: int = len(solution) - 3 - solution[::-1].index("```")
+            solution = solution[code_start:code_end]
+        except ValueError:
+            pass
+
         self.attempt += 1
         # Remove previous attempts.
         self.messages.pop(len(self.messages) - 1)

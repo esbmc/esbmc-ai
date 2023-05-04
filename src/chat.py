@@ -3,6 +3,8 @@
 import openai
 from tiktoken import get_encoding, encoding_for_model
 
+from src.ai_models import AI_MODEL_GPT3, AI_MODEL_GPT4
+
 # SYSTEM_MSG = [
 #     {
 #         "role": "system",
@@ -22,7 +24,7 @@ SYSTEM_MSG_DEFAULT = [
 MAX_TOKENS_GPT3TURBO: int = 4096
 
 
-def num_tokens_from_messages(messages, model="gpt-3.5-turbo"):
+def num_tokens_from_messages(messages, model=AI_MODEL_GPT3):
     """Returns the number of tokens used by a list of messages.
     Source: https://platform.openai.com/docs/guides/chat/introduction"""
     try:
@@ -30,7 +32,7 @@ def num_tokens_from_messages(messages, model="gpt-3.5-turbo"):
     except KeyError:
         encoding = get_encoding("cl100k_base")
     # note: future models may deviate from this
-    if model.startswith("gpt-3.5-turbo") or model.startswith("gpt-4"):
+    if model.startswith(AI_MODEL_GPT3) or model.startswith(AI_MODEL_GPT4):
         num_tokens = 0
         for message in messages:
             # every message follows <im_start>{role/name}\n{content}<im_end>\n

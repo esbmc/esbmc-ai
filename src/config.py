@@ -22,15 +22,11 @@ esbmc_params: list[str] = [
     "2",
     "--floatbv",
     "--unlimited-k-steps",
-    # FIXME Added temporarily solution generator not that good at generating
-    # code and giving it the extra instruction of adding NULL checks makes it
-    # even worse.
-    "--force-malloc-success",
 ]
 
 consecutive_prompt_delay: float = 20.0
 chat_temperature: float = 1.0
-ai_model: str = "gpt-3.5-turbo"
+ai_model: str = AI_MODEL_GPT3
 
 cfg_path: str = "./config.json"
 
