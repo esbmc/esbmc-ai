@@ -31,7 +31,10 @@ DEFAULT_PROMPT: str = "Walk me through the source code, while also explaining th
 
 # TODO Need to include this in help message, problem is that argparse removes
 # the new lines.
-ESBMC_HELP: str = """Property checking:
+ESBMC_HELP: str = """Additional ESBMC Arguments - The following are useful
+arguments that can be added after the filename to modify ESBMC functionality.
+For all the options, run ESBMC with -h as a parameter:
+
   --no-assertions                  ignore assertions
   --no-bounds-check                do not do array bounds check
   --no-div-by-zero-check           do not do division by zero check
@@ -159,7 +162,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         prog="ESBMC-ChatGPT",
         description=HELP_MESSAGE,
-        epilog="Made by Yiannis Charalambous",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=f"Made by Yiannis Charalambous\n\n{ESBMC_HELP}",
     )
 
     parser.add_argument("filename", help="The filename to pass to esbmc.")
@@ -190,6 +194,14 @@ def main() -> None:
         "--ai-model",
         default="",
         help="Which AI model to use.",
+    )
+
+    parser.add_argument(
+        "-a",
+        "--append",
+        action="store_true",
+        default=False,
+        help="Any ESBMC parameters passed after the file name will be appended to the ones set in the config file, or the default ones if config file options are not set.",
     )
 
     args = parser.parse_args()
@@ -274,6 +286,7 @@ def main() -> None:
                 help_command.execute()
                 continue
             elif command == fix_code_command.command_name:
+                print()
                 print("ESBMC-AI will generate a fix for the code...")
                 print("Warning: This is very experimental and will most likely fail...")
                 error, solution = fix_code_command.execute(

@@ -190,5 +190,8 @@ def load_args(args) -> None:
             exit(4)
 
     global esbmc_params
-    if len(args.remaining) != 0:
+    # If append flag is set, then append.
+    if args.append:
+        esbmc_params.extend(args.remaining)
+    elif len(args.remaining) != 0:
         esbmc_params = args.remaining
