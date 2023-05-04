@@ -1,10 +1,22 @@
 {
   "chat_temperature": 1.0,
+  "code_fix_temperature": 1.1,
   "ai_model": "gpt-3.5-turbo",
   "esbmc_path": "./esbmc",
   "cfg_sys_path": "./config/system.json",
   "cfg_initial_prompt_path": "./config/initial_prompt.txt",
-  "esbmc_params": ["--z3", "--incremental-bmc"],
+  "esbmc_params": [
+    "--interval-analysis",
+    "--goto-unwind",
+    "--unlimited-goto-unwind",
+    "--k-induction",
+    "--state-hashing",
+    "--add-symex-value-sets",
+    "--k-step",
+    "2",
+    "--floatbv",
+    "--unlimited-k-steps"
+  ],
   "consecutive_prompt_delay": 20,
   "prompts": {
     "user_mode": {

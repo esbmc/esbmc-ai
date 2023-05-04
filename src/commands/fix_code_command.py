@@ -26,9 +26,10 @@ class FixCodeCommand(ChatCommand):
             source_code=source_code,
             esbmc_output=esbmc_output,
             model=config.ai_model,
-            # TODO Make this loadable from config file.
-            temperature=1.1,
+            temperature=config.code_fix_temperature,
         )
+
+        print()
 
         max_retries: int = 10
         for idx in range(max_retries):

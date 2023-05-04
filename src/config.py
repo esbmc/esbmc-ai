@@ -26,6 +26,7 @@ esbmc_params: list[str] = [
 
 consecutive_prompt_delay: float = 20.0
 chat_temperature: float = 1.0
+code_fix_temperature: float = 1.1
 ai_model: str = AI_MODEL_GPT3
 
 cfg_path: str = "./config.json"
@@ -79,6 +80,14 @@ def load_config(file_path: str) -> None:
     with open(file_path, mode="r") as file:
         config_file = json.load(file)
 
+    global esbmc_params
+    if "esbmc_params" in config_file:
+        esbmc_params = config_file["esbmc_params"]
+    else:
+        print(
+            f"Warning: esbmc_params not found in config... Defaulting to {esbmc_params}"
+        )
+
     global consecutive_prompt_delay
     if "consecutive_prompt_delay" in config_file:
         if (
@@ -113,6 +122,24 @@ def load_config(file_path: str) -> None:
     else:
         print(
             f"Warning: chat_temperature not found in config... Defaulting to {chat_temperature}"
+        )
+
+    global code_fix_temperature
+    if "code_fix_temperature" in config_file:
+        if (
+            type(config_file["code_fix_temperature"]) is float
+            or type(config_file["code_fix_temperature"]) is int
+        ):
+            code_fix_temperature = config_file["code_fix_temperature"]
+        else:
+            print(
+                f"Error: config invalid code_fix_temperature value: {config_file['code_fix_temperature']}"
+            )
+            print("Make sure it is a float or int...")
+            exit(4)
+    else:
+        print(
+            f"Warning: code_fix_temperature not found in config... Defaulting to {code_fix_temperature}"
         )
 
     global ai_model
