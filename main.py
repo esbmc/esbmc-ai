@@ -277,6 +277,7 @@ def main() -> None:
     while True:
         # Get user input.
         user_message = input(">: ")
+
         # Check if it is a command, if not, then pass it to the chat interface.
         if user_message.startswith("/"):
             command: str = user_message[1:]
