@@ -2,8 +2,9 @@
 
 from time import sleep
 
-import src.config as config
 
+import src.config as config
+from src.msg_bus import Signal
 from src.commands.chat_command import ChatCommand
 from src.loading_widget import LoadingWidget
 from src.esbmc import esbmc_load_source_code
@@ -11,6 +12,8 @@ from src.solution_generator import SolutionGenerator
 
 
 class FixCodeCommand(ChatCommand):
+    on_solution_signal: Signal = Signal()
+
     def __init__(self) -> None:
         super().__init__(
             command_name="fix-code",
@@ -59,11 +62,12 @@ class FixCodeCommand(ChatCommand):
                 print("\n\nassistant: Here is the corrected code, verified with ESBMC:")
                 print(f"```\n{response}\n```")
 
+                self.on_solution_signal.emit(response)
+
                 return False, response
             elif exit_code != 1:
                 print("Error: AI model has probably output text in the source code...")
                 print(f"ESBMC Error: {esbmc_output}")
-                return True, esbmc_output
 
             # Failure case
             print(f"Failure {idx+1}/{max_retries}: Retrying...")
