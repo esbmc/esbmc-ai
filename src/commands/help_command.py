@@ -6,16 +6,14 @@ from src.commands.chat_command import ChatCommand
 class HelpCommand(ChatCommand):
     commands: list[ChatCommand] = []
 
-    def __init__(
-        self,
-        commands: list[ChatCommand] = [],
-    ) -> None:
+    def __init__(self) -> None:
         super().__init__(
             command_name="help",
             help_message="Print this help message.",
         )
+
+    def set_commands(self, commands: list[ChatCommand]) -> None:
         self.commands = commands
-        self.commands.insert(0, self)
 
     def execute(self) -> None:
         print()

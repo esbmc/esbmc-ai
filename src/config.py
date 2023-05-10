@@ -4,9 +4,9 @@ import os
 import json
 from dotenv import load_dotenv
 
+from src.logging import *
 from src.ai_models import *
 
-verbose: bool = False
 openai_api_key: str = ""
 raw_responses: bool = False
 
@@ -44,11 +44,6 @@ class ChatPromptSettings(object):
 
 chat_prompt_user_mode: ChatPromptSettings
 chat_prompt_generator_mode: ChatPromptSettings
-
-
-def printv(m) -> None:
-    if verbose:
-        print(m)
 
 
 def load_envs() -> None:
@@ -160,7 +155,7 @@ def load_config(file_path: str) -> None:
 
     # Load the AI data from the file that will command the AI for all modes.
     printv("Initializing AI data")
-    # Will not be "" if valid. Checked already in load_envs()
+    # TODO Add checking here.
     global chat_prompt_user_mode
     chat_prompt_user_mode = ChatPromptSettings(
         system_messages=config_file["prompts"]["user_mode"]["system"],
