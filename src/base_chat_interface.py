@@ -1,5 +1,6 @@
 # Author: Yiannis Charalambous
 
+from abc import abstractmethod
 import openai
 from tiktoken import get_encoding, encoding_for_model
 
@@ -38,6 +39,24 @@ def num_tokens_from_messages(messages, model=AI_MODEL_GPT3):
         )
 
 
+# API returned complete model output
+FINISH_REASON_STOP: str = "stop"
+# Incomplete model output due to max_tokens parameter or token limit
+FINISH_REASON_LENGTH: str = "length"
+# Omitted content due to a flag from our content filters
+FINISH_REASON_CONTENT_FILTER: str = "content_filter"
+# API response still in progress or incomplete
+FINISH_REASON_NULL: str = "null"
+
+
+class ChatResponse(object):
+    base_message: object
+    finish_reason: str
+    role: str
+    message: str
+    total_tokens: int
+
+
 class BaseChatInterface(object):
     max_tokens = MAX_TOKENS_GPT3TURBO
 
@@ -58,20 +77,29 @@ class BaseChatInterface(object):
         self.model_name = model
         self.temperature = temperature
 
+    @abstractmethod
+    def compress_message_stack(self) -> None:
+        raise NotImplementedError()
+
     def push_to_message_stack(self, role: str, message: str) -> None:
         self.messages.append({"role": role, "content": message})
 
     # Returns an OpenAI object back.
-    def send_message(self, message: str):
+    def send_message(self, message: str) -> ChatResponse:
+        """Sends a message to the AI model. Returns solution."""
         self.push_to_message_stack("user", message)
 
         # Check if necessary to shorten.
         msg_tokens: int = num_tokens_from_messages(self.messages, self.model_name)
         if msg_tokens > self.max_tokens:
-            print(
-                f"Max tokens reached... Conversation too long {msg_tokens}/{self.max_tokens}. Exiting..."
-            )
-            exit(2)
+            try:
+                self.compress_message_stack()
+            except NotImplementedError as e:
+                print("compress_message_stack() not implemented: " + str(e))
+                print(
+                    f"Max tokens reached... Conversation too long {msg_tokens}/{self.max_tokens}. Exiting..."
+                )
+                exit(2)
 
         completion = openai.ChatCompletion.create(
             model=self.model_name,
@@ -79,8 +107,14 @@ class BaseChatInterface(object):
             temperature=self.temperature,
         )
 
-        response_role = completion.choices[0].message.role
-        response_message = completion.choices[0].message.content
-        self.push_to_message_stack(response_role, response_message)
+        response = ChatResponse()
+        response.base_message = completion
+        response.role = completion.choices[0].message.role
+        response.message = completion.choices[0].message.content
+        response.finish_reason = completion.choices[0].finish_reason
+        response.total_tokens = completion.usage.total_tokens
 
-        return completion
+        if response.finish_reason == FINISH_REASON_STOP:
+            self.push_to_message_stack(response.role, response.message)
+
+        return response

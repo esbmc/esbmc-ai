@@ -19,7 +19,8 @@ from src.commands.exit_command import ExitCommand
 from src.commands.verify_code_command import VerifyCodeCommand
 
 from src.loading_widget import LoadingWidget
-from src.chat import ChatInterface
+from src.user_chat import ChatInterface
+from src.base_chat_interface import ChatResponse
 from src.logging import printv
 from src.esbmc import esbmc
 
@@ -98,27 +99,22 @@ def get_src(path: str) -> str:
 
 def print_assistant_response(
     chat: ChatInterface,
-    response,
+    response: ChatResponse,
     raw_responses: bool = False,
     hide_stats: bool = False,
 ) -> None:
     if raw_responses:
-        print(response)
+        print(response.base_message)
         return
 
-    response_role = response.choices[0].message.role
-    response_message = response.choices[0].message.content
-    print(f"{response_role}: {response_message}\n\n")
+    print(f"{response.role}: {response.message}\n\n")
 
-    total_tokens: int = response.usage.total_tokens
-    max_tokens: int = chat.max_tokens
-    finish_reason: str = response.choices[0].finish_reason
     if not hide_stats:
         print(
             "Stats:",
-            f"total tokens: {total_tokens},",
-            f"max tokens: {max_tokens}",
-            f"finish reason: {finish_reason}",
+            f"total tokens: {response.total_tokens},",
+            f"max tokens: {chat.max_tokens}",
+            f"finish reason: {response.finish_reason}",
         )
 
 
@@ -269,7 +265,7 @@ def main() -> None:
     printv(f"Using AI Model: {chat.model_name}")
 
     # Show the initial output.
-    response = {}
+    response: ChatResponse
     if len(config.chat_prompt_user_mode.initial_prompt) > 0:
         printv("Using initial prompt from file...\n")
         anim.start("Model is parsing ESBMC output... Please Wait")
