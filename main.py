@@ -293,7 +293,7 @@ def main() -> None:
             if command == fix_code_command.command_name:
                 print()
                 print("ESBMC-AI will generate a fix for the code...")
-                print("Warning: This is very experimental and will most likely fail...")
+
                 error, solution = fix_code_command.execute(
                     source_code=source_code,
                     esbmc_output=esbmc_output,
