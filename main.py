@@ -306,11 +306,15 @@ def main() -> None:
                 continue
             else:
                 # Commands without parameters or returns are handled automatically.
+                found: bool = False
                 for cmd in commands:
                     if cmd.command_name == command:
+                        found = True
                         cmd.execute()
                         break
-                print("Error: Unknown command...")
+
+                if not found:
+                    print("Error: Unknown command...")
                 continue
         elif user_message == "":
             continue
