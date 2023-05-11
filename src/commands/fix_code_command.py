@@ -71,10 +71,18 @@ class FixCodeCommand(ChatCommand):
 
             # Failure case
             print(f"Failure {idx+1}/{max_retries}: Retrying...")
-            # Final iteration no need to sleep.
+            # If final iteration no need to sleep.
             if idx < max_retries - 1:
                 self.wait_anim.start(f"Sleeping due to rate limit:")
                 sleep(config.consecutive_prompt_delay)
                 self.wait_anim.stop()
+
+                # Inform solution generator chat about the ESBMC response.
+                solution_generator.push_to_message_stack(
+                    "user",
+                    f"Do not respond with any text, based on the source code provided, here is ESBMC output: {esbmc_output}",
+                )
+
+                solution_generator.push_to_message_stack("assistant", "Understood.")
 
         return True, "Failed all attempts..."

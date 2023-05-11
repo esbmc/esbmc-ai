@@ -1,14 +1,13 @@
 # Author: Yiannis Charalambous 2023
 
-
-from src.chat import ChatInterface
+from src.base_chat_interface import ChatResponse
+from src.user_chat import ChatInterface
 
 
 class SolutionGenerator(ChatInterface):
     initial_prompt: str
     source_code: str
     esbmc_output: str
-    attempt: int
 
     def __init__(
         self,
@@ -28,7 +27,6 @@ class SolutionGenerator(ChatInterface):
         self.source_code = source_code
         self.initial_prompt = initial_prompt
         self.esbmc_output = esbmc_output
-        self.attempt = 0
 
         # Introduce source code and ESBMC output to AI.
         self.push_to_message_stack(
@@ -42,10 +40,13 @@ class SolutionGenerator(ChatInterface):
         )
         self.push_to_message_stack("assistant", "ok")
 
+    def compress_message_stack(self) -> None:
+        # TODO
+        return super().compress_message_stack()
+
     def generate_solution(self) -> str:
-        solution: str = (
-            self.send_message(self.initial_prompt).choices[0].message.content
-        )
+        response: ChatResponse = self.send_message(self.initial_prompt)
+        solution: str = response.message
 
         # Strip the source code of any leftover text as sometimes the AI model
         # will generate text and formatting despite being told not to.
@@ -56,8 +57,4 @@ class SolutionGenerator(ChatInterface):
         except ValueError:
             pass
 
-        self.attempt += 1
-        # Remove previous attempts.
-        self.messages.pop(len(self.messages) - 1)
-        self.messages.pop(len(self.messages) - 1)
         return solution
