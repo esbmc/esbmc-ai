@@ -41,7 +41,8 @@ class SolutionGenerator(ChatInterface):
         self.push_to_message_stack("assistant", "ok")
 
     def compress_message_stack(self) -> None:
-        # TODO
+        # TODO Delete previous and system messages.
+
         return super().compress_message_stack()
 
     def generate_solution(self) -> str:
