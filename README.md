@@ -5,9 +5,17 @@ natural language to understand the output. As the output from ESBMC can be quite
 The AI can also be asked other questions, such as suggestions on how to fix the problem outputted by ESBMC,
 and to offer further explanations.
 
-This is an area of research.
+This is an area of active research.
+
+## Demonstration
+
+### Basic Usage Demo
 
 [demo.webm](https://user-images.githubusercontent.com/9535618/235352993-b54c47ef-a1c6-422c-aa5b-07edc2988521.webm)
+
+### Fix Code Demo
+
+[demo_fix_code.webm](https://github.com/Yiannis128/esbmc-ai/assets/9535618/e35882ee-7e50-4c10-9879-d19e73d7f45d)
 
 ## ESBMC
 
