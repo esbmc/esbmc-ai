@@ -1,6 +1,6 @@
 {
   "chat_temperature": 1.0,
-  "code_fix_temperature": 1.25,
+  "code_fix_temperature": 1.0,
   "ai_model": "gpt-3.5-turbo",
   "esbmc_path": "./esbmc",
   "cfg_sys_path": "./config/system.json",
