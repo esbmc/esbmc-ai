@@ -86,24 +86,22 @@ class BaseChatInterface(object):
 
     # Returns an OpenAI object back.
     def send_message(self, message: str) -> ChatResponse:
-        """Sends a message to the AI model. Returns solution."""
-        self.push_to_message_stack("user", message)
+        """Sends a message to the AI model. Returns solution. If the message
+        stack fills up, the command will exit with no changes to the message
+        stack."""
+        # See if the new stack if over the limit.
+        new_stack = [*self.messages, {"role": "user", "content": message}]
 
-        # Check if necessary to shorten.
-        msg_tokens: int = num_tokens_from_messages(self.messages, self.model_name)
+        # Check if message is too long and exit.
+        msg_tokens: int = num_tokens_from_messages(new_stack, self.model_name)
         if msg_tokens > self.max_tokens:
-            try:
-                self.compress_message_stack()
-            except NotImplementedError as e:
-                print("compress_message_stack() not implemented: " + str(e))
-                print(
-                    f"Max tokens reached... Conversation too long {msg_tokens}/{self.max_tokens}. Exiting..."
-                )
-                exit(2)
+            response: ChatResponse = ChatResponse()
+            response.finish_reason = FINISH_REASON_LENGTH
+            return response
 
         completion = openai.ChatCompletion.create(
             model=self.model_name,
-            messages=self.messages,
+            messages=new_stack,
             temperature=self.temperature,
         )
 
@@ -114,7 +112,9 @@ class BaseChatInterface(object):
         response.finish_reason = completion.choices[0].finish_reason
         response.total_tokens = completion.usage.total_tokens
 
+        # If the response is OK then add to stack.
         if response.finish_reason == FINISH_REASON_STOP:
+            self.push_to_message_stack("user", message)
             self.push_to_message_stack(response.role, response.message)
 
         return response

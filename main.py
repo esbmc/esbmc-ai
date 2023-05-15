@@ -20,7 +20,7 @@ from src.commands.verify_code_command import VerifyCodeCommand
 
 from src.loading_widget import LoadingWidget
 from src.user_chat import ChatInterface
-from src.base_chat_interface import ChatResponse
+from src.base_chat_interface import ChatResponse, FINISH_REASON_LENGTH, FINISH_REASON_STOP
 from src.logging import printv
 from src.esbmc import esbmc
 
@@ -236,7 +236,7 @@ def main() -> None:
     source_code: str = get_src(args.filename)
 
     anim.start("ESBMC is processing... Please Wait")
-    exit_code, esbmc_output, esbmc_err = esbmc(args.filename)
+    exit_code, esbmc_output, esbmc_err = esbmc(path=args.filename, esbmc_params=config.esbmc_params,)
     anim.stop()
 
     # ESBMC will output 0 for verification success and 1 for verification
@@ -321,10 +321,20 @@ def main() -> None:
         else:
             print()
 
-        # Send user message to AI model and process.
-        anim.start("Generating response... Please Wait")
-        response = chat.send_message(user_message)
-        anim.stop()
+        while True:
+            # Send user message to AI model and process.
+            anim.start("Generating response... Please Wait")
+            response = chat.send_message(user_message)
+            anim.stop()
+            if response.finish_reason == FINISH_REASON_STOP:
+                break
+            elif response.finish_reason == FINISH_REASON_LENGTH:
+                anim.start("Message stack limit reached. Shortening message stack... Please Wait")
+                chat.compress_message_stack()
+                anim.stop()
+                continue
+            else:
+                raise NotImplementedError(f"User Chat Mode: Finish Reason: {response.finish_reason}")
 
         print_assistant_response(
             chat,

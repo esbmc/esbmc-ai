@@ -21,3 +21,7 @@ class ChatInterface(BaseChatInterface):
             f"Here is the corrected code:\n\n{source_code}",
         )
         self.push_to_message_stack("assistant", "Understood.")
+
+    def compress_message_stack(self) -> None:
+        # TODO
+        return super().compress_message_stack()
