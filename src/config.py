@@ -2,6 +2,7 @@
 
 import os
 import json
+from typing import Any, Union
 from dotenv import load_dotenv
 
 from src.logging import *
@@ -66,6 +67,25 @@ def load_envs() -> None:
         )
 
 
+def _load_config_value(config_file: dict, name: str, default: object = None) -> Any:
+    if name in config_file:
+        return config_file[name], True
+    else:
+        print(f"Warning: {name} not found in config... Using default value: {default}")
+        return default, False
+
+
+def _load_config_real_number(config_file: dict, name: str, default: object = None) -> Union[int, float]:
+    value, _ = _load_config_value(config_file, name, default)
+    # Type check
+    if type(value) is float or type(value) is int:
+        return value
+    else:
+        print(f"Error: config invalid {name} value: {value}")
+        print("Make sure it is a float or int...")
+        exit(4)
+
+
 def load_config(file_path: str) -> None:
     if not os.path.exists(file_path):
         print(f"Error: Config not found: {file_path}")
@@ -84,70 +104,36 @@ def load_config(file_path: str) -> None:
         )
 
     global consecutive_prompt_delay
-    if "consecutive_prompt_delay" in config_file:
-        if (
-            type(config_file["consecutive_prompt_delay"]) is float
-            or type(config_file["consecutive_prompt_delay"]) is int
-        ):
-            consecutive_prompt_delay = config_file["consecutive_prompt_delay"]
-        else:
-            print(
-                f"Error: config invalid consecutive_prompt_delay value: {config_file['consecutive_prompt_delay']}"
-            )
-            print("Make sure it is a float or int...")
-            exit(4)
-    else:
-        print(
-            f"Warning: consecutive_prompt_delay not found in config... Defaulting to {consecutive_prompt_delay}"
-        )
+    consecutive_prompt_delay = _load_config_real_number(
+        config_file,
+        "consecutive_prompt_delay",
+        consecutive_prompt_delay,
+    )
 
     global chat_temperature
-    if "chat_temperature" in config_file:
-        if (
-            type(config_file["chat_temperature"]) is float
-            or type(config_file["chat_temperature"]) is int
-        ):
-            chat_temperature = config_file["chat_temperature"]
-        else:
-            print(
-                f"Error: config invalid chat_temperature value: {config_file['chat_temperature']}"
-            )
-            print("Make sure it is a float or int...")
-            exit(4)
-    else:
-        print(
-            f"Warning: chat_temperature not found in config... Defaulting to {chat_temperature}"
-        )
+    chat_temperature = _load_config_real_number(
+        config_file,
+        "chat_temperature",
+        chat_temperature,
+    )
 
     global code_fix_temperature
-    if "code_fix_temperature" in config_file:
-        if (
-            type(config_file["code_fix_temperature"]) is float
-            or type(config_file["code_fix_temperature"]) is int
-        ):
-            code_fix_temperature = config_file["code_fix_temperature"]
-        else:
-            print(
-                f"Error: config invalid code_fix_temperature value: {config_file['code_fix_temperature']}"
-            )
-            print("Make sure it is a float or int...")
-            exit(4)
-    else:
-        print(
-            f"Warning: code_fix_temperature not found in config... Defaulting to {code_fix_temperature}"
-        )
+    code_fix_temperature = _load_config_real_number(
+        config_file,
+        "code_fix_temperature",
+        code_fix_temperature,
+    )
 
     global ai_model
-    if "ai_model" in config_file:
-        value = config_file["ai_model"]
-        if type(value) is str and is_valid_ai_model(value):
-            ai_model = value
-        else:
-            print(f"Error: config invalid ai_model value: {ai_model}")
-            exit(4)
-    else:
-        print(f"Warning: ai_model not found in config... Defaulting to {ai_model}")
-
+    ai_model, _ = _load_config_value(
+        config_file,
+        "ai_model",
+        ai_model,
+    )
+    if not is_valid_ai_model(ai_model):
+        print(f"Error: {ai_model} is not a valid AI model")
+        exit(4)
+    
     global esbmc_path
     # Health check verifies this.
     if "esbmc_path" in config_file and config_file["esbmc_path"] != "":
