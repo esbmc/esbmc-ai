@@ -1,5 +1,6 @@
 #include <stdlib.h>
 
+// This program is meant to print hello world
 int main()
 {
     int *a = malloc(sizeof(int) * 5);

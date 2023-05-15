@@ -2,11 +2,12 @@
 
 import os
 import json
+from typing import Any, Union
 from dotenv import load_dotenv
 
+from src.logging import *
 from src.ai_models import *
 
-verbose: bool = False
 openai_api_key: str = ""
 raw_responses: bool = False
 
@@ -24,18 +25,26 @@ esbmc_params: list[str] = [
     "--unlimited-k-steps",
 ]
 
+consecutive_prompt_delay: float = 20.0
 chat_temperature: float = 1.0
-ai_model: str = "gpt-3.5-turbo"
+code_fix_temperature: float = 1.1
+ai_model: str = AI_MODEL_GPT3
 
 cfg_path: str = "./config.json"
 
-cfg_sys_msg: dict
-cfg_initial_prompt = []
+
+class ChatPromptSettings(object):
+    system_messages: list
+    initial_prompt: str
+
+    def __init__(self, system_messages: list, initial_prompt: str) -> None:
+        super().__init__()
+        self.system_messages = system_messages
+        self.initial_prompt = initial_prompt
 
 
-def printv(m) -> None:
-    if verbose:
-        print(m)
+chat_prompt_user_mode: ChatPromptSettings
+chat_prompt_generator_mode: ChatPromptSettings
 
 
 def load_envs() -> None:
@@ -58,6 +67,25 @@ def load_envs() -> None:
         )
 
 
+def _load_config_value(config_file: dict, name: str, default: object = None) -> Any:
+    if name in config_file:
+        return config_file[name], True
+    else:
+        print(f"Warning: {name} not found in config... Using default value: {default}")
+        return default, False
+
+
+def _load_config_real_number(config_file: dict, name: str, default: object = None) -> Union[int, float]:
+    value, _ = _load_config_value(config_file, name, default)
+    # Type check
+    if type(value) is float or type(value) is int:
+        return value
+    else:
+        print(f"Error: config invalid {name} value: {value}")
+        print("Make sure it is a float or int...")
+        exit(4)
+
+
 def load_config(file_path: str) -> None:
     if not os.path.exists(file_path):
         print(f"Error: Config not found: {file_path}")
@@ -67,47 +95,64 @@ def load_config(file_path: str) -> None:
     with open(file_path, mode="r") as file:
         config_file = json.load(file)
 
-    global chat_temperature
-    if "chat_temperature" in config_file:
-        if (
-            type(config_file["chat_temperature"]) is float
-            or type(config_file["chat_temperature"]) is int
-        ):
-            chat_temperature = config_file["chat_temperature"]
-        else:
-            print(
-                f"Error: Invalid .env CHAT_TEMPERATURE value: {config_file['chat_temperature']}"
-            )
-            print("Make sure it is a float or int...")
-            exit(4)
+    global esbmc_params
+    if "esbmc_params" in config_file:
+        esbmc_params = config_file["esbmc_params"]
     else:
         print(
-            f"Warning: CHAT_TEMPERATURE not found in .env file... Defaulting to {chat_temperature}"
+            f"Warning: esbmc_params not found in config... Defaulting to {esbmc_params}"
         )
 
-    global ai_model
-    if "ai_model" in config_file:
-        value = config_file["ai_model"]
-        if type(value) is str and is_valid_ai_model(value):
-            ai_model = value
-        else:
-            print(f"Error: .env invalid AI_MODEL value: {ai_model}")
-            exit(4)
-    else:
-        print(f"Warning: AI_MODEL not found in .env file... Defaulting to {ai_model}")
+    global consecutive_prompt_delay
+    consecutive_prompt_delay = _load_config_real_number(
+        config_file,
+        "consecutive_prompt_delay",
+        consecutive_prompt_delay,
+    )
 
+    global chat_temperature
+    chat_temperature = _load_config_real_number(
+        config_file,
+        "chat_temperature",
+        chat_temperature,
+    )
+
+    global code_fix_temperature
+    code_fix_temperature = _load_config_real_number(
+        config_file,
+        "code_fix_temperature",
+        code_fix_temperature,
+    )
+
+    global ai_model
+    ai_model, _ = _load_config_value(
+        config_file,
+        "ai_model",
+        ai_model,
+    )
+    if not is_valid_ai_model(ai_model):
+        print(f"Error: {ai_model} is not a valid AI model")
+        exit(4)
+    
     global esbmc_path
     # Health check verifies this.
     if "esbmc_path" in config_file and config_file["esbmc_path"] != "":
         esbmc_path = config_file["esbmc_path"]
 
+    # Load the AI data from the file that will command the AI for all modes.
     printv("Initializing AI data")
-    # Will not be "" if valid. Checked already in load_envs()
-    global cfg_sys_msg
-    cfg_sys_msg = config_file["prompts"]["system"]
+    # TODO Add checking here.
+    global chat_prompt_user_mode
+    chat_prompt_user_mode = ChatPromptSettings(
+        system_messages=config_file["prompts"]["user_mode"]["system"],
+        initial_prompt=config_file["prompts"]["user_mode"]["initial"],
+    )
 
-    global cfg_initial_prompt
-    cfg_initial_prompt = config_file["prompts"]["initial"]
+    global chat_prompt_generator_mode
+    chat_prompt_generator_mode = ChatPromptSettings(
+        system_messages=config_file["prompts"]["generate_solution"]["system"],
+        initial_prompt=config_file["prompts"]["generate_solution"]["initial"],
+    )
 
 
 def load_args(args) -> None:
@@ -126,5 +171,8 @@ def load_args(args) -> None:
             exit(4)
 
     global esbmc_params
-    if len(args.remaining) != 0:
+    # If append flag is set, then append.
+    if args.append:
+        esbmc_params.extend(args.remaining)
+    elif len(args.remaining) != 0:
         esbmc_params = args.remaining

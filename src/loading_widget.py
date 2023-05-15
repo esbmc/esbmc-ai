@@ -16,20 +16,38 @@ class LoadingWidget(object):
     done: bool = False
     thread: Thread
     loading_text: str
-    anim_speed: float = 0.1
+    animation: list[str]
+    anim_speed: float
+    anim_clear_length: int
 
-    def __init__(self, anim_speed: float = 0.1) -> None:
+    def __init__(
+        self,
+        anim_speed: float = 0.1,
+        animation: list[str] = ["|", "/", "-", "\\"],
+    ) -> None:
         super().__init__()
         self.anim_speed = anim_speed
+        self.animation = animation
+
+        # Find the largest animatioon
+        self.anim_clear_length = 0
+        for frame in self.animation:
+            if len(frame) > self.anim_clear_length:
+                self.anim_clear_length = len(frame)
 
     def _animate(self) -> None:
-        for c in cycle(["|", "/", "-", "\\"]):
+        for c in cycle(self.animation):
             if self.done:
                 break
-            terminal.write(f"\r{self.loading_text} " + c)
+            # Calculate how much extra space to clear after c.
+            extra_space_clear: int = self.anim_clear_length - len(c)
+            terminal.write(f"\r{self.loading_text} " + c + " " * extra_space_clear)
             terminal.flush()
             sleep(self.anim_speed)
-        terminal.write("\r" + " " * (len(self.loading_text) + 2))
+
+        # +1 for space between loading text and c.
+        clear_length: int = len(self.loading_text) + 1 + self.anim_clear_length
+        terminal.write("\r" + " " * clear_length)
         terminal.flush()
         terminal.write("\r")
         terminal.flush()
