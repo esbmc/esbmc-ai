@@ -80,7 +80,7 @@ class FixCodeCommand(ChatCommand):
                 # Inform solution generator chat about the ESBMC response.
                 solution_generator.push_to_message_stack(
                     "user",
-                    f"Do not respond with any text, based on the source code provided, here is ESBMC output: {esbmc_output}",
+                    f"Do not respond with any text, based on the source code provided, here is ESBMC output:\n\n{esbmc_output}",
                 )
 
                 solution_generator.push_to_message_stack("assistant", "Understood.")
