@@ -5,13 +5,15 @@ from subprocess import Popen, PIPE
 
 import src.config as config
 
+from src.logging import printv
 
-def esbmc(path: str, esbmc_params: list = config.esbmc_params):
+
+def esbmc(path: str, esbmc_params: list):
     # Build parameters
     esbmc_cmd = [config.esbmc_path]
     esbmc_cmd.extend(esbmc_params)
     esbmc_cmd.append(path)
-
+    
     # Run ESBMC and get output
     process = Popen(esbmc_cmd, stdout=PIPE)
     (output_bytes, err_bytes) = process.communicate()
