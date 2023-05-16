@@ -3,9 +3,7 @@
 import os
 from subprocess import Popen, PIPE
 
-import src.config as config
-
-from src.logging import printv
+from . import config
 
 
 def esbmc(path: str, esbmc_params: list):

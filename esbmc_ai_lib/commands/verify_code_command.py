@@ -1,6 +1,6 @@
 # Author: Yiannis Charalambous
 
-from src.commands.chat_command import ChatCommand
+from .chat_command import ChatCommand
 
 
 class VerifyCodeCommand(ChatCommand):
