@@ -139,9 +139,12 @@ def load_config(file_path: str) -> None:
         exit(4)
 
     global esbmc_path
-    # Health check verifies this.
-    if "esbmc_path" in config_file and config_file["esbmc_path"] != "":
-        esbmc_path = config_file["esbmc_path"]
+    # Health check verifies this later in the init process.
+    esbmc_path, _ = _load_config_value(
+        config_file,
+        "esbmc_path",
+        esbmc_path,
+    )
 
     # Load the AI data from the file that will command the AI for all modes.
     printv("Initializing AI data")

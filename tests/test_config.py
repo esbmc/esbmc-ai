@@ -71,6 +71,3 @@ def test_load_config_real_number_wrong_value_default() -> None:
             1.0,
         )
         assert result == None
-
-
-# TODO Add testing whole config load process.
