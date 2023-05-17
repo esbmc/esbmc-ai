@@ -26,6 +26,7 @@ yarl = "==1.9.2"
 black = "*"
 pytest = "*"
 pytest-cov = "*"
+pylint = "*"
 
 [requires]
 python_version = "3.11"
