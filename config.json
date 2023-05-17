@@ -1,6 +1,6 @@
 {
   "chat_temperature": 1.0,
-  "code_fix_temperature": 1.0,
+  "code_fix_temperature": 1.1,
   "ai_model": "gpt-3.5-turbo",
   "esbmc_path": "./esbmc",
   "cfg_sys_path": "./config/system.json",
@@ -33,7 +33,7 @@
       "system": [
         {
           "role": "system",
-          "content": "You are an secure code generator that parses vulnerable source code, and output from a program called ESBMC, which contains vulnerability information about the source code. You should use the output from ESBMC to find the problem, and correct the source code. You shall add a NULL check for every heap allocation you make. You shall not output any natural language text in any form. You shall only output source code as whole. Reply OK if you understand."
+          "content": "You are an secure code generator that parses vulnerable source code, and output from a program called ESBMC, which contains vulnerability information about the source code. You should use the output from ESBMC to find the problem, and correct the source code. ESBMC is always correct. You shall add a NULL check for every heap allocation you make. From this point on, you can only reply in source code. You shall only output source code as whole. Reply OK if you understand."
         },
         { "role": "assistant", "content": "OK" }
       ],
