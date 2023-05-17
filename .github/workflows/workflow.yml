@@ -1,9 +1,9 @@
-# .github/workflows/pytest.yaml
-name: PyTest
+name: Checking
 on: push
 
 jobs:
-  test:
+  setup:
+    name: Setup
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -30,6 +30,27 @@ jobs:
         if: steps.cache-pipenv.outputs.cache-hit != 'true'
         run: |
           pipenv install --deploy --dev
+
+  pylint:
+    name: PyLint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: setup
+
+    steps:
+      - name: GitHub Action for pylint
+        uses: cclauss/GitHub-Action-for-pylint@0.7.0
+      # - name: Run PyLint
+      #   run: |
+      #     pylint
+
+  test:
+    name: PyTest
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: setup
+
+    steps:
       - name: Run test suite
         run: |
           pipenv run pytest -v
