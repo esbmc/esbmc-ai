@@ -67,7 +67,9 @@ def load_envs() -> None:
         )
 
 
-def _load_config_value(config_file: dict, name: str, default: object = None) -> Any:
+def _load_config_value(
+    config_file: dict, name: str, default: object = None
+) -> tuple[Any, bool]:
     if name in config_file:
         return config_file[name], True
     else:
@@ -75,15 +77,18 @@ def _load_config_value(config_file: dict, name: str, default: object = None) -> 
         return default, False
 
 
-def _load_config_real_number(config_file: dict, name: str, default: object = None) -> Union[int, float]:
+def _load_config_real_number(
+    config_file: dict, name: str, default: object = None
+) -> Union[int, float]:
     value, _ = _load_config_value(config_file, name, default)
     # Type check
     if type(value) is float or type(value) is int:
         return value
     else:
-        print(f"Error: config invalid {name} value: {value}")
-        print("Make sure it is a float or int...")
-        exit(4)
+        raise TypeError(
+            f"Error: config invalid {name} value: {value} "
+            + "Make sure it is a float or int..."
+        )
 
 
 def load_config(file_path: str) -> None:
@@ -96,12 +101,11 @@ def load_config(file_path: str) -> None:
         config_file = json.load(file)
 
     global esbmc_params
-    if "esbmc_params" in config_file:
-        esbmc_params = config_file["esbmc_params"]
-    else:
-        print(
-            f"Warning: esbmc_params not found in config... Defaulting to {esbmc_params}"
-        )
+    esbmc_params, _ = _load_config_value(
+        config_file,
+        "esbmc_params",
+        esbmc_params,
+    )
 
     global consecutive_prompt_delay
     consecutive_prompt_delay = _load_config_real_number(
@@ -133,7 +137,7 @@ def load_config(file_path: str) -> None:
     if not is_valid_ai_model(ai_model):
         print(f"Error: {ai_model} is not a valid AI model")
         exit(4)
-    
+
     global esbmc_path
     # Health check verifies this.
     if "esbmc_path" in config_file and config_file["esbmc_path"] != "":
