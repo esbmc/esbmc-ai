@@ -1,0 +1,3 @@
+#!/usr/bin/env sh
+
+python -m esbmc_ai_lib $@

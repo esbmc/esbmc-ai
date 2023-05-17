@@ -1,7 +1,7 @@
 # Author: Yiannis Charalambous 2023
 
-from src.base_chat_interface import ChatResponse
-from src.user_chat import ChatInterface
+from .base_chat_interface import ChatResponse
+from .user_chat import ChatInterface
 
 
 class SolutionGenerator(ChatInterface):

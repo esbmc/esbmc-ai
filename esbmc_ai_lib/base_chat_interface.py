@@ -4,7 +4,7 @@ from abc import abstractmethod
 import openai
 from tiktoken import get_encoding, encoding_for_model
 
-from src.ai_models import AI_MODEL_GPT3, AI_MODEL_GPT4
+from .ai_models import AI_MODEL_GPT3, AI_MODEL_GPT4
 
 MAX_TOKENS_GPT3TURBO: int = 4096
 

@@ -3,12 +3,12 @@
 from time import sleep
 
 
-import src.config as config
-from src.msg_bus import Signal
-from src.commands.chat_command import ChatCommand
-from src.loading_widget import LoadingWidget
-from src.esbmc import esbmc_load_source_code
-from src.solution_generator import SolutionGenerator
+from .. import config
+from ..msg_bus import Signal
+from .chat_command import ChatCommand
+from ..loading_widget import LoadingWidget
+from ..esbmc_util import esbmc_load_source_code
+from ..solution_generator import SolutionGenerator
 
 
 class FixCodeCommand(ChatCommand):

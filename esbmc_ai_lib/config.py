@@ -5,8 +5,8 @@ import json
 from typing import Any, Union
 from dotenv import load_dotenv
 
-from src.logging import *
-from src.ai_models import *
+from .logging import *
+from .ai_models import *
 
 openai_api_key: str = ""
 raw_responses: bool = False

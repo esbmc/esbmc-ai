@@ -10,19 +10,25 @@ import readline
 import argparse
 import openai
 
-import src.config as config
+import esbmc_ai_lib.config as config
 
-from src.commands.chat_command import ChatCommand
-from src.commands.fix_code_command import FixCodeCommand
-from src.commands.help_command import HelpCommand
-from src.commands.exit_command import ExitCommand
-from src.commands.verify_code_command import VerifyCodeCommand
+from esbmc_ai_lib.commands import (
+    ChatCommand,
+    FixCodeCommand,
+    HelpCommand,
+    ExitCommand,
+    VerifyCodeCommand,
+)
 
-from src.loading_widget import LoadingWidget
-from src.user_chat import ChatInterface
-from src.base_chat_interface import ChatResponse, FINISH_REASON_LENGTH, FINISH_REASON_STOP
-from src.logging import printv
-from src.esbmc import esbmc
+from esbmc_ai_lib.loading_widget import LoadingWidget
+from esbmc_ai_lib.user_chat import ChatInterface
+from esbmc_ai_lib.base_chat_interface import (
+    ChatResponse,
+    FINISH_REASON_LENGTH,
+    FINISH_REASON_STOP,
+)
+from esbmc_ai_lib.logging import printv
+from esbmc_ai_lib.esbmc_util import esbmc
 
 
 commands: list[ChatCommand] = []
@@ -236,7 +242,10 @@ def main() -> None:
     source_code: str = get_src(args.filename)
 
     anim.start("ESBMC is processing... Please Wait")
-    exit_code, esbmc_output, esbmc_err = esbmc(path=args.filename, esbmc_params=config.esbmc_params,)
+    exit_code, esbmc_output, esbmc_err = esbmc(
+        path=args.filename,
+        esbmc_params=config.esbmc_params,
+    )
     anim.stop()
 
     # ESBMC will output 0 for verification success and 1 for verification
@@ -329,12 +338,16 @@ def main() -> None:
             if response.finish_reason == FINISH_REASON_STOP:
                 break
             elif response.finish_reason == FINISH_REASON_LENGTH:
-                anim.start("Message stack limit reached. Shortening message stack... Please Wait")
+                anim.start(
+                    "Message stack limit reached. Shortening message stack... Please Wait"
+                )
                 chat.compress_message_stack()
                 anim.stop()
                 continue
             else:
-                raise NotImplementedError(f"User Chat Mode: Finish Reason: {response.finish_reason}")
+                raise NotImplementedError(
+                    f"User Chat Mode: Finish Reason: {response.finish_reason}"
+                )
 
         print_assistant_response(
             chat,

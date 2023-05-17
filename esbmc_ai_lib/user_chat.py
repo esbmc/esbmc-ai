@@ -1,6 +1,6 @@
 # Author: Yiannis Charalambous 2023
 
-from src.base_chat_interface import BaseChatInterface
+from .base_chat_interface import BaseChatInterface
 
 
 class ChatInterface(BaseChatInterface):
