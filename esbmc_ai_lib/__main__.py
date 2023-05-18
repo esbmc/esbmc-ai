@@ -245,7 +245,7 @@ def main() -> None:
     source_code: str = get_src(args.filename)
 
     anim.start("ESBMC is processing... Please Wait")
-    exit_code, esbmc_output, esbmc_err = esbmc(
+    exit_code, esbmc_output = esbmc(
         path=args.filename,
         esbmc_params=config.esbmc_params,
     )

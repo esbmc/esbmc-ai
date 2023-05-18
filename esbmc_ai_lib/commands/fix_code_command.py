@@ -51,7 +51,7 @@ class FixCodeCommand(ChatCommand):
             # Pass to ESBMC, a workaround is used where the file is saved
             # to a temporary location since ESBMC needs it in file format.
             self.anim.start("Verifying with ESBMC... Please Wait")
-            exit_code, esbmc_output, esbmc_err = esbmc_load_source_code(
+            exit_code, esbmc_output = esbmc_load_source_code(
                 str(response),
                 config.esbmc_params,
                 False,
@@ -66,8 +66,15 @@ class FixCodeCommand(ChatCommand):
 
                 return False, response
             elif exit_code != 1:
-                print("Error: AI model has probably output text in the source code...")
-                print(f"ESBMC Error: {esbmc_output}")
+                # The program did not compile.
+                solution_generator.push_to_message_stack(
+                    "user",
+                    "The source code you provided does not compile.",
+                )
+                solution_generator.push_to_message_stack(
+                    "assistant",
+                    "OK. Show me the ESBMC output for additional assistance.",
+                )
 
             # Failure case
             print(f"Failure {idx+1}/{max_retries}: Retrying...")
@@ -80,7 +87,7 @@ class FixCodeCommand(ChatCommand):
                 # Inform solution generator chat about the ESBMC response.
                 solution_generator.push_to_message_stack(
                     "user",
-                    f"Do not respond with any text, based on the source code provided, here is ESBMC output:\n\n{esbmc_output}",
+                    f"Based on the source code provided, here is ESBMC output:\n\n{esbmc_output}",
                 )
 
                 solution_generator.push_to_message_stack("assistant", "Understood.")
