@@ -241,7 +241,7 @@ def main() -> None:
 
     # Read the source code and esbmc output.
     printv("Reading source code...")
-    printv(f"Running ESBMC with {config.esbmc_params}")
+    print(f"Running ESBMC with {config.esbmc_params}\n")
     source_code: str = get_src(args.filename)
 
     anim.start("ESBMC is processing... Please Wait")
