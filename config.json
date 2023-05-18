@@ -15,7 +15,8 @@
     "--k-step",
     "2",
     "--floatbv",
-    "--unlimited-k-steps"
+    "--unlimited-k-steps",
+    "--memory-leak-check"
   ],
   "consecutive_prompt_delay": 20,
   "prompts": {

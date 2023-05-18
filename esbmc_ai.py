@@ -2,6 +2,6 @@
 
 # Author: Yiannis Charalambous 2023
 
-from esbmc_ai_lib.main import main
+from esbmc_ai_lib.__main__ import main
 
 main()

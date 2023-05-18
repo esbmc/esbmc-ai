@@ -1,0 +1,17 @@
+{
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Python: esbmc_ai_lib",
+      "type": "python",
+      "request": "launch",
+      "module": "esbmc_ai_lib",
+      "justMyCode": true,
+      "cwd": "${workspaceFolder}",
+      "args": ["-a", "samples/mem_leak.c", "--memory-leak-check"]
+    }
+  ]
+}
