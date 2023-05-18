@@ -179,6 +179,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         prog="ESBMC-ChatGPT",
         description=HELP_MESSAGE,
+        # argparse.RawDescriptionHelpFormatter allows the ESBMC_HELP to display
+        # properly.
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=f"Made by Yiannis Charalambous\n\n{ESBMC_HELP}",
     )
@@ -224,6 +226,7 @@ def main() -> None:
     args = parser.parse_args()
 
     print("ESBMC-AI")
+    print("Made by Yiannis Charalambous")
     print()
 
     init_check_health(args.verbose)
