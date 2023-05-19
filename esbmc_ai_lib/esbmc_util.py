@@ -2,6 +2,8 @@
 
 import os
 from subprocess import Popen, PIPE, STDOUT
+from tempfile import NamedTemporaryFile, TemporaryDirectory
+from pathlib import Path
 
 from . import config
 
@@ -25,24 +27,37 @@ def esbmc(path: str, esbmc_params: list):
 
 
 def esbmc_load_source_code(
+    file_path: str,
     source_code: str,
     esbmc_params: list = config.esbmc_params,
-    auto_clean: bool = True,
+    auto_clean: bool = config.temp_auto_clean,
 ):
-    # Make temp folder
-    if not os.path.exists("temp"):
-        os.mkdir("temp")
+    source_code_path = Path(file_path)
 
-    # Save to temporary folder.
-    with open("temp/tempfile.c", "w") as file:
+    # Create temp path.
+    delete_path: bool = False
+    if not os.path.exists(config.temp_file_dir):
+        os.mkdir(config.temp_file_dir)
+        delete_path = True
+
+    temp_file_path = f"{config.temp_file_dir}{os.sep}{source_code_path.name}"
+
+    # Create temp file.
+    with open(temp_file_path, "w") as file:
+        # Save to temporary folder and flush contents.
         file.write(source_code)
+        file.flush()
 
-    # Call ESBMC to temporary folder.
-    results = esbmc("temp/tempfile.c", esbmc_params)
+        # Call ESBMC to temporary folder.
+        results = esbmc(file.name, esbmc_params)
 
-    # Delete temporary file.
+    # Delete temp files and path
     if auto_clean:
-        os.remove("temp/tempfile.c")
+        # Remove file
+        os.remove(temp_file_path)
+        # Remove file path if created this run and is empty.
+        if delete_path and len(os.listdir(config.temp_file_dir)) == 0:
+            os.rmdir(config.temp_file_dir)
 
     # Return
     return results
