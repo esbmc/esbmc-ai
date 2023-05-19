@@ -1,25 +1,27 @@
 # Author: Yiannis Charalambous
 
 import os
-from subprocess import Popen, PIPE
+from subprocess import Popen, PIPE, STDOUT
 
 from . import config
 
 
 def esbmc(path: str, esbmc_params: list):
+    """Exit code will be 0 if verification successful, 1 if verification
+    failed. And any other number for compilation error/general errors."""
     # Build parameters
     esbmc_cmd = [config.esbmc_path]
     esbmc_cmd.extend(esbmc_params)
     esbmc_cmd.append(path)
-    
+
     # Run ESBMC and get output
-    process = Popen(esbmc_cmd, stdout=PIPE)
+    process = Popen(esbmc_cmd, stdout=PIPE, stderr=STDOUT)
     (output_bytes, err_bytes) = process.communicate()
     # Return
     exit_code = process.wait()
     output: str = str(output_bytes).replace("\\n", "\n")
     err: str = str(err_bytes).replace("\\n", "\n")
-    return exit_code, output, err
+    return exit_code, output
 
 
 def esbmc_load_source_code(

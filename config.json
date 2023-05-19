@@ -39,6 +39,16 @@
         { "role": "assistant", "content": "OK" }
       ],
       "initial": "Generate a correction for the source code provided. Show the code only. Do not reply with acknowledgements."
+    },
+    "conv_summarizer": {
+      "system": [
+        {
+          "role": "system",
+          "content": "You are a conversation summarizer. Your goal is to summarize conversations between the assistant and the user in an informative and compact way. You can only reply in summaries from now on. Reply OK if you understand."
+        },
+        { "role": "assistant", "content": "OK" }
+      ],
+      "initial": "Summarize the conversation provided."
     }
   }
 }

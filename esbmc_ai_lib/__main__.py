@@ -3,6 +3,7 @@
 # Author: Yiannis Charalambous 2023
 
 import os
+from time import sleep
 
 # Enables arrow key functionality for input(). Do not remove import.
 import readline
@@ -21,7 +22,7 @@ from esbmc_ai_lib.commands import (
 )
 
 from esbmc_ai_lib.loading_widget import LoadingWidget
-from esbmc_ai_lib.user_chat import ChatInterface
+from esbmc_ai_lib.user_chat import ChatInterface, ConversationSummarizerChat
 from esbmc_ai_lib.base_chat_interface import (
     ChatResponse,
     FINISH_REASON_LENGTH,
@@ -245,7 +246,7 @@ def main() -> None:
     source_code: str = get_src(args.filename)
 
     anim.start("ESBMC is processing... Please Wait")
-    exit_code, esbmc_output, esbmc_err = esbmc(
+    exit_code, esbmc_output = esbmc(
         path=args.filename,
         esbmc_params=config.esbmc_params,
     )
@@ -268,11 +269,20 @@ def main() -> None:
     # Inject output for ai.
     system_messages: list = build_system_messages(source_code, esbmc_output)
 
+    printv("Creating user chat mode summarizer...")
+    chat_summarizer: ConversationSummarizerChat = ConversationSummarizerChat(
+        system_messages=config.chat_prompt_conversation_summarizer.system_messages,
+        model=config.ai_model,
+        temperature=config.chat_temperature,
+    )
+
+    printv("Creating user chat")
     global chat
     chat = ChatInterface(
         system_messages=system_messages,
         model=config.ai_model,
         temperature=config.chat_temperature,
+        summarizer=chat_summarizer,
     )
     printv(f"Using AI Model: {chat.model_name}")
 
@@ -281,7 +291,7 @@ def main() -> None:
     if len(config.chat_prompt_user_mode.initial_prompt) > 0:
         printv("Using initial prompt from file...\n")
         anim.start("Model is parsing ESBMC output... Please Wait")
-        response = chat.send_message(config.chat_prompt_user_mode.initial_prompt)
+        response = chat.send_message(config.chat_prompt_user_mode.initial_prompt, True)
         anim.stop()
     else:
         raise RuntimeError("User mode initial prompt not found in config.")
@@ -297,7 +307,7 @@ def main() -> None:
 
     while True:
         # Get user input.
-        user_message = input(">: ")
+        user_message = input("user>: ")
 
         # Check if it is a command, if not, then pass it to the chat interface.
         if user_message.startswith("/"):
@@ -344,7 +354,9 @@ def main() -> None:
                 anim.start(
                     "Message stack limit reached. Shortening message stack... Please Wait"
                 )
+                sleep(config.consecutive_prompt_delay)
                 chat.compress_message_stack()
+                sleep(config.consecutive_prompt_delay)
                 anim.stop()
                 continue
             else:

@@ -2,7 +2,7 @@
 
 import os
 import json
-from typing import Any, Union
+from typing import Any, NamedTuple, Union
 from dotenv import load_dotenv
 
 from .logging import *
@@ -33,18 +33,14 @@ ai_model: str = AI_MODEL_GPT3
 cfg_path: str = "./config.json"
 
 
-class ChatPromptSettings(object):
+class ChatPromptSettings(NamedTuple):
     system_messages: list
     initial_prompt: str
-
-    def __init__(self, system_messages: list, initial_prompt: str) -> None:
-        super().__init__()
-        self.system_messages = system_messages
-        self.initial_prompt = initial_prompt
 
 
 chat_prompt_user_mode: ChatPromptSettings
 chat_prompt_generator_mode: ChatPromptSettings
+chat_prompt_conversation_summarizer: ChatPromptSettings
 
 
 def load_envs() -> None:
@@ -159,6 +155,12 @@ def load_config(file_path: str) -> None:
     chat_prompt_generator_mode = ChatPromptSettings(
         system_messages=config_file["prompts"]["generate_solution"]["system"],
         initial_prompt=config_file["prompts"]["generate_solution"]["initial"],
+    )
+
+    global chat_prompt_conversation_summarizer
+    chat_prompt_conversation_summarizer = ChatPromptSettings(
+        system_messages=config_file["prompts"]["conv_summarizer"]["system"],
+        initial_prompt=config_file["prompts"]["conv_summarizer"]["initial"],
     )
 
 

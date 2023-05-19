@@ -17,6 +17,10 @@ This is an area of active research.
 
 [demo_fix_code.webm](https://github.com/Yiannis128/esbmc-ai/assets/9535618/e35882ee-7e50-4c10-9879-d19e73d7f45d)
 
+### YouTube Channel
+
+More videos can be found on the [ESBMC-AI Youtube Channel](https://www.youtube.com/@esbmc-ai)
+
 ## ESBMC
 
 From the [ESBMC website](http://esbmc.org):
@@ -36,12 +40,13 @@ From the [ESBMC GitHub repo](https://github.com/esbmc/esbmc)
 
 ## Initial Setup
 
-1. Install required Python modules: `pip3 install -r requirements.txt`. Alternatively use `pipenv shell` to go into a virtual envrionment and run `pipenv lock`.
+1. Install required Python modules: `pip3 install -dr requirements.txt`. Alternatively use `pipenv shell` to go into a virtual environment and run `pipenv lock -d` to install dependencies from the Pipfile.
 2. ESBMC-AI does not come with the original ESBMC software. In order to use ESBMC-AI you must provide ESBMC. Download [ESBMC](http://esbmc.org/) executable or build from [source](https://github.com/esbmc/esbmc).
-3. Create a `.env` file using the provided `.env.example` as a template. Make sure to insert your OpenAI API key inside the `.env` file you just created!
-4. Enter the ESBMC executable location in the .env `ESBMC_PATH`.
-5. Further adjust .env settings as required.
-6. You can now run ESBMC-AI.
+3. Once the ESBMC software is downloaded, open `config.json` and edit the `esbmc_path` field to specify its location, it's recommended for development purposes to either install it globally or have it in the project root.
+4. Create a `.env` file using the provided `.env.example` as a template (use command `cp .env.example .env`). **Make sure to insert your OpenAI API key inside the `.env` file you just created!**
+5. Further, adjust `.env` settings as required.
+6. Further, adjust the `config.json` file as required. Be careful when editing AI model messages as incorrect messages can break the flow of the program, or introduce incorrect results. In general, it's recommended to leave those options alone.
+7. You can now run ESBMC-AI.
 
 ## Settings
 
@@ -54,7 +59,7 @@ The following settings are adjustable in the .env file. **Some settings are allo
 
 ### config.json
 
-The following settings are adjustable in the config.json file. **Some settings are allowed to be omitted, however, the program will display a warning when done so as it is not a recommended practice**. This list may be incomplete:
+The following settings are adjustable in the `config.json` file. **Some settings are allowed to be omitted, however, the program will display a warning when done so as it is not a recommended practice**. This list may be incomplete:
 
 1. `chat_temperature`: The temperature parameter used when calling the chat completion API. This controls the temperature sampling that the model uses. Higher values like 0.8 and above will make the output more random, on the other hand, lower values like 0.2 will be more deterministic. **Allowed values are between 0.0 to 2.0**. Default is 1.0
 2. `ai_model`: The model to use. Options: `gpt-3.5-turbo`, `gpt-4` (under API key conditions).
@@ -73,7 +78,7 @@ The following settings are adjustable in the config.json file. **Some settings a
 ESBMC-AI can be used to scan a file with default parameters like this:
 
 ```bash
-./main.py /path/to/source_code.c
+./esbmc_ai.py /path/to/source_code.c
 ```
 
 ### ESBMC-AI Parameters
@@ -83,13 +88,13 @@ So in this case `-vr` will be consumed by ESBMC-AI, and ESBMC will not get any
 arguments.
 
 ```bash
-./main.py -vr /path/to/source_code.c
+./esbmc_ai.py -vr /path/to/source_code.c
 ```
 
 ### Help
 
 ```bash
-./main.py -h
+./esbmc_ai.py -h
 ```
 
 ### ESBMC Arguments
@@ -127,7 +132,7 @@ Property checking:
 Some examples of passing parameters to ESBMC:
 
 ```
-./main.py /path/to/source_code.c --force-malloc-success --no-assertions --unwind 5
+./esbmc_ai.py /path/to/source_code.c --force-malloc-success --no-assertions --unwind 5
 ```
 
 Basically, any arguments **after** the filename are passed directly to ESBMC.

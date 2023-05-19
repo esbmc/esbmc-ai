@@ -5,13 +5,22 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Python: esbmc_ai_lib",
+      "name": "Launch ESBMC-AI on Open File",
       "type": "python",
       "request": "launch",
       "module": "esbmc_ai_lib",
       "justMyCode": true,
       "cwd": "${workspaceFolder}",
-      "args": ["-a", "samples/mem_leak.c", "--memory-leak-check"]
+      "args": ["${file}"]
+    },
+    {
+      "name": "Run tests",
+      "type": "python",
+      "request": "launch",
+      "module": "pytest",
+      "justMyCode": true,
+      "cwd": "${workspaceFolder}",
+      "args": ["-v"]
     }
   ]
 }
