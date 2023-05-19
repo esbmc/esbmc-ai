@@ -17,6 +17,10 @@ This is an area of active research.
 
 [demo_fix_code.webm](https://github.com/Yiannis128/esbmc-ai/assets/9535618/e35882ee-7e50-4c10-9879-d19e73d7f45d)
 
+### YouTube Channel
+
+More videos can be found on the [ESBMC-AI Youtube Channel](https://www.youtube.com/@esbmc-ai)
+
 ## ESBMC
 
 From the [ESBMC website](http://esbmc.org):
