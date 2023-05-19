@@ -1,10 +1,10 @@
 # Author: Yiannis Charalambous 2023
 
-from .base_chat_interface import ChatResponse
+from .base_chat_interface import BaseChatInterface, ChatResponse
 from .user_chat import ChatInterface
 
 
-class SolutionGenerator(ChatInterface):
+class SolutionGenerator(BaseChatInterface):
     initial_prompt: str
     source_code: str
     esbmc_output: str
@@ -25,27 +25,26 @@ class SolutionGenerator(ChatInterface):
         )
         self.initial_prompt = initial_prompt
         self.source_code = source_code
-        self.initial_prompt = initial_prompt
         self.esbmc_output = esbmc_output
 
         # Introduce source code and ESBMC output to AI.
         self.push_to_message_stack(
             "user",
             f"The following text is the source code of the program, reply OK if you understand:\n\n{source_code}",
+            True,
         )
-        self.push_to_message_stack("assistant", "ok")
+        self.push_to_message_stack("assistant", "ok", True)
         self.push_to_message_stack(
             "user",
             f"The following text is the output of ESBMC, reply OK if you understand:\n\n{esbmc_output}",
+            True,
         )
-        self.push_to_message_stack("assistant", "ok")
+        self.push_to_message_stack("assistant", "ok", True)
 
     def compress_message_stack(self) -> None:
-        # TODO Delete previous and system messages.
+        self.messages = self.protected_messages.copy()
 
-        return super().compress_message_stack()
-
-    def generate_solution(self) -> str:
+    def generate_solution(self) -> tuple[str, str]:
         response: ChatResponse = self.send_message(self.initial_prompt)
         solution: str = response.message
 
@@ -58,4 +57,4 @@ class SolutionGenerator(ChatInterface):
         except ValueError:
             pass
 
-        return solution
+        return solution, response.finish_reason

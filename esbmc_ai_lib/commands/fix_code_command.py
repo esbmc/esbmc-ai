@@ -3,12 +3,13 @@
 from time import sleep
 
 
+from .chat_command import ChatCommand
 from .. import config
 from ..msg_bus import Signal
-from .chat_command import ChatCommand
 from ..loading_widget import LoadingWidget
 from ..esbmc_util import esbmc_load_source_code
 from ..solution_generator import SolutionGenerator
+from ..base_chat_interface import FINISH_REASON_LENGTH
 
 
 class FixCodeCommand(ChatCommand):
@@ -43,10 +44,19 @@ class FixCodeCommand(ChatCommand):
 
         max_retries: int = 10
         for idx in range(max_retries):
-            # Generate AI solution
-            self.anim.start("Generating Solution... Please Wait")
-            response = solution_generator.generate_solution()
-            self.anim.stop()
+            # Get response.
+            response: str = ""
+            while True:
+                # Generate AI solution
+                self.anim.start("Generating Solution... Please Wait")
+                response, finish_reason = solution_generator.generate_solution()
+                self.anim.stop()
+                if finish_reason == FINISH_REASON_LENGTH:
+                    self.anim.start("Compressing message stack... Please Wait")
+                    solution_generator.compress_message_stack()
+                    self.anim.stop()
+                else:
+                    break
 
             # Pass to ESBMC, a workaround is used where the file is saved
             # to a temporary location since ESBMC needs it in file format.

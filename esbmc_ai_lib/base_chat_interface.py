@@ -60,7 +60,7 @@ class ChatResponse(object):
 class BaseChatInterface(object):
     max_tokens = MAX_TOKENS_GPT3TURBO
 
-    system_messages: list
+    protected_messages: list
     messages: list
     model_name: str
     temperature: float
@@ -72,20 +72,26 @@ class BaseChatInterface(object):
         temperature: float = 1.0,
     ) -> None:
         super().__init__()
-        self.system_messages = system_messages
-        self.messages = self.system_messages
         self.model_name = model
         self.temperature = temperature
+
+        self.protected_messages = system_messages.copy()
+        self.messages = system_messages.copy()
 
     @abstractmethod
     def compress_message_stack(self) -> None:
         raise NotImplementedError()
 
-    def push_to_message_stack(self, role: str, message: str) -> None:
-        self.messages.append({"role": role, "content": message})
+    def push_to_message_stack(
+        self, role: str, message: str, protected: bool = False
+    ) -> None:
+        message_struct = {"role": role, "content": message}
+        if protected:
+            self.protected_messages.append(message_struct)
+        self.messages.append(message_struct)
 
     # Returns an OpenAI object back.
-    def send_message(self, message: str) -> ChatResponse:
+    def send_message(self, message: str, protected: bool = False) -> ChatResponse:
         """Sends a message to the AI model. Returns solution. If the message
         stack fills up, the command will exit with no changes to the message
         stack."""
@@ -114,7 +120,7 @@ class BaseChatInterface(object):
 
         # If the response is OK then add to stack.
         if response.finish_reason == FINISH_REASON_STOP:
-            self.push_to_message_stack("user", message)
-            self.push_to_message_stack(response.role, response.message)
+            self.push_to_message_stack("user", message, protected)
+            self.push_to_message_stack(response.role, response.message, protected)
 
         return response
