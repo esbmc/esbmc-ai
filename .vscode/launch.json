@@ -21,6 +21,15 @@
       "justMyCode": true,
       "cwd": "${workspaceFolder}",
       "args": ["-v"]
+    },
+    {
+      "name": "Run coverage tests",
+      "type": "python",
+      "request": "launch",
+      "module": "pytest",
+      "justMyCode": true,
+      "cwd": "${workspaceFolder}",
+      "args": ["-v", "--cov"]
     }
   ]
 }

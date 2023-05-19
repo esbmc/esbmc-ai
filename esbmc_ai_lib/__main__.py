@@ -317,6 +317,7 @@ def main() -> None:
                 print("ESBMC-AI will generate a fix for the code...")
 
                 error, solution = fix_code_command.execute(
+                    file_name=args.filename,
                     source_code=source_code,
                     esbmc_output=esbmc_output,
                 )

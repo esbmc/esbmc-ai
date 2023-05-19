@@ -30,7 +30,7 @@ class FixCodeCommand(ChatCommand):
             animation=[str(num) for num in range(wait_time, 0, -1)],
         )
 
-    def execute(self, source_code: str, esbmc_output: str):
+    def execute(self, file_name: str, source_code: str, esbmc_output: str):
         solution_generator = SolutionGenerator(
             system_messages=config.chat_prompt_generator_mode.system_messages,
             initial_prompt=config.chat_prompt_generator_mode.initial_prompt,
@@ -62,9 +62,10 @@ class FixCodeCommand(ChatCommand):
             # to a temporary location since ESBMC needs it in file format.
             self.anim.start("Verifying with ESBMC... Please Wait")
             exit_code, esbmc_output = esbmc_load_source_code(
-                str(response),
-                config.esbmc_params,
-                False,
+                file_path=file_name,
+                source_code=str(response),
+                esbmc_params=config.esbmc_params,
+                auto_clean=config.temp_auto_clean,
             )
             self.anim.stop()
 

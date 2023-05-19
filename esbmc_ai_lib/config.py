@@ -25,6 +25,8 @@ esbmc_params: list[str] = [
     "--unlimited-k-steps",
 ]
 
+temp_auto_clean: bool = True
+temp_file_dir: str = "."
 consecutive_prompt_delay: float = 20.0
 chat_temperature: float = 1.0
 code_fix_temperature: float = 1.1
@@ -108,6 +110,20 @@ def load_config(file_path: str) -> None:
         config_file,
         "consecutive_prompt_delay",
         consecutive_prompt_delay,
+    )
+
+    global temp_auto_clean
+    temp_auto_clean, _ = _load_config_value(
+        config_file,
+        "temp_auto_clean",
+        temp_auto_clean,
+    )
+
+    global temp_file_dir
+    temp_file_dir, _ = _load_config_value(
+        config_file,
+        "temp_file_dir",
+        temp_file_dir,
     )
 
     global chat_temperature

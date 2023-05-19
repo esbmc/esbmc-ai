@@ -19,6 +19,8 @@
     "--memory-leak-check"
   ],
   "consecutive_prompt_delay": 20,
+  "temp_auto_clean": true,
+  "temp_file_dir": "./temp",
   "prompts": {
     "user_mode": {
       "system": [
