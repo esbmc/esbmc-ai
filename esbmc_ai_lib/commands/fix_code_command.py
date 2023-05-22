@@ -44,7 +44,8 @@ class FixCodeCommand(ChatCommand):
 
         max_retries: int = 10
         for idx in range(max_retries):
-            # Get response.
+            # Get a response. Use while loop to account for if the message stack
+            # gets full, then need to compress and retry.
             response: str = ""
             while True:
                 # Generate AI solution
@@ -98,7 +99,7 @@ class FixCodeCommand(ChatCommand):
                 # Inform solution generator chat about the ESBMC response.
                 solution_generator.push_to_message_stack(
                     "user",
-                    f"Based on the source code provided, here is ESBMC output:\n\n{esbmc_output}",
+                    f"ESBMC has reported that verification failed, use the ESBMC output to find out what is wrong, and fix it. Here is ESBMC output:\n\n{esbmc_output}",
                 )
 
                 solution_generator.push_to_message_stack("assistant", "Understood.")
