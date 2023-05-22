@@ -9,6 +9,7 @@ from time import sleep
 import readline
 
 import argparse
+from typing import Any
 import openai
 
 import esbmc_ai_lib.config as config
@@ -125,14 +126,7 @@ def print_assistant_response(
         )
 
 
-def init_commands() -> None:
-    """Function that handles initializing commands. Each command needs to be added
-    into the commands array in order for the command to register to be called by
-    the user and also register in the help system."""
-    # Bus Signals:
-    # fix_code_command.on_solution_signal.add_listener(chat.set_solution)
-    # fix_code_command.on_solution_signal.add_listener(verify_code_command.set_solution)
-
+def init_commands_list() -> None:
     # Setup Help command and commands list.
     global help_command
     commands.extend(
@@ -144,6 +138,16 @@ def init_commands() -> None:
         ]
     )
     help_command.set_commands(commands)
+
+
+def init_commands() -> None:
+    """Function that handles initializing commands. Each command needs to be added
+    into the commands array in order for the command to register to be called by
+    the user and also register in the help system."""
+    # Bus Signals:
+    # fix_code_command.on_solution_signal.add_listener(chat.set_solution)
+    # fix_code_command.on_solution_signal.add_listener(verify_code_command.set_solution)
+    pass
 
 
 def build_system_messages(source_code: str, esbmc_output: str) -> list:
@@ -176,7 +180,35 @@ def build_system_messages(source_code: str, esbmc_output: str) -> list:
     return system_messages
 
 
+def _run_command_mode(
+    command: ChatCommand,
+    args,
+    esbmc_output: str,
+    source_code: str,
+) -> None:
+    if command == fix_code_command:
+        error, solution = fix_code_command.execute(
+            file_name=args.filename,
+            source_code=source_code,
+            esbmc_output=esbmc_output,
+        )
+
+        if error:
+            print("Failed all attempts...")
+            exit(1)
+        else:
+            print(solution)
+    elif command == verify_code_command:
+        raise NotImplementedError()
+    else:
+        command.execute()
+    exit(0)
+
+
 def main() -> None:
+    init_commands_list()
+    command_names: list[str] = [command.command_name for command in commands]
+
     parser = argparse.ArgumentParser(
         prog="ESBMC-ChatGPT",
         description=HELP_MESSAGE,
@@ -224,6 +256,13 @@ def main() -> None:
         help="Any ESBMC parameters passed after the file name will be appended to the ones set in the config file, or the default ones if config file options are not set.",
     )
 
+    parser.add_argument(
+        "-c",
+        "--command",
+        choices=command_names,
+        help="Runs the program in command mode, it will exit after the command ends with an exit code.",
+    )
+
     args = parser.parse_args()
 
     print("ESBMC-AI")
@@ -262,9 +301,22 @@ def main() -> None:
         print(f"ESBMC exit code: {exit_code}")
         exit(1)
 
-    # Prepare the chat.
     printv("Initializing OpenAI")
     openai.api_key = config.openai_api_key
+
+    # Command mode: Check if command is called and call it.
+    # If not, then continue to user mode.
+    if args.command in command_names:
+        print("Running Command:", args.command)
+        for idx, command_name in enumerate(command_names):
+            if args.command == command_name:
+                _run_command_mode(
+                    command=commands[idx],
+                    args=args,
+                    source_code=source_code,
+                    esbmc_output=esbmc_output,
+                )
+        exit(0)
 
     # Inject output for ai.
     system_messages: list = build_system_messages(source_code, esbmc_output)
@@ -323,6 +375,10 @@ def main() -> None:
                 )
 
                 if not error:
+                    print(
+                        "\n\nassistant: Here is the corrected code, verified with ESBMC:"
+                    )
+                    print(f"```\n{solution}\n```")
                     # Let the AI model know about the corrected code.
                     printv("Informing Chat AI about correct code...")
                     chat.set_solution(solution)
