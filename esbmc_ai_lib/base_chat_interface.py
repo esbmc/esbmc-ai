@@ -1,6 +1,7 @@
 # Author: Yiannis Charalambous
 
 from abc import abstractmethod
+from typing import NamedTuple
 import openai
 from tiktoken import get_encoding, encoding_for_model
 
@@ -49,12 +50,12 @@ FINISH_REASON_CONTENT_FILTER: str = "content_filter"
 FINISH_REASON_NULL: str = "null"
 
 
-class ChatResponse(object):
-    base_message: object
-    finish_reason: str
-    role: str
-    message: str
-    total_tokens: int
+class ChatResponse(NamedTuple):
+    base_message: object = None
+    finish_reason: str = FINISH_REASON_NULL
+    role: str = ""
+    message: str = ""
+    total_tokens: int = 0
 
 
 class BaseChatInterface(object):
@@ -101,8 +102,9 @@ class BaseChatInterface(object):
         # Check if message is too long and exit.
         msg_tokens: int = num_tokens_from_messages(new_stack, self.model_name)
         if msg_tokens > self.max_tokens:
-            response: ChatResponse = ChatResponse()
-            response.finish_reason = FINISH_REASON_LENGTH
+            response: ChatResponse = ChatResponse(
+                finish_reason=FINISH_REASON_LENGTH,
+            )
             return response
 
         completion = openai.ChatCompletion.create(
@@ -111,12 +113,13 @@ class BaseChatInterface(object):
             temperature=self.temperature,
         )
 
-        response = ChatResponse()
-        response.base_message = completion
-        response.role = completion.choices[0].message.role
-        response.message = completion.choices[0].message.content
-        response.finish_reason = completion.choices[0].finish_reason
-        response.total_tokens = completion.usage.total_tokens
+        response = ChatResponse(
+            base_message=completion,
+            role=completion.choices[0].message.role,
+            message=completion.choices[0].message.content,
+            finish_reason=completion.choices[0].finish_reason,
+            total_tokens=completion.usage.total_tokens,
+        )
 
         # If the response is OK then add to stack.
         if response.finish_reason == FINISH_REASON_STOP:
