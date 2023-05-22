@@ -23,6 +23,7 @@ esbmc_params: list[str] = [
     "2",
     "--floatbv",
     "--unlimited-k-steps",
+    "--compact-trace",
 ]
 
 temp_auto_clean: bool = True
