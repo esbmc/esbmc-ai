@@ -150,36 +150,6 @@ def init_commands() -> None:
     pass
 
 
-def build_system_messages(source_code: str, esbmc_output: str) -> list:
-    """Build the setup messages from either the provided default settings or from
-    the loaded files."""
-    printv("Loading system messages")
-    system_messages: list = []
-    if len(config.chat_prompt_user_mode.system_messages) > 0:
-        system_messages.extend(config.chat_prompt_user_mode.system_messages)
-    else:
-        raise RuntimeError("Chat mode system messages could not be loaded from config.")
-
-    # Add the introduction of code prompts. TODO Make these loaded from config
-    # too in the future.
-    system_messages.extend(
-        [
-            {
-                "role": "system",
-                "content": f"Reply OK if you understand that the following text is the program source code:\n\n{source_code}",
-            },
-            {"role": "assistant", "content": "OK"},
-            {
-                "role": "system",
-                "content": f"Reply OK if you understand that the following text is the output from ESBMC:\n\n{esbmc_output}",
-            },
-            {"role": "assistant", "content": "OK"},
-        ]
-    )
-
-    return system_messages
-
-
 def _run_command_mode(
     command: ChatCommand,
     args,
@@ -318,9 +288,6 @@ def main() -> None:
                 )
         exit(0)
 
-    # Inject output for ai.
-    system_messages: list = build_system_messages(source_code, esbmc_output)
-
     printv("Creating user chat mode summarizer...")
     chat_summarizer: ConversationSummarizerChat = ConversationSummarizerChat(
         system_messages=config.chat_prompt_conversation_summarizer.system_messages,
@@ -331,10 +298,12 @@ def main() -> None:
     printv("Creating user chat")
     global chat
     chat = ChatInterface(
-        system_messages=system_messages,
+        system_messages=config.chat_prompt_user_mode.system_messages,
         model=config.ai_model,
         temperature=config.chat_temperature,
         summarizer=chat_summarizer,
+        source_code=source_code,
+        esbmc_output=esbmc_output,
     )
     printv(f"Using AI Model: {chat.model_name}")
 
