@@ -34,6 +34,7 @@ from esbmc_ai_lib.esbmc_util import esbmc
 
 
 commands: list[ChatCommand] = []
+command_names: list[str]
 help_command: HelpCommand = HelpCommand()
 fix_code_command: FixCodeCommand = FixCodeCommand()
 verify_code_command: VerifyCodeCommand = VerifyCodeCommand()
@@ -140,6 +141,9 @@ def init_commands_list() -> None:
     )
     help_command.set_commands(commands)
 
+    global command_names
+    command_names = [command.command_name for command in commands]
+
 
 def init_commands() -> None:
     """Function that handles initializing commands. Each command needs to be added
@@ -178,7 +182,6 @@ def _run_command_mode(
 
 def main() -> None:
     init_commands_list()
-    command_names: list[str] = [command.command_name for command in commands]
 
     parser = argparse.ArgumentParser(
         prog="ESBMC-ChatGPT",
