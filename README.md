@@ -103,6 +103,7 @@ Below are some very useful arguments that can be passed to ESBMC:
 
 ```
 Property checking:
+  --compact-trace                  add trace information to output
   --no-assertions                  ignore assertions
   --no-bounds-check                do not do array bounds check
   --no-div-by-zero-check           do not do division by zero check

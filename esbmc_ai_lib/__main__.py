@@ -48,6 +48,7 @@ ESBMC_HELP: str = """Additional ESBMC Arguments - The following are useful
 arguments that can be added after the filename to modify ESBMC functionality.
 For all the options, run ESBMC with -h as a parameter:
 
+  --compact-trace                  add trace information to output
   --no-assertions                  ignore assertions
   --no-bounds-check                do not do array bounds check
   --no-div-by-zero-check           do not do division by zero check
@@ -369,6 +370,7 @@ def main() -> None:
         else:
             print()
 
+        # User chat mode send message and process
         while True:
             # Send user message to AI model and process.
             anim.start("Generating response... Please Wait")

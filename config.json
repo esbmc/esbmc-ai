@@ -16,7 +16,6 @@
     "2",
     "--floatbv",
     "--unlimited-k-steps",
-    "--compact-trace",
     "--memory-leak-check"
   ],
   "consecutive_prompt_delay": 20,
