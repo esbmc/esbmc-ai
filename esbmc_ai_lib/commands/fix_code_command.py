@@ -71,9 +71,6 @@ class FixCodeCommand(ChatCommand):
             self.anim.stop()
 
             if exit_code == 0:
-                print("\n\nassistant: Here is the corrected code, verified with ESBMC:")
-                print(f"```\n{response}\n```")
-
                 self.on_solution_signal.emit(response)
 
                 return False, response

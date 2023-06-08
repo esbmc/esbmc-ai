@@ -14,6 +14,8 @@ class ChatInterface(BaseChatInterface):
         model: str,
         temperature: float,
         summarizer: ConversationSummarizerChat,
+        source_code: str,
+        esbmc_output: str,
     ) -> None:
         super().__init__(
             system_messages=system_messages,
@@ -21,6 +23,22 @@ class ChatInterface(BaseChatInterface):
             temperature=temperature,
         )
         self.summarizer = summarizer
+
+        self.push_to_message_stack(
+            "system",
+            f"Reply OK if you understand that the following text is the program source code:\n\n{source_code}",
+            True,
+        )
+
+        self.push_to_message_stack("assistant", "OK", True)
+
+        self.push_to_message_stack(
+            "system",
+            f"Reply OK if you understand that the following text is the output from ESBMC:\n\n{esbmc_output}",
+            True,
+        )
+
+        self.push_to_message_stack("assistant", "OK", True)
 
     def set_solution(self, source_code: str) -> None:
         """Sets the solution to the problem ESBMC reported, this will inform the AI."""

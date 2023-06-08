@@ -9,6 +9,7 @@ from time import sleep
 import readline
 
 import argparse
+from typing import Any
 import openai
 
 import esbmc_ai_lib.config as config
@@ -33,6 +34,7 @@ from esbmc_ai_lib.esbmc_util import esbmc
 
 
 commands: list[ChatCommand] = []
+command_names: list[str]
 help_command: HelpCommand = HelpCommand()
 fix_code_command: FixCodeCommand = FixCodeCommand()
 verify_code_command: VerifyCodeCommand = VerifyCodeCommand()
@@ -47,6 +49,7 @@ ESBMC_HELP: str = """Additional ESBMC Arguments - The following are useful
 arguments that can be added after the filename to modify ESBMC functionality.
 For all the options, run ESBMC with -h as a parameter:
 
+  --compact-trace                  add trace information to output
   --no-assertions                  ignore assertions
   --no-bounds-check                do not do array bounds check
   --no-div-by-zero-check           do not do division by zero check
@@ -125,14 +128,7 @@ def print_assistant_response(
         )
 
 
-def init_commands() -> None:
-    """Function that handles initializing commands. Each command needs to be added
-    into the commands array in order for the command to register to be called by
-    the user and also register in the help system."""
-    # Bus Signals:
-    # fix_code_command.on_solution_signal.add_listener(chat.set_solution)
-    # fix_code_command.on_solution_signal.add_listener(verify_code_command.set_solution)
-
+def init_commands_list() -> None:
     # Setup Help command and commands list.
     global help_command
     commands.extend(
@@ -145,38 +141,48 @@ def init_commands() -> None:
     )
     help_command.set_commands(commands)
 
+    global command_names
+    command_names = [command.command_name for command in commands]
 
-def build_system_messages(source_code: str, esbmc_output: str) -> list:
-    """Build the setup messages from either the provided default settings or from
-    the loaded files."""
-    printv("Loading system messages")
-    system_messages: list = []
-    if len(config.chat_prompt_user_mode.system_messages) > 0:
-        system_messages.extend(config.chat_prompt_user_mode.system_messages)
+
+def init_commands() -> None:
+    """Function that handles initializing commands. Each command needs to be added
+    into the commands array in order for the command to register to be called by
+    the user and also register in the help system."""
+    # Bus Signals:
+    # fix_code_command.on_solution_signal.add_listener(chat.set_solution)
+    # fix_code_command.on_solution_signal.add_listener(verify_code_command.set_solution)
+    pass
+
+
+def _run_command_mode(
+    command: ChatCommand,
+    args,
+    esbmc_output: str,
+    source_code: str,
+) -> None:
+    if command == fix_code_command:
+        error, solution = fix_code_command.execute(
+            file_name=args.filename,
+            source_code=source_code,
+            esbmc_output=esbmc_output,
+        )
+
+        if error:
+            print("Failed all attempts...")
+            exit(1)
+        else:
+            print(solution)
+    elif command == verify_code_command:
+        raise NotImplementedError()
     else:
-        raise RuntimeError("Chat mode system messages could not be loaded from config.")
-
-    # Add the introduction of code prompts. TODO Make these loaded from config
-    # too in the future.
-    system_messages.extend(
-        [
-            {
-                "role": "system",
-                "content": f"Reply OK if you understand that the following text is the program source code:\n\n{source_code}",
-            },
-            {"role": "assistant", "content": "OK"},
-            {
-                "role": "system",
-                "content": f"Reply OK if you understand that the following text is the output from ESBMC:\n\n{esbmc_output}",
-            },
-            {"role": "assistant", "content": "OK"},
-        ]
-    )
-
-    return system_messages
+        command.execute()
+    exit(0)
 
 
 def main() -> None:
+    init_commands_list()
+
     parser = argparse.ArgumentParser(
         prog="ESBMC-ChatGPT",
         description=HELP_MESSAGE,
@@ -224,6 +230,13 @@ def main() -> None:
         help="Any ESBMC parameters passed after the file name will be appended to the ones set in the config file, or the default ones if config file options are not set.",
     )
 
+    parser.add_argument(
+        "-c",
+        "--command",
+        choices=command_names,
+        help="Runs the program in command mode, it will exit after the command ends with an exit code.",
+    )
+
     args = parser.parse_args()
 
     print("ESBMC-AI")
@@ -262,12 +275,22 @@ def main() -> None:
         print(f"ESBMC exit code: {exit_code}")
         exit(1)
 
-    # Prepare the chat.
     printv("Initializing OpenAI")
     openai.api_key = config.openai_api_key
 
-    # Inject output for ai.
-    system_messages: list = build_system_messages(source_code, esbmc_output)
+    # Command mode: Check if command is called and call it.
+    # If not, then continue to user mode.
+    if args.command in command_names:
+        print("Running Command:", args.command)
+        for idx, command_name in enumerate(command_names):
+            if args.command == command_name:
+                _run_command_mode(
+                    command=commands[idx],
+                    args=args,
+                    source_code=source_code,
+                    esbmc_output=esbmc_output,
+                )
+        exit(0)
 
     printv("Creating user chat mode summarizer...")
     chat_summarizer: ConversationSummarizerChat = ConversationSummarizerChat(
@@ -279,10 +302,12 @@ def main() -> None:
     printv("Creating user chat")
     global chat
     chat = ChatInterface(
-        system_messages=system_messages,
+        system_messages=config.chat_prompt_user_mode.system_messages,
         model=config.ai_model,
         temperature=config.chat_temperature,
         summarizer=chat_summarizer,
+        source_code=source_code,
+        esbmc_output=esbmc_output,
     )
     printv(f"Using AI Model: {chat.model_name}")
 
@@ -323,6 +348,10 @@ def main() -> None:
                 )
 
                 if not error:
+                    print(
+                        "\n\nassistant: Here is the corrected code, verified with ESBMC:"
+                    )
+                    print(f"```\n{solution}\n```")
                     # Let the AI model know about the corrected code.
                     printv("Informing Chat AI about correct code...")
                     chat.set_solution(solution)
@@ -344,6 +373,7 @@ def main() -> None:
         else:
             print()
 
+        # User chat mode send message and process
         while True:
             # Send user message to AI model and process.
             anim.start("Generating response... Please Wait")
