@@ -21,16 +21,17 @@ class FixCodeCommand(ChatCommand):
             help_message="Generates a solution for this code, and reevaluates it with ESBMC.",
         )
         self.anim = LoadingWidget()
+
+    def execute(self, file_name: str, source_code: str, esbmc_output: str):
         wait_time: int = int(config.consecutive_prompt_delay)
         # Create time left animation to show how much time left between API calls
         # This is done by creating a list of all the numbers to be displayed and
         # setting the animation delay to 1 second.
-        self.wait_anim = LoadingWidget(
+        wait_anim = LoadingWidget(
             anim_speed=1,
             animation=[str(num) for num in range(wait_time, 0, -1)],
         )
 
-    def execute(self, file_name: str, source_code: str, esbmc_output: str):
         solution_generator = SolutionGenerator(
             system_messages=config.chat_prompt_generator_mode.system_messages,
             initial_prompt=config.chat_prompt_generator_mode.initial_prompt,
@@ -89,9 +90,9 @@ class FixCodeCommand(ChatCommand):
             print(f"Failure {idx+1}/{max_retries}: Retrying...")
             # If final iteration no need to sleep.
             if idx < max_retries - 1:
-                self.wait_anim.start(f"Sleeping due to rate limit:")
+                wait_anim.start(f"Sleeping due to rate limit:")
                 sleep(config.consecutive_prompt_delay)
-                self.wait_anim.stop()
+                wait_anim.stop()
 
                 # Inform solution generator chat about the ESBMC response.
                 solution_generator.push_to_message_stack(
