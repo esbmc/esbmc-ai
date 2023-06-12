@@ -63,3 +63,4 @@ class LoadingWidget(object):
         self.done = True
         # Block until end.
         self.thread.join()
+
