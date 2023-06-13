@@ -21,6 +21,8 @@ requests = "==2.29.0"
 tqdm = "==4.65.0"
 urllib3 = "==1.26.15"
 yarl = "==1.9.2"
+libclang = "*"
+clang = "*"
 
 [dev-packages]
 black = "*"
@@ -28,6 +30,7 @@ pytest = "*"
 pytest-cov = "*"
 pylint = "*"
 pytest-regtest = "*"
+ipykernel = "*"
 
 [requires]
 python_version = "3.11"
