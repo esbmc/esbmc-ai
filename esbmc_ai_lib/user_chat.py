@@ -1,5 +1,6 @@
 # Author: Yiannis Charalambous 2023
 
+from .ai_models import AIModel
 from .base_chat_interface import BaseChatInterface, ChatResponse
 from .conv_summarizer import ConversationSummarizerChat
 
@@ -11,7 +12,7 @@ class ChatInterface(BaseChatInterface):
     def __init__(
         self,
         system_messages: list,
-        model: str,
+        ai_model: AIModel,
         temperature: float,
         summarizer: ConversationSummarizerChat,
         source_code: str,
@@ -19,7 +20,7 @@ class ChatInterface(BaseChatInterface):
     ) -> None:
         super().__init__(
             system_messages=system_messages,
-            model=model,
+            ai_model=ai_model,
             temperature=temperature,
         )
         self.summarizer = summarizer

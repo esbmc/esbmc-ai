@@ -3,22 +3,25 @@
 # Author: Yiannis Charalambous 2023
 
 import os
+import re
 from time import sleep
 
 # Enables arrow key functionality for input(). Do not remove import.
 import readline
 
 import argparse
-from typing import Any
+from typing import Any, Optional
 import openai
 
 import esbmc_ai_lib.config as config
+from esbmc_ai_lib.frontend.solution import set_main_source_file, get_main_source_file
 
 from esbmc_ai_lib.commands import (
     ChatCommand,
     FixCodeCommand,
     HelpCommand,
     ExitCommand,
+    OptimizeCodeCommand,
     VerifyCodeCommand,
 )
 
@@ -37,6 +40,7 @@ commands: list[ChatCommand] = []
 command_names: list[str]
 help_command: HelpCommand = HelpCommand()
 fix_code_command: FixCodeCommand = FixCodeCommand()
+optimize_code_command: OptimizeCodeCommand = OptimizeCodeCommand()
 verify_code_command: VerifyCodeCommand = VerifyCodeCommand()
 exit_command: ExitCommand = ExitCommand()
 
@@ -123,7 +127,7 @@ def print_assistant_response(
         print(
             "Stats:",
             f"total tokens: {response.total_tokens},",
-            f"max tokens: {chat.max_tokens}",
+            f"max tokens: {chat.ai_model.tokens}",
             f"finish reason: {response.finish_reason}",
         )
 
@@ -136,6 +140,7 @@ def init_commands_list() -> None:
             help_command,
             exit_command,
             fix_code_command,
+            optimize_code_command,
             verify_code_command,
         ]
     )
@@ -146,24 +151,26 @@ def init_commands_list() -> None:
 
 
 def init_commands() -> None:
-    """Function that handles initializing commands. Each command needs to be added
+    """# Bus Signals
+    Function that handles initializing commands. Each command needs to be added
     into the commands array in order for the command to register to be called by
     the user and also register in the help system."""
-    # Bus Signals:
-    # fix_code_command.on_solution_signal.add_listener(chat.set_solution)
-    # fix_code_command.on_solution_signal.add_listener(verify_code_command.set_solution)
+
+    # Let the AI model know about the corrected code.
+    fix_code_command.on_solution_signal.add_listener(chat.set_solution)
+    fix_code_command.on_solution_signal.add_listener(verify_code_command.set_solution)
     pass
 
 
 def _run_command_mode(
     command: ChatCommand,
-    args,
+    args: list[str],
     esbmc_output: str,
     source_code: str,
 ) -> None:
     if command == fix_code_command:
         error, solution = fix_code_command.execute(
-            file_name=args.filename,
+            file_name=get_main_source_file(),
             source_code=source_code,
             esbmc_output=esbmc_output,
         )
@@ -175,9 +182,29 @@ def _run_command_mode(
             print(solution)
     elif command == verify_code_command:
         raise NotImplementedError()
+    elif command == optimize_code_command:
+        optimize_code_command.execute(
+            file_path=get_main_source_file(),
+            source_code=source_code,
+            function_names=args,
+        )
     else:
         command.execute()
     exit(0)
+
+
+def parse_command(user_prompt_string: str) -> tuple[str, list[str]]:
+    """Parses a command and returns it based on the command rules outlined in
+    the wiki: https://github.com/Yiannis128/esbmc-ai/wiki/User-Chat-Mode"""
+    regex_pattern: str = (
+        r'\s+(?=(?:[^\\"]*(?:\\.[^\\"]*)*)$)|(?:(?<!\\)".*?(?<!\\)")|(?:\\.)+|\S+'
+    )
+    segments: list[str] = re.findall(regex_pattern, user_prompt_string)
+    parsed_array: list[str] = [segment for segment in segments if segment != " "]
+    # Remove all empty spaces.
+    command: str = parsed_array[0]
+    command_args: list[str] = parsed_array[1:]
+    return command, command_args
 
 
 def main() -> None:
@@ -192,7 +219,11 @@ def main() -> None:
         epilog=f"Made by Yiannis Charalambous\n\n{ESBMC_HELP}",
     )
 
-    parser.add_argument("filename", help="The filename to pass to esbmc.")
+    parser.add_argument(
+        "filename",
+        help="The filename to pass to esbmc.",
+    )
+
     parser.add_argument(
         "remaining",
         nargs=argparse.REMAINDER,
@@ -234,7 +265,10 @@ def main() -> None:
         "-c",
         "--command",
         choices=command_names,
-        help="Runs the program in command mode, it will exit after the command ends with an exit code.",
+        metavar="",
+        help="Runs the program in command mode, it will exit after the command ends with an exit code. Options: {"
+        + ", ".join(command_names)
+        + "}",
     )
 
     args = parser.parse_args()
@@ -249,6 +283,9 @@ def main() -> None:
     config.load_config(config.cfg_path)
     config.load_args(args)
 
+    # Add the main source file to the solution explorer.
+    set_main_source_file(args.filename)
+
     check_health()
 
     anim: LoadingWidget = LoadingWidget()
@@ -256,11 +293,11 @@ def main() -> None:
     # Read the source code and esbmc output.
     printv("Reading source code...")
     print(f"Running ESBMC with {config.esbmc_params}\n")
-    source_code: str = get_src(args.filename)
+    source_code: str = get_src(get_main_source_file())
 
     anim.start("ESBMC is processing... Please Wait")
     exit_code, esbmc_output = esbmc(
-        path=args.filename,
+        path=get_main_source_file(),
         esbmc_params=config.esbmc_params,
     )
     anim.stop()
@@ -280,36 +317,38 @@ def main() -> None:
 
     # Command mode: Check if command is called and call it.
     # If not, then continue to user mode.
-    if args.command in command_names:
-        print("Running Command:", args.command)
-        for idx, command_name in enumerate(command_names):
-            if args.command == command_name:
-                _run_command_mode(
-                    command=commands[idx],
-                    args=args,
-                    source_code=source_code,
-                    esbmc_output=esbmc_output,
-                )
-        exit(0)
+    if args.command != None:
+        command = args.command
+        if command in command_names:
+            print("Running Command:", command)
+            for idx, command_name in enumerate(command_names):
+                if command == command_name:
+                    _run_command_mode(
+                        command=commands[idx],
+                        args=[],  # NOTE: Currently not supported...
+                        source_code=source_code,
+                        esbmc_output=esbmc_output,
+                    )
+            exit(0)
 
     printv("Creating user chat mode summarizer...")
     chat_summarizer: ConversationSummarizerChat = ConversationSummarizerChat(
         system_messages=config.chat_prompt_conversation_summarizer.system_messages,
-        model=config.ai_model,
-        temperature=config.chat_temperature,
+        ai_model=config.ai_model,
+        temperature=config.chat_prompt_conversation_summarizer.temperature,
     )
 
     printv("Creating user chat")
     global chat
     chat = ChatInterface(
         system_messages=config.chat_prompt_user_mode.system_messages,
-        model=config.ai_model,
-        temperature=config.chat_temperature,
+        ai_model=config.ai_model,
+        temperature=config.chat_prompt_user_mode.temperature,
         summarizer=chat_summarizer,
         source_code=source_code,
         esbmc_output=esbmc_output,
     )
-    printv(f"Using AI Model: {chat.model_name}")
+    printv(f"Using AI Model: {chat.ai_model.name}")
 
     # Show the initial output.
     response: ChatResponse
@@ -336,13 +375,14 @@ def main() -> None:
 
         # Check if it is a command, if not, then pass it to the chat interface.
         if user_message.startswith("/"):
-            command: str = user_message[1:]
+            command, command_args = parse_command(user_message)
+            command = command[1:]  # Remove the /
             if command == fix_code_command.command_name:
                 print()
                 print("ESBMC-AI will generate a fix for the code...")
 
                 error, solution = fix_code_command.execute(
-                    file_name=args.filename,
+                    file_name=get_main_source_file(),
                     source_code=source_code,
                     esbmc_output=esbmc_output,
                 )
@@ -352,9 +392,13 @@ def main() -> None:
                         "\n\nassistant: Here is the corrected code, verified with ESBMC:"
                     )
                     print(f"```\n{solution}\n```")
-                    # Let the AI model know about the corrected code.
-                    printv("Informing Chat AI about correct code...")
-                    chat.set_solution(solution)
+                continue
+            elif command == optimize_code_command.command_name:
+                optimize_code_command.execute(
+                    file_path=get_main_source_file(),
+                    source_code=source_code,
+                    function_names=command_args,
+                )
                 continue
             else:
                 # Commands without parameters or returns are handled automatically.

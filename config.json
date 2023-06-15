@@ -1,7 +1,5 @@
 {
-  "chat_temperature": 1.0,
-  "code_fix_temperature": 1.1,
-  "ai_model": "gpt-3.5-turbo",
+  "ai_model": "gpt-3.5-turbo-16k",
   "esbmc_path": "./esbmc",
   "cfg_sys_path": "./config/system.json",
   "cfg_initial_prompt_path": "./config/initial_prompt.txt",
@@ -21,8 +19,9 @@
   "consecutive_prompt_delay": 20,
   "temp_auto_clean": false,
   "temp_file_dir": "./temp",
-  "prompts": {
-    "user_mode": {
+  "chat_modes": {
+    "user_chat": {
+      "temperature": 1.0,
       "system": [
         {
           "role": "system",
@@ -33,6 +32,7 @@
       "initial": "Walk me through the source code, while also explaining the output of ESBMC at the relevant parts. You shall not start the reply with an acknowledgement message such as 'Certainly'."
     },
     "generate_solution": {
+      "temperature": 1.1,
       "system": [
         {
           "role": "system",
@@ -43,6 +43,7 @@
       "initial": "Generate a correction for the source code provided. Show the code only. Do not reply with acknowledgements."
     },
     "conv_summarizer": {
+      "temperature": 1.0,
       "system": [
         {
           "role": "system",

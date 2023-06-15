@@ -10,5 +10,8 @@ class VerifyCodeCommand(ChatCommand):
             help_message="Verifies using context if the code works as intended.",
         )
 
+    def set_solution(self, source_code: str) -> None:
+        print("VerifyCodeCommand (TODO): set_solution")
+
     def execute(self) -> None:
         print("TODO")

@@ -37,8 +37,8 @@ class FixCodeCommand(ChatCommand):
             initial_prompt=config.chat_prompt_generator_mode.initial_prompt,
             source_code=source_code,
             esbmc_output=esbmc_output,
-            model=config.ai_model,
-            temperature=config.code_fix_temperature,
+            ai_model=config.ai_model,
+            temperature=config.chat_prompt_generator_mode.temperature,
         )
 
         print()

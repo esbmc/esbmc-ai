@@ -29,9 +29,7 @@ esbmc_params: list[str] = [
 temp_auto_clean: bool = True
 temp_file_dir: str = "."
 consecutive_prompt_delay: float = 20.0
-chat_temperature: float = 1.0
-code_fix_temperature: float = 1.1
-ai_model: str = AI_MODEL_GPT3
+ai_model: AIModel = AI_MODEL_GPT3
 
 cfg_path: str = "./config.json"
 
@@ -39,6 +37,7 @@ cfg_path: str = "./config.json"
 class ChatPromptSettings(NamedTuple):
     system_messages: list
     initial_prompt: str
+    temperature: float
 
 
 chat_prompt_user_mode: ChatPromptSettings
@@ -127,29 +126,19 @@ def load_config(file_path: str) -> None:
         temp_file_dir,
     )
 
-    global chat_temperature
-    chat_temperature = _load_config_real_number(
-        config_file,
-        "chat_temperature",
-        chat_temperature,
-    )
-
-    global code_fix_temperature
-    code_fix_temperature = _load_config_real_number(
-        config_file,
-        "code_fix_temperature",
-        code_fix_temperature,
-    )
-
     global ai_model
-    ai_model, _ = _load_config_value(
+    ai_model_name, _ = _load_config_value(
         config_file,
         "ai_model",
         ai_model,
     )
-    if not is_valid_ai_model(ai_model):
-        print(f"Error: {ai_model} is not a valid AI model")
+    if not is_valid_ai_model(ai_model_name):
+        print(f"Error: {ai_model_name} is not a valid AI model")
         exit(4)
+    else:
+        for model in models:
+            if ai_model_name == model.name:
+                ai_model = model
 
     global esbmc_path
     # Health check verifies this later in the init process.
@@ -164,20 +153,23 @@ def load_config(file_path: str) -> None:
     # TODO Add checking here.
     global chat_prompt_user_mode
     chat_prompt_user_mode = ChatPromptSettings(
-        system_messages=config_file["prompts"]["user_mode"]["system"],
-        initial_prompt=config_file["prompts"]["user_mode"]["initial"],
+        system_messages=config_file["chat_modes"]["user_chat"]["system"],
+        initial_prompt=config_file["chat_modes"]["user_chat"]["initial"],
+        temperature=config_file["chat_modes"]["user_chat"]["temperature"],
     )
 
     global chat_prompt_generator_mode
     chat_prompt_generator_mode = ChatPromptSettings(
-        system_messages=config_file["prompts"]["generate_solution"]["system"],
-        initial_prompt=config_file["prompts"]["generate_solution"]["initial"],
+        system_messages=config_file["chat_modes"]["generate_solution"]["system"],
+        initial_prompt=config_file["chat_modes"]["generate_solution"]["initial"],
+        temperature=config_file["chat_modes"]["generate_solution"]["temperature"],
     )
 
     global chat_prompt_conversation_summarizer
     chat_prompt_conversation_summarizer = ChatPromptSettings(
-        system_messages=config_file["prompts"]["conv_summarizer"]["system"],
-        initial_prompt=config_file["prompts"]["conv_summarizer"]["initial"],
+        system_messages=config_file["chat_modes"]["conv_summarizer"]["system"],
+        initial_prompt=config_file["chat_modes"]["conv_summarizer"]["initial"],
+        temperature=config_file["chat_modes"]["conv_summarizer"]["temperature"],
     )
 
 

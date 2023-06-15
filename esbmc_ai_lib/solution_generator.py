@@ -1,5 +1,6 @@
 # Author: Yiannis Charalambous 2023
 
+from esbmc_ai_lib.ai_models import AIModel
 from .base_chat_interface import BaseChatInterface, ChatResponse
 from .user_chat import ChatInterface
 
@@ -15,12 +16,12 @@ class SolutionGenerator(BaseChatInterface):
         initial_prompt: str,
         source_code: str,
         esbmc_output: str,
-        model: str,
+        ai_model: AIModel,
         temperature: float,
     ) -> None:
         super().__init__(
             system_messages=system_messages,
-            model=model,
+            ai_model=ai_model,
             temperature=temperature,
         )
         self.initial_prompt = initial_prompt

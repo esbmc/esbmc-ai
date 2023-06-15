@@ -3,41 +3,8 @@
 from abc import abstractmethod
 from typing import NamedTuple
 import openai
-from tiktoken import get_encoding, encoding_for_model
 
-from .ai_models import AI_MODEL_GPT3, AI_MODEL_GPT4
-
-MAX_TOKENS_GPT3TURBO: int = 4096
-
-
-def num_tokens_from_messages(messages, model=AI_MODEL_GPT3):
-    """Returns the number of tokens used by a list of messages.
-    Source: https://platform.openai.com/docs/guides/chat/introduction"""
-    try:
-        encoding = encoding_for_model(model)
-    except KeyError:
-        encoding = get_encoding("cl100k_base")
-    # note: future models may deviate from this
-    if model.startswith(AI_MODEL_GPT3) or model.startswith(AI_MODEL_GPT4):
-        num_tokens = 0
-        for message in messages:
-            # every message follows <im_start>{role/name}\n{content}<im_end>\n
-            num_tokens += 4
-            for key, value in message.items():
-                num_tokens += len(encoding.encode(value))
-                # if there's a name, the role is omitted
-                if key == "name":
-                    # role is always required and always 1 token
-                    num_tokens += -1
-        # every reply is primed with <im_start>assistant
-        num_tokens += 2
-        return num_tokens
-    else:
-        # See https://github.com/openai/openai-python/blob/main/chatml.md for
-        # information on how messages are converted to tokens.
-        raise NotImplementedError(
-            f"num_tokens_from_messages() is not presently implemented for model {model}."
-        )
+from .ai_models import AIModel, AI_MODEL_GPT3, num_tokens_from_messages
 
 
 # API returned complete model output
@@ -59,21 +26,19 @@ class ChatResponse(NamedTuple):
 
 
 class BaseChatInterface(object):
-    max_tokens = MAX_TOKENS_GPT3TURBO
-
     protected_messages: list
     messages: list
-    model_name: str
+    ai_model: AIModel
     temperature: float
 
     def __init__(
         self,
         system_messages: list,
-        model: str = "gpt-3.5-turbo",
+        ai_model: AIModel = AI_MODEL_GPT3,
         temperature: float = 1.0,
     ) -> None:
         super().__init__()
-        self.model_name = model
+        self.ai_model = ai_model
         self.temperature = temperature
 
         self.protected_messages = system_messages.copy()
@@ -100,15 +65,15 @@ class BaseChatInterface(object):
         new_stack = [*self.messages, {"role": "user", "content": message}]
 
         # Check if message is too long and exit.
-        msg_tokens: int = num_tokens_from_messages(new_stack, self.model_name)
-        if msg_tokens > self.max_tokens:
+        msg_tokens: int = num_tokens_from_messages(new_stack, self.ai_model)
+        if msg_tokens > self.ai_model.tokens:
             response: ChatResponse = ChatResponse(
                 finish_reason=FINISH_REASON_LENGTH,
             )
             return response
 
         completion = openai.ChatCompletion.create(
-            model=self.model_name,
+            model=self.ai_model.name,
             messages=new_stack,
             temperature=self.temperature,
         )

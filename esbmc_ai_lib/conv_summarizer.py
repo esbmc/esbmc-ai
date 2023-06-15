@@ -1,5 +1,6 @@
 # Author: Yiannis Charalambous
 
+from esbmc_ai_lib.ai_models import AIModel
 from .base_chat_interface import BaseChatInterface, ChatResponse
 
 
@@ -9,8 +10,17 @@ class ConversationSummarizerChat(BaseChatInterface):
     AI Chat that will summarize conversations and return a compressed summmary.
     This is primarily used by `ChatInterface`."""
 
-    def __init__(self, system_messages: list, model: str, temperature: float) -> None:
-        super().__init__(system_messages, model=model, temperature=temperature)
+    def __init__(
+        self,
+        system_messages: list,
+        ai_model: AIModel,
+        temperature: float,
+    ) -> None:
+        super().__init__(
+            system_messages,
+            ai_model=ai_model,
+            temperature=temperature,
+        )
 
     def compress_message_stack(self) -> None:
         """No need to implement a compression method."""
