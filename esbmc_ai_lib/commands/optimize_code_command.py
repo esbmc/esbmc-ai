@@ -1,6 +1,5 @@
 # Author: Yiannis Charalambous
 
-from .. import config
 from .chat_command import ChatCommand
 from ..frontend import ast
 
