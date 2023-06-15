@@ -29,7 +29,6 @@ black = "*"
 pytest = "*"
 pytest-cov = "*"
 pylint = "*"
-pytest-regtest = "*"
 ipykernel = "*"
 
 [requires]
