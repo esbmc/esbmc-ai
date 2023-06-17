@@ -1,6 +1,9 @@
 # Author: Yiannis Charalambous
 
 from .chat_command import ChatCommand
+from .. import config
+from ..base_chat_interface import ChatResponse
+from ..optimize_code import OptimizeCode
 from ..frontend import ast
 
 
@@ -29,8 +32,26 @@ class OptimizeCodeCommand(ChatCommand):
         else:
             function_names = all_functions.copy()
 
-        print(f"Optimizing the following functions: {function_names}")
+        print(f"Optimizing the following functions: {function_names}\n")
+
+        chat: OptimizeCode = OptimizeCode(
+            system_messages=config.chat_prompt_optimize_code.system_messages,
+            initial_message=config.chat_prompt_optimize_code.initial_prompt,
+            ai_model=config.ai_model,
+            temperature=config.chat_prompt_optimize_code.temperature,
+        )
 
         for function in function_names:
-            print(f"\nOptimizing function: {function}")
-            print("TODO")
+            print(f"Optimizing function: {function}")
+            response: ChatResponse = chat.optimize_function(
+                source_code=source_code,
+                function_name=function,
+            )
+
+            # TODO Implement function equivalence checking.
+
+            source_code = response.message
+
+        print("\nOptimizations Completed:\n")
+        print(source_code)
+        print()

@@ -43,6 +43,7 @@ class ChatPromptSettings(NamedTuple):
 chat_prompt_user_mode: ChatPromptSettings
 chat_prompt_generator_mode: ChatPromptSettings
 chat_prompt_conversation_summarizer: ChatPromptSettings
+chat_prompt_optimize_code: ChatPromptSettings
 
 
 def load_envs() -> None:
@@ -170,6 +171,13 @@ def load_config(file_path: str) -> None:
         system_messages=config_file["chat_modes"]["conv_summarizer"]["system"],
         initial_prompt=config_file["chat_modes"]["conv_summarizer"]["initial"],
         temperature=config_file["chat_modes"]["conv_summarizer"]["temperature"],
+    )
+
+    global chat_prompt_optimize_code
+    chat_prompt_optimize_code = ChatPromptSettings(
+        system_messages=config_file["chat_modes"]["optimize_code"]["system"],
+        initial_prompt=config_file["chat_modes"]["optimize_code"]["initial"],
+        temperature=config_file["chat_modes"]["optimize_code"]["temperature"],
     )
 
 
