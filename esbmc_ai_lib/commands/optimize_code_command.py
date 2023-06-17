@@ -5,6 +5,7 @@ from .. import config
 from ..base_chat_interface import ChatResponse
 from ..optimize_code import OptimizeCode
 from ..frontend import ast
+from ..frontend.ast import FunctionDeclaration
 
 
 class OptimizeCodeCommand(ChatCommand):
@@ -21,16 +22,18 @@ class OptimizeCodeCommand(ChatCommand):
             file_path=file_path, source_code=source_code
         )
 
-        all_functions: list[str] = clang_ast.get_function_declarations()
+        all_functions: list[FunctionDeclaration] = clang_ast.get_function_declarations()
+        all_function_names: list[str] = [fn.name for fn in all_functions]
 
+        # If specific function names to optimize have been specified, then
+        # check that they exist.
         if len(function_names) > 0:
-            # Loop through and verify every function is valid.
             for function_name in function_names:
-                if function_name not in all_functions:
+                if function_name not in all_function_names:
                     print(f"Error: {function_name} is not defined...")
                     exit(1)
         else:
-            function_names = all_functions.copy()
+            function_names = all_function_names.copy()
 
         print(f"Optimizing the following functions: {function_names}\n")
 

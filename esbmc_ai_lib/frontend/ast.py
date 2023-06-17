@@ -1,6 +1,7 @@
 # Author: Yiannis Charalambous
 
 from os.path import dirname, join as path_join
+from typing import NamedTuple
 
 import clang.native
 import clang.cindex as cindex
@@ -11,6 +12,17 @@ Config.library_file = path_join(
     dirname(clang.native.__file__),
     "libclang.so",
 )
+
+
+class Declaration(NamedTuple):
+    name: str
+    type: str
+
+
+class FunctionDeclaration(NamedTuple):
+    name: str
+    type: str
+    args: list[Declaration]
 
 
 class ClangAST(object):
@@ -35,11 +47,10 @@ class ClangAST(object):
                 path=file_path,
                 unsaved_files=[(file_path, source_code)],
             )
-
         self.root = self.tu.cursor
 
-    def get_function_declarations(self) -> list[str]:
-        functions: list[str] = []
+    def get_function_declarations(self) -> list[FunctionDeclaration]:
+        functions: list[FunctionDeclaration] = []
         node: cindex.Cursor
         for node in self.root.get_children():
             kind: cindex.CursorKind = node.kind
@@ -48,5 +59,21 @@ class ClangAST(object):
                 and node.storage_class == cindex.StorageClass.NONE
                 and kind == cindex.CursorKind.FUNCTION_DECL
             ):
-                functions.append(node.spelling)
+                # Get function parameters.
+                arg: cindex.Cursor
+                function_params: list[Declaration] = []
+                for arg in node.get_arguments():
+                    param_type: cindex.Type = arg.type
+                    param: Declaration = Declaration(
+                        name=arg.spelling,
+                        type=param_type.spelling,
+                    )
+                    function_params.append(param)
+
+                function_declaration: FunctionDeclaration = FunctionDeclaration(
+                    name=node.spelling,
+                    type=node.type.get_result().spelling,
+                    args=function_params,
+                )
+                functions.append(function_declaration)
         return functions
