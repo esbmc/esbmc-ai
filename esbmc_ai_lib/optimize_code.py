@@ -23,9 +23,9 @@ class OptimizeCode(BaseChatInterface):
         self.push_to_message_stack(
             "user",
             f"Reply OK if you understand the following is the source code to optimize:\n\n{source_code}",
-            True,
+            False,
         )
-        self.push_to_message_stack("assistant", "OK.", True)
+        self.push_to_message_stack("assistant", "OK.", False)
 
         expanded_initial_message: str = self.initial_message.replace(
             "%s", function_name
