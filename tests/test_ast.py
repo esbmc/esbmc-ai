@@ -3,6 +3,7 @@
 import pytest
 
 import esbmc_ai_lib.frontend.ast as ast
+from esbmc_ai_lib.frontend.ast import FunctionDeclaration, Declaration
 
 
 def test_ast_functions() -> None:
@@ -34,14 +35,28 @@ int main()
 }
     """
     cast = ast.ClangAST(file_path=file, source_code=source_code)
-    functions = set(cast.get_function_declarations())
-    assert functions == set(
-        [
-            "__VERIFIER_atomic_acquire",
-            "c",
-            "main",
-        ],
-    )
+    functions: list[FunctionDeclaration] = cast.get_fn_decl()
+    answer: list[FunctionDeclaration] = [
+        FunctionDeclaration(
+            name="__VERIFIER_atomic_acquire",
+            type_name="void",
+            args=[],
+        ),
+        FunctionDeclaration(
+            name="c",
+            type_name="void *",
+            args=[Declaration(name="arg", type_name="void *")],
+        ),
+        FunctionDeclaration(
+            name="main",
+            type_name="int",
+            args=[],
+        ),
+    ]
+
+    assert functions[0] == answer[0]
+    assert functions[1] == answer[1]
+    assert functions[2] == answer[2]
 
 
 def test_ast_functions_blank() -> None:
@@ -51,3 +66,6 @@ def test_ast_functions_blank() -> None:
 int a, b;
 pthread_t d;
     """
+    cast = ast.ClangAST(file_path=file, source_code=source_code)
+    functions: list[FunctionDeclaration] = cast.get_fn_decl()
+    assert functions == []

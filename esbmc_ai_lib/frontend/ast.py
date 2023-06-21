@@ -1,7 +1,7 @@
 # Author: Yiannis Charalambous
 
 from os.path import dirname, join as path_join
-from typing import NamedTuple
+from typing import NamedTuple, Optional
 
 import clang.native
 import clang.cindex as cindex
@@ -16,12 +16,12 @@ Config.library_file = path_join(
 
 class Declaration(NamedTuple):
     name: str
-    type: str
+    type_name: str
 
 
 class FunctionDeclaration(NamedTuple):
     name: str
-    type: str
+    type_name: str
     args: list[Declaration]
 
 
@@ -32,13 +32,17 @@ class ClangAST(object):
     tu: cindex.TranslationUnit
     root: cindex.Cursor
 
-    def __init__(self, file_path: str = "", source_code: str = "") -> None:
+    def __init__(
+        self,
+        file_path: str = "",
+        source_code: Optional[str] = None,
+    ) -> None:
         super().__init__()
 
         self.file_path = file_path
         self.index = cindex.Index.create()
 
-        if source_code == "":
+        if source_code is None:
             # Load from file
             self.tu = self.index.parse(path=file_path)
         else:
@@ -49,7 +53,8 @@ class ClangAST(object):
             )
         self.root = self.tu.cursor
 
-    def get_function_declarations(self) -> list[FunctionDeclaration]:
+    def get_fn_decl(self) -> list[FunctionDeclaration]:
+        """Get function declaration list."""
         functions: list[FunctionDeclaration] = []
         node: cindex.Cursor
         for node in self.root.get_children():
@@ -66,13 +71,13 @@ class ClangAST(object):
                     param_type: cindex.Type = arg.type
                     param: Declaration = Declaration(
                         name=arg.spelling,
-                        type=param_type.spelling,
+                        type_name=param_type.spelling,
                     )
                     function_params.append(param)
 
                 function_declaration: FunctionDeclaration = FunctionDeclaration(
                     name=node.spelling,
-                    type=node.type.get_result().spelling,
+                    type_name=node.type.get_result().spelling,
                     args=function_params,
                 )
                 functions.append(function_declaration)
