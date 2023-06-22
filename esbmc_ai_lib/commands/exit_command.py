@@ -1,5 +1,6 @@
 # Author: Yiannis Charalambous
 
+from typing_extensions import override
 from .chat_command import ChatCommand
 
 
@@ -10,6 +11,7 @@ class ExitCommand(ChatCommand):
             help_message="Exit the program.",
         )
 
+    @override
     def execute(self) -> None:
         print("exiting...")
         exit(0)

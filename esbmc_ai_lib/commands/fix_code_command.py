@@ -1,6 +1,7 @@
 # Author: Yiannis Charalambous
 
 from time import sleep
+from typing_extensions import override
 
 
 from .chat_command import ChatCommand
@@ -22,6 +23,7 @@ class FixCodeCommand(ChatCommand):
         )
         self.anim = LoadingWidget()
 
+    @override
     def execute(self, file_name: str, source_code: str, esbmc_output: str):
         wait_time: int = int(config.consecutive_prompt_delay)
         # Create time left animation to show how much time left between API calls

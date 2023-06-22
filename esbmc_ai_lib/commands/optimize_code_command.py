@@ -1,5 +1,6 @@
 # Author: Yiannis Charalambous
 
+from typing_extensions import override
 from .chat_command import ChatCommand
 from ..frontend import ast
 
@@ -11,6 +12,7 @@ class OptimizeCodeCommand(ChatCommand):
             help_message="Optimizes the code of a specific function or the entire file if a function is not specified. Usage: optimize-code [function_name]",
         )
 
+    @override
     def execute(
         self, file_path: str, source_code: str, function_names: list[str]
     ) -> None:
