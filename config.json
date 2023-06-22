@@ -1,5 +1,8 @@
 {
-  "ai_model": "gpt-3.5-turbo-16k",
+  "ai_model": "text-generation-inference",
+  "text-generation-inference": {
+    "url": "https://api-inference.huggingface.co/models/tiiuae/falcon-7b-instruct"
+  },
   "esbmc_path": "./esbmc",
   "cfg_sys_path": "./config/system.json",
   "cfg_initial_prompt_path": "./config/initial_prompt.txt",

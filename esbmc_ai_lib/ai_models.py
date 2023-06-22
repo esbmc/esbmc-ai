@@ -3,6 +3,8 @@
 from typing import NamedTuple
 from tiktoken import get_encoding, encoding_for_model
 
+from .chat_api.chat_api import ChatAPI
+
 
 class AIModel(NamedTuple):
     name: str = ""
@@ -14,12 +16,15 @@ AI_MODEL_GPT3_16K = AIModel("gpt-3.5-turbo-16k", 16384)
 AI_MODEL_GPT4 = AIModel("gpt-4", 8192)
 AI_MODEL_GPT4_32k = AIModel("gpt-4-32k", 32768)
 
+# TODO Make it dynamically set from config.
+AI_MODEL_TEXTGEN = AIModel("text-generation-inference", 8192)
 
 models: list[AIModel] = [
     AI_MODEL_GPT3,
     AI_MODEL_GPT3_16K,
     AI_MODEL_GPT4,
     AI_MODEL_GPT4_32k,
+    AI_MODEL_TEXTGEN,
 ]
 
 
