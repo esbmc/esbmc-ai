@@ -1,8 +1,13 @@
 # Author: Yiannis Charalambous
 
-verbose: bool = False
+verbose: int = 0
+
+
+def set_verbose(level: int) -> None:
+    global verbose
+    verbose = level
 
 
 def printv(m) -> None:
-    if verbose:
+    if verbose > 0:
         print(m)

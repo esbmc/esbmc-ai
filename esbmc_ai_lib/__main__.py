@@ -10,8 +10,7 @@ from time import sleep
 import readline
 
 import argparse
-from typing import Any, Optional
-import openai
+from langchain.base_language import BaseLanguageModel
 
 import esbmc_ai_lib.config as config
 from esbmc_ai_lib.frontend.solution import set_main_source_file, get_main_source_file
@@ -26,14 +25,10 @@ from esbmc_ai_lib.commands import (
 )
 
 from esbmc_ai_lib.loading_widget import LoadingWidget
-from esbmc_ai_lib.user_chat import ChatInterface, ConversationSummarizerChat
-from esbmc_ai_lib.base_chat_interface import (
-    ChatResponse,
-    FINISH_REASON_LENGTH,
-    FINISH_REASON_STOP,
-)
+from esbmc_ai_lib.user_chat import ChatInterface
 from esbmc_ai_lib.logging import printv
 from esbmc_ai_lib.esbmc_util import esbmc
+from esbmc_ai_lib.chat_response import FinishReason, json_to_base_message, ChatResponse
 
 
 commands: list[ChatCommand] = []
@@ -114,14 +109,9 @@ def get_src(path: str) -> str:
 def print_assistant_response(
     chat: ChatInterface,
     response: ChatResponse,
-    raw_responses: bool = False,
     hide_stats: bool = False,
 ) -> None:
-    if raw_responses:
-        print(response.base_message)
-        return
-
-    print(f"{response.role}: {response.message}\n\n")
+    print(f"{response.message.type}: {response.message.content}\n\n")
 
     if not hide_stats:
         print(
@@ -239,14 +229,6 @@ def main() -> None:
     )
 
     parser.add_argument(
-        "-r",
-        "--raw-output",
-        action="store_true",
-        default=False,
-        help="Responses from AI model will be shown raw.",
-    )
-
-    parser.add_argument(
         "-m",
         "--ai-model",
         default="",
@@ -312,9 +294,6 @@ def main() -> None:
         print(f"ESBMC exit code: {exit_code}")
         exit(1)
 
-    printv("Initializing OpenAI")
-    openai.api_key = config.openai_api_key
-
     # Command mode: Check if command is called and call it.
     # If not, then continue to user mode.
     if args.command != None:
@@ -331,31 +310,33 @@ def main() -> None:
                     )
             exit(0)
 
-    printv("Creating user chat mode summarizer...")
-    chat_summarizer: ConversationSummarizerChat = ConversationSummarizerChat(
-        system_messages=config.chat_prompt_conversation_summarizer.system_messages,
-        ai_model=config.ai_model,
-        temperature=config.chat_prompt_conversation_summarizer.temperature,
+    printv(f"Initializing the LLM: {config.ai_model.name}\n")
+    chat_llm: BaseLanguageModel = config.create_llm(
+        temperature=config.chat_prompt_user_mode.temperature,
     )
 
     printv("Creating user chat")
     global chat
     chat = ChatInterface(
-        system_messages=config.chat_prompt_user_mode.system_messages,
+        system_messages=[
+            json_to_base_message(system_message)
+            for system_message in config.chat_prompt_user_mode.system_messages
+        ],
         ai_model=config.ai_model,
-        temperature=config.chat_prompt_user_mode.temperature,
-        summarizer=chat_summarizer,
+        llm=chat_llm,
         source_code=source_code,
         esbmc_output=esbmc_output,
     )
-    printv(f"Using AI Model: {chat.ai_model.name}")
 
     # Show the initial output.
     response: ChatResponse
     if len(config.chat_prompt_user_mode.initial_prompt) > 0:
         printv("Using initial prompt from file...\n")
         anim.start("Model is parsing ESBMC output... Please Wait")
-        response = chat.send_message(config.chat_prompt_user_mode.initial_prompt, True)
+        response = chat.send_message(
+            message=config.chat_prompt_user_mode.initial_prompt,
+            protected=True,
+        )
         anim.stop()
     else:
         raise RuntimeError("User mode initial prompt not found in config.")
@@ -417,15 +398,15 @@ def main() -> None:
         else:
             print()
 
-        # User chat mode send message and process
+        # User chat mode send and process current message response.
         while True:
             # Send user message to AI model and process.
             anim.start("Generating response... Please Wait")
             response = chat.send_message(user_message)
             anim.stop()
-            if response.finish_reason == FINISH_REASON_STOP:
+            if response.finish_reason == FinishReason.stop:
                 break
-            elif response.finish_reason == FINISH_REASON_LENGTH:
+            elif response.finish_reason == FinishReason.length:
                 anim.start(
                     "Message stack limit reached. Shortening message stack... Please Wait"
                 )

@@ -4,11 +4,17 @@ import os
 import json
 from typing import Any, NamedTuple, Union
 from dotenv import load_dotenv
+from langchain import HuggingFaceTextGenInference
+from langchain.base_language import BaseLanguageModel
+from langchain.chat_models import ChatOpenAI
+
+from openai import ChatCompletion as OpenAIChatCompletion
 
 from .logging import *
 from .ai_models import *
 
 openai_api_key: str = ""
+huggingface_api_key: str = ""
 raw_responses: bool = False
 
 esbmc_path: str = "./esbmc"
@@ -29,7 +35,7 @@ esbmc_params: list[str] = [
 temp_auto_clean: bool = True
 temp_file_dir: str = "."
 consecutive_prompt_delay: float = 20.0
-ai_model: AIModel = AI_MODEL_GPT3
+ai_model: AIModel = AIModels.gpt_3.value
 
 cfg_path: str = "./config.json"
 
@@ -45,11 +51,54 @@ chat_prompt_generator_mode: ChatPromptSettings
 chat_prompt_conversation_summarizer: ChatPromptSettings
 
 
+def _load_custom_ai(config: dict) -> None:
+    ai_custom: dict = config
+    for custom_ai_name, custom_ai_data in ai_custom.items():
+        # Load the max tokens
+        custom_ai_max_tokens, ok = _load_config_value(
+            config_file=custom_ai_data,
+            name="max_tokens",
+        )
+        assert (
+            ok
+        ), f'max_tokens field not found in "ai_custom" entry "{custom_ai_name}".'
+        assert (
+            isinstance(custom_ai_max_tokens, int) and custom_ai_max_tokens > 0
+        ), f'custom_ai_max_tokens in ai_custom entry "{custom_ai_name}" needs to be an int and greater than 0.'
+        # Load the URL
+        custom_ai_url, ok = _load_config_value(
+            config_file=custom_ai_data,
+            name="url",
+        )
+        assert ok, f'url field not found in "ai_custom" entry "{custom_ai_name}".'
+        # Load the config message
+        custom_ai_config_message, ok = _load_config_value(
+            config_file=custom_ai_data,
+            name="config_message",
+        )
+        assert (
+            ok
+        ), f'config_message field not found in "ai_custom" entry "{custom_ai_name}".'
+        # Add the custom AI.
+        add_custom_ai_model(
+            AIModel(
+                name=custom_ai_name,
+                tokens=custom_ai_max_tokens,
+                provider=AIModelProvider.text_inference_server,
+                url=custom_ai_url,
+                config_message=custom_ai_config_message,
+            )
+        )
+
+
 def load_envs() -> None:
     load_dotenv(dotenv_path="./.env", override=True, verbose=True)
 
     global openai_api_key
     openai_api_key = str(os.getenv("OPENAI_API_KEY"))
+
+    global huggingface_api_key
+    huggingface_api_key = str(os.getenv("HUGGINGFACE_API_KEY"))
 
     global cfg_path
     value = os.getenv("ESBMC_AI_CFG_PATH")
@@ -126,19 +175,21 @@ def load_config(file_path: str) -> None:
         temp_file_dir,
     )
 
+    # Load the custom ai configs.
+    _load_custom_ai(config_file["ai_custom"])
+
     global ai_model
     ai_model_name, _ = _load_config_value(
         config_file,
         "ai_model",
         ai_model,
     )
-    if not is_valid_ai_model(ai_model_name):
+    if is_valid_ai_model(ai_model_name):
+        # Load the ai_model from loaded models.
+        ai_model = get_ai_model_by_name(ai_model_name)
+    else:
         print(f"Error: {ai_model_name} is not a valid AI model")
         exit(4)
-    else:
-        for model in models:
-            if ai_model_name == model.name:
-                ai_model = model
 
     global esbmc_path
     # Health check verifies this later in the init process.
@@ -174,16 +225,12 @@ def load_config(file_path: str) -> None:
 
 
 def load_args(args) -> None:
-    global verbose
-    verbose = args.verbose
-
-    global raw_responses
-    raw_responses = args.raw_output
+    set_verbose(1 if args.verbose else 0)
 
     global ai_model
     if args.ai_model != "":
         if is_valid_ai_model(args.ai_model):
-            ai_model = args.ai_model
+            ai_model = get_ai_model_by_name(args.ai_model)
         else:
             print(f"Error: invalid --ai-model parameter {args.ai_model}")
             exit(4)
@@ -194,3 +241,29 @@ def load_args(args) -> None:
         esbmc_params.extend(args.remaining)
     elif len(args.remaining) != 0:
         esbmc_params = args.remaining
+
+
+def create_llm(temperature: float = 1.0) -> BaseLanguageModel:
+    if ai_model.provider == AIModelProvider.text_inference_server:
+        return HuggingFaceTextGenInference(
+            client=None,
+            async_client=None,
+            inference_server_url=ai_model.url,
+            server_kwargs={
+                "headers": {"Authorization": f"Bearer {huggingface_api_key}"}
+            },
+            # FIXME Need to find a way to make output bigger. When token tracking
+            # for this LLM type is added.
+            max_new_tokens=1024,
+            temperature=temperature,
+        )
+    else:
+        return ChatOpenAI(
+            client=OpenAIChatCompletion,
+            model=ai_model.name,
+            openai_api_key=openai_api_key,
+            # FIXME
+            max_tokens=512,
+            # max_tokens=max_tokens,
+            temperature=temperature,
+        )

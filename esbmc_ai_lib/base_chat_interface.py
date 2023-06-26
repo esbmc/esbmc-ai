@@ -1,94 +1,122 @@
 # Author: Yiannis Charalambous
 
 from abc import abstractmethod
-from typing import NamedTuple
-import openai
+from langchain.base_language import BaseLanguageModel
 
-from .ai_models import AIModel, AI_MODEL_GPT3, num_tokens_from_messages
+from langchain.callbacks import get_openai_callback
+from langchain.llms.base import BaseLLM
+from langchain.prompts import (
+    HumanMessagePromptTemplate,
+)
+from langchain.prompts.chat import ChatPromptValue
+from langchain.schema import (
+    AIMessage,
+    BaseMessage,
+    ChatMessage,
+    HumanMessage,
+    LLMResult,
+)
 
-
-# API returned complete model output
-FINISH_REASON_STOP: str = "stop"
-# Incomplete model output due to max_tokens parameter or token limit
-FINISH_REASON_LENGTH: str = "length"
-# Omitted content due to a flag from our content filters
-FINISH_REASON_CONTENT_FILTER: str = "content_filter"
-# API response still in progress or incomplete
-FINISH_REASON_NULL: str = "null"
-
-
-class ChatResponse(NamedTuple):
-    base_message: object = None
-    finish_reason: str = FINISH_REASON_NULL
-    role: str = ""
-    message: str = ""
-    total_tokens: int = 0
+from .chat_response import ChatResponse, FinishReason
+from .ai_models import AIModel
 
 
 class BaseChatInterface(object):
-    protected_messages: list
-    messages: list
+    protected_messages: list[BaseMessage]
+    messages: list[BaseMessage]
     ai_model: AIModel
-    temperature: float
+    llm: BaseLanguageModel
 
+    # TODO Consider removing ai_model from constructor.
     def __init__(
         self,
-        system_messages: list,
-        ai_model: AIModel = AI_MODEL_GPT3,
-        temperature: float = 1.0,
+        system_messages: list[BaseMessage],
+        llm: BaseLanguageModel,
+        ai_model: AIModel,
     ) -> None:
         super().__init__()
         self.ai_model = ai_model
-        self.temperature = temperature
 
         self.protected_messages = system_messages.copy()
         self.messages = system_messages.copy()
+
+        self.llm = llm
 
     @abstractmethod
     def compress_message_stack(self) -> None:
         raise NotImplementedError()
 
     def push_to_message_stack(
-        self, role: str, message: str, protected: bool = False
+        self, message: BaseMessage, protected: bool = False
     ) -> None:
-        message_struct = {"role": role, "content": message}
         if protected:
-            self.protected_messages.append(message_struct)
-        self.messages.append(message_struct)
+            self.protected_messages.append(message)
+        self.messages.append(message)
 
     # Returns an OpenAI object back.
     def send_message(self, message: str, protected: bool = False) -> ChatResponse:
-        """Sends a message to the AI model. Returns solution. If the message
-        stack fills up, the command will exit with no changes to the message
-        stack."""
-        # See if the new stack if over the limit.
-        new_stack = [*self.messages, {"role": "user", "content": message}]
+        """Sends a message to the AI model. Returns solution."""
+        self.push_to_message_stack(
+            message=HumanMessage(content=message),
+            protected=protected,
+        )
 
-        # Check if message is too long and exit.
-        msg_tokens: int = num_tokens_from_messages(new_stack, self.ai_model)
-        if msg_tokens > self.ai_model.tokens:
-            response: ChatResponse = ChatResponse(
-                finish_reason=FINISH_REASON_LENGTH,
+        # Transform message stack to ChatPromptValue
+
+        message_prompts: ChatPromptValue
+        if isinstance(self.llm, BaseLLM):
+            # Load the LLM prompts.
+            message_prompts = self.load_llm_template()
+        else:
+            # Is BaseChatModel so can use messages as is.
+            message_prompts = ChatPromptValue(messages=self.messages)
+
+        # TODO Add error checking back as it was before the LangChain update.
+
+        # TODO When token counting comes to other models, implement it.
+
+        response: ChatResponse
+        with get_openai_callback() as cb:
+            result: LLMResult = self.llm.generate_prompt(
+                prompts=[message_prompts],
             )
-            return response
 
-        completion = openai.ChatCompletion.create(
-            model=self.ai_model.name,
-            messages=new_stack,
-            temperature=self.temperature,
-        )
+            response_message: BaseMessage = AIMessage(
+                content=result.generations[0][0].text
+            )
 
-        response = ChatResponse(
-            base_message=completion,
-            role=completion.choices[0].message.role,
-            message=completion.choices[0].message.content,
-            finish_reason=completion.choices[0].finish_reason,
-            total_tokens=completion.usage.total_tokens,
-        )
+            self.push_to_message_stack(message=response_message, protected=protected)
 
-        # If the response is OK then add to stack.
-        if response.finish_reason == FINISH_REASON_STOP:
-            self.push_to_message_stack("user", message, protected)
-            self.push_to_message_stack(response.role, response.message, protected)
+            response = ChatResponse(
+                finish_reason=FinishReason.stop,
+                message=response_message,
+                total_tokens=cb.total_tokens,
+            )
 
         return response
+
+    # TODO FIXME Temporary place for this.
+    def load_llm_template(self) -> ChatPromptValue:
+        # Special tokens from: https://huggingface.co/tiiuae/falcon-7b-instruct/blob/main/special_tokens_map.json
+        sys_initial_text: str = """>>DOMAIN<<You are a helpful assistant that answers any questions asked based on the previous messages in the conversation. The questions are asked by Human. The \"AI\" is the assistant. The AI shall not impersonate any other entity in the interaction including System and Human. The Human may refer to the AI directly, the AI should refer to the Human directly back, for example, when asked \"How do you suggest a fix?\", the AI shall respond \"You can try...\". The AI should follow the instructions given by System."""
+
+        system_messages: list[BaseMessage] = [
+            # sys_initial_text
+            ChatMessage(role="", content=sys_initial_text),
+            *self.messages[:-1],
+        ]
+
+        prompt_answer_template_text = """>>QUESTION<<{user_prompt}\n>>ANSWER<<"""
+
+        prompt_answer_template = HumanMessagePromptTemplate.from_template(
+            template=prompt_answer_template_text,
+        )
+
+        message_prompts: ChatPromptValue = ChatPromptValue(
+            messages=[
+                *system_messages,
+                *prompt_answer_template.format_messages(user_prompt=self.messages[-1]),
+            ]
+        )
+
+        return message_prompts

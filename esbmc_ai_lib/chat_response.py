@@ -1,20 +1,41 @@
 # Author: Yiannis Charalambous
 
+from enum import Enum
 from typing import NamedTuple
 
-# API returned complete model output
-FINISH_REASON_STOP: str = "stop"
-# Incomplete model output due to max_tokens parameter or token limit
-FINISH_REASON_LENGTH: str = "length"
-# Omitted content due to a flag from our content filters
-FINISH_REASON_CONTENT_FILTER: str = "content_filter"
-# API response still in progress or incomplete
-FINISH_REASON_NULL: str = "null"
+from langchain.schema import AIMessage, BaseMessage, HumanMessage, SystemMessage
+
+
+class FinishReason(Enum):
+    # API response still in progress or incomplete
+    null = 0
+    # API returned complete model output
+    stop = 1
+    # Incomplete model output due to max_tokens parameter or token limit
+    length = 2
+    # Omitted content due to a flag from our content filters
+    content_filter = 3
 
 
 class ChatResponse(NamedTuple):
-    base_message: object = None
-    finish_reason: str = FINISH_REASON_NULL
-    role: str = ""
-    message: str = ""
+    message: BaseMessage
     total_tokens: int = 0
+    finish_reason: FinishReason = FinishReason.null
+
+
+def json_to_base_message(json_string: dict) -> BaseMessage:
+    """Converts a json representation of messages (such as in config.json),
+    into LangChain object messages. The three recognized roles are:
+    1. System
+    2. AI
+    3. Human"""
+    role: str = json_string["role"]
+    content: str = json_string["content"]
+    if role == "System":
+        return SystemMessage(content=content)
+    elif role == "AI":
+        return AIMessage(content=content)
+    elif role == "Human":
+        return HumanMessage(content=content)
+    else:
+        raise Exception()
