@@ -4,18 +4,13 @@ import os
 import json
 from typing import Any, NamedTuple, Union
 from dotenv import load_dotenv
-from langchain import HuggingFaceTextGenInference
-from langchain.base_language import BaseLanguageModel
-from langchain.chat_models import ChatOpenAI
-
-from openai import ChatCompletion as OpenAIChatCompletion
 
 from .logging import *
 from .ai_models import *
+from .api_key_collection import APIKeyCollection
 
-openai_api_key: str = ""
-huggingface_api_key: str = ""
-raw_responses: bool = False
+
+api_keys: APIKeyCollection
 
 esbmc_path: str = "./esbmc"
 esbmc_params: list[str] = [
@@ -81,10 +76,9 @@ def _load_custom_ai(config: dict) -> None:
         ), f'config_message field not found in "ai_custom" entry "{custom_ai_name}".'
         # Add the custom AI.
         add_custom_ai_model(
-            AIModel(
+            AIModelTextGen(
                 name=custom_ai_name,
                 tokens=custom_ai_max_tokens,
-                provider=AIModelProvider.text_inference_server,
                 url=custom_ai_url,
                 config_message=custom_ai_config_message,
             )
@@ -94,11 +88,12 @@ def _load_custom_ai(config: dict) -> None:
 def load_envs() -> None:
     load_dotenv(dotenv_path="./.env", override=True, verbose=True)
 
-    global openai_api_key
-    openai_api_key = str(os.getenv("OPENAI_API_KEY"))
+    global api_keys
 
-    global huggingface_api_key
-    huggingface_api_key = str(os.getenv("HUGGINGFACE_API_KEY"))
+    api_keys = APIKeyCollection(
+        openai=str(os.getenv("OPENAI_API_KEY")),
+        huggingface=str(os.getenv("HUGGINGFACE_API_KEY")),
+    )
 
     global cfg_path
     value = os.getenv("ESBMC_AI_CFG_PATH")
@@ -241,29 +236,3 @@ def load_args(args) -> None:
         esbmc_params.extend(args.remaining)
     elif len(args.remaining) != 0:
         esbmc_params = args.remaining
-
-
-def create_llm(temperature: float = 1.0) -> BaseLanguageModel:
-    if ai_model.provider == AIModelProvider.text_inference_server:
-        return HuggingFaceTextGenInference(
-            client=None,
-            async_client=None,
-            inference_server_url=ai_model.url,
-            server_kwargs={
-                "headers": {"Authorization": f"Bearer {huggingface_api_key}"}
-            },
-            # FIXME Need to find a way to make output bigger. When token tracking
-            # for this LLM type is added.
-            max_new_tokens=1024,
-            temperature=temperature,
-        )
-    else:
-        return ChatOpenAI(
-            client=OpenAIChatCompletion,
-            model=ai_model.name,
-            openai_api_key=openai_api_key,
-            # FIXME
-            max_tokens=512,
-            # max_tokens=max_tokens,
-            temperature=temperature,
-        )

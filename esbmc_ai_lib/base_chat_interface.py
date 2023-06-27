@@ -4,17 +4,12 @@ from abc import abstractmethod
 from langchain.base_language import BaseLanguageModel
 
 from langchain.callbacks import get_openai_callback
-from langchain.llms.base import BaseLLM
-from langchain.prompts import (
-    HumanMessagePromptTemplate,
-)
-from langchain.prompts.chat import ChatPromptValue
 from langchain.schema import (
     AIMessage,
     BaseMessage,
-    ChatMessage,
     HumanMessage,
     LLMResult,
+    PromptValue,
 )
 
 from .chat_response import ChatResponse, FinishReason
@@ -27,7 +22,6 @@ class BaseChatInterface(object):
     ai_model: AIModel
     llm: BaseLanguageModel
 
-    # TODO Consider removing ai_model from constructor.
     def __init__(
         self,
         system_messages: list[BaseMessage],
@@ -61,15 +55,14 @@ class BaseChatInterface(object):
             protected=protected,
         )
 
-        # Transform message stack to ChatPromptValue
-
-        message_prompts: ChatPromptValue
-        if isinstance(self.llm, BaseLLM):
-            # Load the LLM prompts.
-            message_prompts = self.load_llm_template()
-        else:
-            # Is BaseChatModel so can use messages as is.
-            message_prompts = ChatPromptValue(messages=self.messages)
+        # Transform message stack to ChatPromptValue: If this is a ChatLLM then the
+        # function will simply be an identity function that does nothing and simply
+        # returns the messages as a ChatPromptValue. If this is a text generation
+        # LLM, then the function should inject the config message around the
+        # conversation to make the LLM behave like a ChatLLM.
+        message_prompts: PromptValue = self.ai_model.apply_chat_template(
+            messages=self.messages,
+        )
 
         # TODO Add error checking back as it was before the LangChain update.
 
@@ -94,29 +87,3 @@ class BaseChatInterface(object):
             )
 
         return response
-
-    # TODO FIXME Temporary place for this.
-    def load_llm_template(self) -> ChatPromptValue:
-        # Special tokens from: https://huggingface.co/tiiuae/falcon-7b-instruct/blob/main/special_tokens_map.json
-        sys_initial_text: str = """>>DOMAIN<<You are a helpful assistant that answers any questions asked based on the previous messages in the conversation. The questions are asked by Human. The \"AI\" is the assistant. The AI shall not impersonate any other entity in the interaction including System and Human. The Human may refer to the AI directly, the AI should refer to the Human directly back, for example, when asked \"How do you suggest a fix?\", the AI shall respond \"You can try...\". The AI should follow the instructions given by System."""
-
-        system_messages: list[BaseMessage] = [
-            # sys_initial_text
-            ChatMessage(role="", content=sys_initial_text),
-            *self.messages[:-1],
-        ]
-
-        prompt_answer_template_text = """>>QUESTION<<{user_prompt}\n>>ANSWER<<"""
-
-        prompt_answer_template = HumanMessagePromptTemplate.from_template(
-            template=prompt_answer_template_text,
-        )
-
-        message_prompts: ChatPromptValue = ChatPromptValue(
-            messages=[
-                *system_messages,
-                *prompt_answer_template.format_messages(user_prompt=self.messages[-1]),
-            ]
-        )
-
-        return message_prompts

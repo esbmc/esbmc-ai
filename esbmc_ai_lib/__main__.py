@@ -29,6 +29,7 @@ from esbmc_ai_lib.user_chat import ChatInterface
 from esbmc_ai_lib.logging import printv
 from esbmc_ai_lib.esbmc_util import esbmc
 from esbmc_ai_lib.chat_response import FinishReason, json_to_base_message, ChatResponse
+from esbmc_ai_lib.ai_models import _ai_model_names
 
 
 commands: list[ChatCommand] = []
@@ -232,7 +233,9 @@ def main() -> None:
         "-m",
         "--ai-model",
         default="",
-        help="Which AI model to use.",
+        help="Which AI model to use. Built-in models: {"
+        + ", ".join(_ai_model_names)
+        + ", +custom models}",
     )
 
     parser.add_argument(
@@ -311,7 +314,8 @@ def main() -> None:
             exit(0)
 
     printv(f"Initializing the LLM: {config.ai_model.name}\n")
-    chat_llm: BaseLanguageModel = config.create_llm(
+    chat_llm: BaseLanguageModel = config.ai_model.create_llm(
+        api_keys=config.api_keys,
         temperature=config.chat_prompt_user_mode.temperature,
     )
 
@@ -341,7 +345,7 @@ def main() -> None:
     else:
         raise RuntimeError("User mode initial prompt not found in config.")
 
-    print_assistant_response(chat, response, config.raw_responses)
+    print_assistant_response(chat, response)
     print(
         "ESBMC-AI: Type '/help' to view the available in-chat commands, along",
         "with useful prompts to ask the AI model...",
@@ -423,7 +427,6 @@ def main() -> None:
         print_assistant_response(
             chat,
             response,
-            config.raw_responses,
         )
 
 

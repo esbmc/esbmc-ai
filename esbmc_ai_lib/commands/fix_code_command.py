@@ -39,7 +39,8 @@ class FixCodeCommand(ChatCommand):
             animation=[str(num) for num in range(wait_time, 0, -1)],
         )
 
-        llm = config.create_llm(
+        llm = config.ai_model.create_llm(
+            api_keys=config.api_keys,
             temperature=config.chat_prompt_generator_mode.temperature,
         )
 

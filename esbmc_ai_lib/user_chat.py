@@ -61,7 +61,7 @@ class ChatInterface(BaseChatInterface):
     @override
     def compress_message_stack(self) -> None:
         raise NotImplementedError()
-        # TODO
+        # TODO Add message compression back.
         # # Reset chat to essentials.
         # self.messages = self.protected_messages.copy()
 
