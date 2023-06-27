@@ -1,15 +1,7 @@
 {
-  "ai_model": "falcon-7b",
-  "ai_custom": {
-    "ex1": {
-      "max_tokens": 4096,
-      "url": "https://api-inference.huggingface.co/models/tiiuae/falcon-7b-instruct",
-      "config_message": "Assistant is a large language model trained by OpenAI.\n\nAssistant is designed to be able to assist with a wide range of tasks, from answering simple questions to providing in-depth explanations and discussions on a wide range of topics. As a language model, Assistant is able to generate human-like text based on the input it receives, allowing it to engage in natural-sounding conversations and provide responses that are coherent and relevant to the topic at hand.\n\nAssistant is constantly learning and improving, and its capabilities are constantly evolving. It is able to process and understand large amounts of text, and can use this knowledge to provide accurate and informative responses to a wide range of questions. Additionally, Assistant is able to generate its own text based on the input it receives, allowing it to engage in discussions and provide explanations and descriptions on a wide range of topics.\n\nOverall, Assistant is a powerful tool that can help with a wide range of tasks and provide valuable insights and information on a wide range of topics. Whether you need help with a specific question or just want to have a conversation about a particular topic, Assistant is here to assist.\n\n{history}\nHuman: {user_prompt}\nAssistant:"
-    }
-  },
+  "ai_model": "gpt-3.5-turbo-16k",
+  "ai_custom": {},
   "esbmc_path": "./esbmc",
-  "cfg_sys_path": "./config/system.json",
-  "cfg_initial_prompt_path": "./config/initial_prompt.txt",
   "esbmc_params": [
     "--interval-analysis",
     "--goto-unwind",
