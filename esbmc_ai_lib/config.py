@@ -196,7 +196,6 @@ def load_config(file_path: str) -> None:
 
     # Load the AI data from the file that will command the AI for all modes.
     printv("Initializing AI data")
-    # TODO Add checking here.
     global chat_prompt_user_mode
     chat_prompt_user_mode = ChatPromptSettings(
         system_messages=config_file["chat_modes"]["user_chat"]["system"],
