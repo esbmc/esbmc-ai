@@ -7,14 +7,13 @@ from typing_extensions import override
 from langchain import HuggingFaceTextGenInference, PromptTemplate
 from langchain.base_language import BaseLanguageModel
 from langchain.chat_models import ChatOpenAI
-from langchain.prompts import HumanMessagePromptTemplate
 from langchain.prompts.base import StringPromptValue
 
 
 from openai import ChatCompletion as OpenAIChatCompletion
 
 from langchain.prompts.chat import ChatPromptValue
-from langchain.schema import BaseMessage, ChatMessage, PromptValue, get_buffer_string
+from langchain.schema import BaseMessage, PromptValue, get_buffer_string
 
 from esbmc_ai_lib.api_key_collection import APIKeyCollection
 
@@ -48,6 +47,9 @@ class AIModel(object):
 
 
 class AIModelOpenAI(AIModel):
+    context_length_exceeded_error: str = "context_length_exceeded"
+    """Error code for when the length has been reached."""
+
     @override
     def create_llm(
         self,
@@ -95,8 +97,7 @@ class AIModelTextGen(AIModel):
             server_kwargs={
                 "headers": {"Authorization": f"Bearer {api_keys.huggingface}"}
             },
-            # FIXME Need to find a way to make output bigger. When token tracking
-            # for this LLM type is added.
+            # FIXME Need to find a way to make output bigger. When token tracking for this LLM type is added.
             max_new_tokens=1024,
             temperature=temperature,
         )
@@ -139,7 +140,7 @@ class AIModels(Enum):
         name="falcon-7b",
         tokens=8192,
         url="https://api-inference.huggingface.co/models/tiiuae/falcon-7b-instruct",
-        config_message='>>DOMAIN<<You are a helpful assistant that answers any questions asked based on the previous messages in the conversation. The questions are asked by Human. The "AI" is the assistant. The AI shall not impersonate any other entity in the interaction including System and Human. The Human may refer to the AI directly, the AI should refer to the Human directly back, for example, when asked "How do you suggest a fix?", the AI shall respond "You can try...". The AI should follow the instructions given by System.\n\n>>SUMMARY<<{history}\n\n>>QUESTION<<{user_prompt}\n\n>>ANSWER<<',
+        config_message='>>DOMAIN<<You are a helpful assistant that answers any questions asked based on the previous messages in the conversation. The questions are asked by Human. The "AI" is the assistant. The AI shall not impersonate any other entity in the interaction including System and Human. The Human may refer to the AI directly, the AI should refer to the Human directly back, for example, when asked "How do you suggest a fix?", the AI shall respond "You can try...". The AI should use markdown formatting in its responses. The AI should follow the instructions given by System.\n\n>>SUMMARY<<{history}\n\n>>QUESTION<<{user_prompt}\n\n>>ANSWER<<',
     )
 
 
