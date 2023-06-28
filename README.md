@@ -64,12 +64,13 @@ The `.env` file contains the configuration of sensitive data. An example `.env.e
 The following settings are adjustable in the `config.json` file:
 
 1. `ai_model`: The model to use. List of models available [here](https://github.com/Yiannis128/esbmc-ai/wiki/AI-Models).
-2. `esbmc_path`: Override the default ESBMC path. Leave blank to use the default ("./esbmc").
-3. `esbmc_params`: Array of strings. This represents the default ESBMC parameters to use when calling ESBMC, these will be used only when no parameters are specified after the filename. **Do not specify a source file to scan in here as ESBMC-AI will inject that in the ESBMC parameters itself**.
-4. `consecutive_prompt_delay`: Rate limit wait time for API calls.
-5. `temp_auto_clean`: Boolean value describing if to clean temporary files from the temporary directory as soon as they are not needed.
-6. `temp_file_dir`: The directory to save temporary files in.
-7. `chat_modes`: Contains settings that belong to each individual chat mode. It is not recommended to change these as changing them will impact the effectiveness of the LLMs.
+2. `ai_custom`: Allows for specifying custom `text-generation-inference` servers to use. For more information see [the wiki page](https://github.com/Yiannis128/esbmc-ai/wiki/AI-Models#custom-llm).
+3. `esbmc_path`: Override the default ESBMC path. Leave blank to use the default ("./esbmc").
+4. `esbmc_params`: Array of strings. This represents the default ESBMC parameters to use when calling ESBMC, these will be used only when no parameters are specified after the filename. **Do not specify a source file to scan in here as ESBMC-AI will inject that in the ESBMC parameters itself**.
+5. `consecutive_prompt_delay`: Rate limit wait time for API calls.
+6. `temp_auto_clean`: Boolean value describing if to clean temporary files from the temporary directory as soon as they are not needed.
+7. `temp_file_dir`: The directory to save temporary files in.
+8. `chat_modes`: Contains settings that belong to each individual chat mode. It is not recommended to change these as changing them will impact the effectiveness of the LLMs.
 
 ## Usage
 
