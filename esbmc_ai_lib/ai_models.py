@@ -1,8 +1,183 @@
 # Author: Yiannis Charalambous
 
-AI_MODEL_GPT3 = "gpt-3.5-turbo"
-AI_MODEL_GPT4 = "gpt-4"
+from abc import abstractmethod
+from typing import Union
+from enum import Enum
+from typing_extensions import override
+from langchain import HuggingFaceTextGenInference, PromptTemplate
+from langchain.base_language import BaseLanguageModel
+from langchain.chat_models import ChatOpenAI
+from langchain.prompts.base import StringPromptValue
 
 
-def is_valid_ai_model(name: str) -> bool:
-    return name == AI_MODEL_GPT3 or name == AI_MODEL_GPT4
+from openai import ChatCompletion as OpenAIChatCompletion
+
+from langchain.prompts.chat import ChatPromptValue
+from langchain.schema import BaseMessage, PromptValue, get_buffer_string
+
+from esbmc_ai_lib.api_key_collection import APIKeyCollection
+
+
+class AIModel(object):
+    name: str
+    tokens: int
+
+    def __init__(
+        self,
+        name: str,
+        tokens: int,
+    ) -> None:
+        self.name = name
+        self.tokens = tokens
+
+    @abstractmethod
+    def create_llm(
+        self,
+        api_keys: APIKeyCollection,
+        temperature: float = 1.0,
+    ) -> BaseLanguageModel:
+        raise NotImplementedError()
+
+    def apply_chat_template(
+        self,
+        messages: list[BaseMessage],
+    ) -> PromptValue:
+        # Default one, identity function essentially.
+        return ChatPromptValue(messages=messages)
+
+
+class AIModelOpenAI(AIModel):
+    context_length_exceeded_error: str = "context_length_exceeded"
+    """Error code for when the length has been reached."""
+
+    @override
+    def create_llm(
+        self,
+        api_keys: APIKeyCollection,
+        temperature: float,
+    ) -> BaseLanguageModel:
+        return ChatOpenAI(
+            client=OpenAIChatCompletion,
+            model=self.name,
+            openai_api_key=api_keys.openai,
+            max_tokens=None,
+            temperature=temperature,
+            model_kwargs={},
+        )
+
+
+class AIModelTextGen(AIModel):
+    # Below are only used for models that need them, such as models that
+    # are using the provider "text_inference_server".
+    url: str = ""
+    config_message: str = ""
+
+    def __init__(
+        self,
+        name: str,
+        tokens: int,
+        url: str,
+        config_message: str,
+    ) -> None:
+        super().__init__(name, tokens)
+
+        self.url = url
+        self.config_message = config_message
+
+    @override
+    def create_llm(
+        self,
+        api_keys: APIKeyCollection,
+        temperature: float,
+    ) -> BaseLanguageModel:
+        return HuggingFaceTextGenInference(
+            client=None,
+            async_client=None,
+            inference_server_url=self.url,
+            server_kwargs={
+                "headers": {"Authorization": f"Bearer {api_keys.huggingface}"}
+            },
+            # FIXME Need to find a way to make output bigger. When token tracking for this LLM type is added.
+            max_new_tokens=1024,
+            temperature=temperature,
+        )
+
+    @override
+    def apply_chat_template(self, messages: list[BaseMessage]) -> PromptValue:
+        """Text generation LLMs take single string of text as input. So the conversation
+        is converted into a string and returned back in a single prompt value. The config
+        message is also applied to the conversation."""
+        config_message_template: PromptTemplate = PromptTemplate(
+            template=self.config_message,
+            input_variables=["history", "user_prompt"],
+        )
+
+        # Get formatted string of each history message and separate it using new
+        # lines, each message is then joined into a single string.
+        formatted_history: str = "\n\n".join(
+            [get_buffer_string([msg]) for msg in messages[:-1]]
+        )
+
+        formatted_user_prompt: str = get_buffer_string(messages=[messages[-1]])
+
+        history_prompt: StringPromptValue = StringPromptValue(text=formatted_history)
+        user_prompt: StringPromptValue = StringPromptValue(text=formatted_user_prompt)
+
+        chat_prompt: PromptValue = config_message_template.format_prompt(
+            history=history_prompt.to_string(),
+            user_prompt=user_prompt.to_string(),
+        )
+
+        return chat_prompt
+
+
+class AIModels(Enum):
+    gpt_3 = AIModelOpenAI(name="gpt-3.5-turbo", tokens=4096)
+    gpt_3_16k = AIModelOpenAI(name="gpt-3.5-turbo-16k", tokens=16384)
+    gpt_4 = AIModelOpenAI(name="gpt-4", tokens=8192)
+    gpt_4_32k = AIModelOpenAI(name="gpt-4-32k", tokens=32768)
+    falcon_7b = AIModelTextGen(
+        name="falcon-7b",
+        tokens=8192,
+        url="https://api-inference.huggingface.co/models/tiiuae/falcon-7b-instruct",
+        config_message='>>DOMAIN<<You are a helpful assistant that answers any questions asked based on the previous messages in the conversation. The questions are asked by Human. The "AI" is the assistant. The AI shall not impersonate any other entity in the interaction including System and Human. The Human may refer to the AI directly, the AI should refer to the Human directly back, for example, when asked "How do you suggest a fix?", the AI shall respond "You can try...". The AI should use markdown formatting in its responses. The AI should follow the instructions given by System.\n\n>>SUMMARY<<{history}\n\n>>QUESTION<<{user_prompt}\n\n>>ANSWER<<',
+    )
+
+
+_custom_ai_models: list[AIModel] = []
+
+_ai_model_names: set[str] = set(item.value.name for item in AIModels)
+
+
+def add_custom_ai_model(ai_model: AIModel) -> None:
+    """Registers a custom AI model."""
+    # Check if AI already already exists.
+    if ai_model.name in _ai_model_names:
+        raise Exception(f'AI Model "{ai_model.name}" already exists...')
+    _ai_model_names.add(ai_model.name)
+    _custom_ai_models.append(ai_model)
+
+
+def is_valid_ai_model(ai_model: Union[str, AIModel]) -> bool:
+    """Accepts both the AIModel object and the name as parameter."""
+    name: str
+    if isinstance(ai_model, AIModel):
+        name = ai_model.name
+    else:
+        name = ai_model
+    return name in _ai_model_names
+
+
+def get_ai_model_by_name(name: str) -> AIModel:
+    # Check AIModels enum.
+    for enum_value in AIModels:
+        ai_model: AIModel = enum_value.value
+        if name == ai_model.name:
+            return ai_model
+
+    # Check custom AI models.
+    for custom_ai in _custom_ai_models:
+        if name == custom_ai.name:
+            return custom_ai
+
+    raise Exception(f'The AI "{name}" was not found...')
