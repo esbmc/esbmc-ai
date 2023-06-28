@@ -3,7 +3,12 @@
 from enum import Enum
 from typing import NamedTuple
 
-from langchain.schema import AIMessage, BaseMessage, HumanMessage, SystemMessage
+from langchain.schema import (
+    AIMessage,
+    BaseMessage,
+    HumanMessage,
+    SystemMessage,
+)
 
 
 class FinishReason(Enum):
@@ -18,7 +23,7 @@ class FinishReason(Enum):
 
 
 class ChatResponse(NamedTuple):
-    message: BaseMessage
+    message: BaseMessage = AIMessage(content="")
     total_tokens: int = 0
     finish_reason: FinishReason = FinishReason.null
 
