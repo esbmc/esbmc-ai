@@ -1,8 +1,8 @@
 # Author: Yiannis Charalambous
 
 from abc import abstractmethod
-from langchain.base_language import BaseLanguageModel
 
+from langchain.base_language import BaseLanguageModel
 from langchain.callbacks import get_openai_callback
 from langchain.schema import (
     AIMessage,
@@ -12,8 +12,11 @@ from langchain.schema import (
     PromptValue,
 )
 
+from openai import InvalidRequestError
+from text_generation.errors import UnknownError, ValidationError
+
 from .chat_response import ChatResponse, FinishReason
-from .ai_models import AIModel
+from .ai_models import AIModel, AIModelOpenAI
 
 
 class BaseChatInterface(object):
@@ -64,26 +67,51 @@ class BaseChatInterface(object):
             messages=self.messages,
         )
 
-        # TODO Add error checking back as it was before the LangChain update.
-
         # TODO When token counting comes to other models, implement it.
+        # Need to implement ai_model.tokens...
 
         response: ChatResponse
         with get_openai_callback() as cb:
-            result: LLMResult = self.llm.generate_prompt(
-                prompts=[message_prompts],
-            )
+            try:
+                result: LLMResult = self.llm.generate_prompt(
+                    prompts=[message_prompts],
+                )
 
-            response_message: BaseMessage = AIMessage(
-                content=result.generations[0][0].text
-            )
+                response_message: BaseMessage = AIMessage(
+                    content=result.generations[0][0].text
+                )
 
-            self.push_to_message_stack(message=response_message, protected=protected)
+                self.push_to_message_stack(
+                    message=response_message, protected=protected
+                )
 
-            response = ChatResponse(
-                finish_reason=FinishReason.stop,
-                message=response_message,
-                total_tokens=cb.total_tokens,
-            )
+                response = ChatResponse(
+                    finish_reason=FinishReason.stop,
+                    message=response_message,
+                    total_tokens=cb.total_tokens,
+                )
+            except ValidationError as e:
+                # HFTextGen
+                response = ChatResponse(
+                    finish_reason=FinishReason.length,
+                    # NOTE Show the total tokens of the model instead of 0
+                    # (no token counting currently...)
+                    total_tokens=self.ai_model.tokens,
+                )
+            except InvalidRequestError as e:
+                # OpenAI model error handling.
+                if e.code == AIModelOpenAI.context_length_exceeded_error:
+                    response = ChatResponse(
+                        finish_reason=FinishReason.null,
+                        total_tokens=cb.total_tokens,
+                    )
+                else:
+                    raise
+            except UnknownError as e:
+                # HFTextGen
+                print(f"There was an unkown error when generating a response: {e}")
+                exit(1)
+            except Exception:
+                raise
 
         return response
