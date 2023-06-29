@@ -332,6 +332,9 @@ def main() -> None:
         esbmc_output=esbmc_output,
     )
 
+    printv("Initializing commands...")
+    init_commands()
+
     # Show the initial output.
     response: ChatResponse
     if len(config.chat_prompt_user_mode.initial_prompt) > 0:
@@ -350,9 +353,6 @@ def main() -> None:
         "ESBMC-AI: Type '/help' to view the available in-chat commands, along",
         "with useful prompts to ask the AI model...",
     )
-
-    printv("Initializing commands...")
-    init_commands()
 
     while True:
         # Get user input.
