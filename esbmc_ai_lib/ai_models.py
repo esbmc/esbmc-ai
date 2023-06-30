@@ -4,16 +4,18 @@ from abc import abstractmethod
 from typing import Union
 from enum import Enum
 from typing_extensions import override
+
 from langchain import HuggingFaceTextGenInference, PromptTemplate
 from langchain.base_language import BaseLanguageModel
 from langchain.chat_models import ChatOpenAI
-from langchain.prompts.base import StringPromptValue
-
 
 from openai import ChatCompletion as OpenAIChatCompletion
 
 from langchain.prompts.chat import ChatPromptValue
-from langchain.schema import BaseMessage, PromptValue, get_buffer_string
+from langchain.schema import (
+    BaseMessage,
+    PromptValue,
+)
 
 from esbmc_ai_lib.api_key_collection import APIKeyCollection
 
@@ -69,20 +71,45 @@ class AIModelOpenAI(AIModel):
 class AIModelTextGen(AIModel):
     # Below are only used for models that need them, such as models that
     # are using the provider "text_inference_server".
-    url: str = ""
-    config_message: str = ""
+    url: str
+    config_message: str
+    """The config message to place all messages in."""
+    system_template: PromptTemplate
+    """Template for each system message."""
+    human_template: PromptTemplate
+    """Template for each human message."""
+    ai_template: PromptTemplate
+    """Template for each AI message."""
 
     def __init__(
         self,
         name: str,
         tokens: int,
         url: str,
-        config_message: str,
+        config_message: str = "{history}\n\n{user_prompt}",
+        system_template: str = "{content}",
+        human_template: str = "{content}",
+        ai_template: str = "{content}",
     ) -> None:
         super().__init__(name, tokens)
 
         self.url = url
         self.config_message = config_message
+
+        self.system_template = PromptTemplate(
+            input_variables=["content"],
+            template=system_template,
+        )
+
+        self.human_template = PromptTemplate(
+            input_variables=["content"],
+            template=human_template,
+        )
+
+        self.ai_template = PromptTemplate(
+            input_variables=["content"],
+            template=ai_template,
+        )
 
     @override
     def create_llm(
@@ -100,6 +127,7 @@ class AIModelTextGen(AIModel):
             # FIXME Need to find a way to make output bigger. When token tracking for this LLM type is added.
             max_new_tokens=1024,
             temperature=temperature,
+            stop_sequences=["<|end|>"],
         )
 
     @override
@@ -107,6 +135,22 @@ class AIModelTextGen(AIModel):
         """Text generation LLMs take single string of text as input. So the conversation
         is converted into a string and returned back in a single prompt value. The config
         message is also applied to the conversation."""
+
+        formatted_messages: list[str] = []
+        for msg in messages:
+            formatted_msg: str
+            if msg.type == "ai":
+                formatted_msg = self.ai_template.format(content=msg.content)
+            elif msg.type == "system":
+                formatted_msg = self.system_template.format(content=msg.content)
+            elif msg.type == "human":
+                formatted_msg = self.human_template.format(content=msg.content)
+            else:
+                raise ValueError(
+                    f"Got unsupported message type: {msg.type}: {msg.content}"
+                )
+            formatted_messages.append(formatted_msg)
+
         config_message_template: PromptTemplate = PromptTemplate(
             template=self.config_message,
             input_variables=["history", "user_prompt"],
@@ -114,18 +158,11 @@ class AIModelTextGen(AIModel):
 
         # Get formatted string of each history message and separate it using new
         # lines, each message is then joined into a single string.
-        formatted_history: str = "\n\n".join(
-            [get_buffer_string([msg]) for msg in messages[:-1]]
-        )
-
-        formatted_user_prompt: str = get_buffer_string(messages=[messages[-1]])
-
-        history_prompt: StringPromptValue = StringPromptValue(text=formatted_history)
-        user_prompt: StringPromptValue = StringPromptValue(text=formatted_user_prompt)
+        formatted_history: str = "\n\n".join(formatted_messages[:-1])
 
         chat_prompt: PromptValue = config_message_template.format_prompt(
-            history=history_prompt.to_string(),
-            user_prompt=user_prompt.to_string(),
+            history=formatted_history,
+            user_prompt=formatted_messages[-1],
         )
 
         return chat_prompt
@@ -140,7 +177,19 @@ class AIModels(Enum):
         name="falcon-7b",
         tokens=8192,
         url="https://api-inference.huggingface.co/models/tiiuae/falcon-7b-instruct",
-        config_message='>>DOMAIN<<You are a helpful assistant that answers any questions asked based on the previous messages in the conversation. The questions are asked by Human. The "AI" is the assistant. The AI shall not impersonate any other entity in the interaction including System and Human. The Human may refer to the AI directly, the AI should refer to the Human directly back, for example, when asked "How do you suggest a fix?", the AI shall respond "You can try...". The AI should use markdown formatting in its responses. The AI should follow the instructions given by System.\n\n>>SUMMARY<<{history}\n\n>>QUESTION<<{user_prompt}\n\n>>ANSWER<<',
+        config_message='>>DOMAIN<<You are a helpful assistant that answers any questions asked based on the previous messages in the conversation. The questions are asked by Human. The "AI" is the assistant. The AI shall not impersonate any other entity in the interaction including System and Human. The Human may refer to the AI directly, the AI should refer to the Human directly back, for example, when asked "How do you suggest a fix?", the AI shall respond "You can try...". The AI should use markdown formatting in its responses. The AI should follow the instructions given by System.\n\n>>SUMMARY<<{history}\n\n{user_prompt}\n\n',
+        ai_template=">>ANSWER<<{content}",
+        human_template=">>QUESTION<<Human:{content}>>ANSWER<<",
+        system_template="System: {content}",
+    )
+    starchat_beta = AIModelTextGen(
+        name="starchat-beta",
+        tokens=8192,
+        url="https://api-inference.huggingface.co/models/HuggingFaceH4/starchat-beta",
+        config_message="{history}\n\n{user_prompt}\n\n<|assistant|>",
+        system_template="<|system|>\n{content}\n<|end|>",
+        ai_template="<|assistant|>{content}",
+        human_template="<|user|>\n{content}\n<|end|>",
     )
 
 

@@ -82,9 +82,9 @@ def test_get_ai_model_by_name() -> None:
 
 def test_apply_chat_template() -> None:
     messages: list = [
-        SystemMessage(content="1"),
-        HumanMessage(content="2"),
-        AIMessage(content="3"),
+        SystemMessage(content="M1"),
+        HumanMessage(content="M2"),
+        AIMessage(content="M3"),
     ]
 
     # Test the identity method.
@@ -103,8 +103,11 @@ def test_apply_chat_template() -> None:
         tokens=999,
         url="",
         config_message="{history}\n\n{user_prompt}",
+        ai_template="AI: {content}",
+        human_template="Human: {content}",
+        system_template="System: {content}",
     )
 
     prompt_text: str = custom_model_2.apply_chat_template(messages=messages).to_string()
 
-    assert prompt_text == "System: 1\n\nHuman: 2\n\nAI: 3"
+    assert prompt_text == "System: M1\n\nHuman: M2\n\nAI: M3"
