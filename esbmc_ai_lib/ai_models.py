@@ -80,6 +80,7 @@ class AIModelTextGen(AIModel):
     """Template for each human message."""
     ai_template: PromptTemplate
     """Template for each AI message."""
+    stop_sequences: list[str]
 
     def __init__(
         self,
@@ -90,6 +91,7 @@ class AIModelTextGen(AIModel):
         system_template: str = "{content}",
         human_template: str = "{content}",
         ai_template: str = "{content}",
+        stop_sequences: list[str] = [],
     ) -> None:
         super().__init__(name, tokens)
 
@@ -111,6 +113,8 @@ class AIModelTextGen(AIModel):
             template=ai_template,
         )
 
+        self.stop_sequences = stop_sequences
+
     @override
     def create_llm(
         self,
@@ -128,7 +132,7 @@ class AIModelTextGen(AIModel):
             # tracking for this LLM type is added.
             max_new_tokens=1024,
             temperature=temperature,
-            stop_sequences=["<|end|>"],
+            stop_sequences=self.stop_sequences,
         )
 
     @override
@@ -191,6 +195,7 @@ class AIModels(Enum):
         system_template="<|system|>\n{content}\n<|end|>",
         ai_template="<|assistant|>{content}",
         human_template="<|user|>\n{content}\n<|end|>",
+        stop_sequences=["<|end|>"],
     )
 
 
