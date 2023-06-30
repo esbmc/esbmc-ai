@@ -64,6 +64,10 @@ def _load_custom_ai(config: dict) -> None:
             name="url",
         )
         assert ok, f'url field not found in "ai_custom" entry "{name}".'
+        stop_sequences, ok = _load_config_value(
+            config_file=ai_data,
+            name="stop_sequences",
+        )
         # Load the config message
         config_message: dict[str, str] = ai_data["config_message"]
         template, ok = _load_config_value(
@@ -93,6 +97,7 @@ def _load_custom_ai(config: dict) -> None:
                 ai_template=ai,
                 human_template=human,
                 system_template=system,
+                stop_sequences=stop_sequences,
             )
         )
 
