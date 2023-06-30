@@ -48,39 +48,51 @@ chat_prompt_conversation_summarizer: ChatPromptSettings
 
 def _load_custom_ai(config: dict) -> None:
     ai_custom: dict = config
-    for custom_ai_name, custom_ai_data in ai_custom.items():
+    for name, ai_data in ai_custom.items():
         # Load the max tokens
         custom_ai_max_tokens, ok = _load_config_value(
-            config_file=custom_ai_data,
+            config_file=ai_data,
             name="max_tokens",
         )
-        assert (
-            ok
-        ), f'max_tokens field not found in "ai_custom" entry "{custom_ai_name}".'
+        assert ok, f'max_tokens field not found in "ai_custom" entry "{name}".'
         assert (
             isinstance(custom_ai_max_tokens, int) and custom_ai_max_tokens > 0
-        ), f'custom_ai_max_tokens in ai_custom entry "{custom_ai_name}" needs to be an int and greater than 0.'
+        ), f'custom_ai_max_tokens in ai_custom entry "{name}" needs to be an int and greater than 0.'
         # Load the URL
         custom_ai_url, ok = _load_config_value(
-            config_file=custom_ai_data,
+            config_file=ai_data,
             name="url",
         )
-        assert ok, f'url field not found in "ai_custom" entry "{custom_ai_name}".'
+        assert ok, f'url field not found in "ai_custom" entry "{name}".'
         # Load the config message
-        custom_ai_config_message, ok = _load_config_value(
-            config_file=custom_ai_data,
-            name="config_message",
+        config_message: dict[str, str] = ai_data["config_message"]
+        template, ok = _load_config_value(
+            config_file=config_message,
+            name="template",
         )
-        assert (
-            ok
-        ), f'config_message field not found in "ai_custom" entry "{custom_ai_name}".'
+        human, ok = _load_config_value(
+            config_file=config_message,
+            name="human",
+        )
+        ai, ok = _load_config_value(
+            config_file=config_message,
+            name="ai",
+        )
+        system, ok = _load_config_value(
+            config_file=config_message,
+            name="system",
+        )
+
         # Add the custom AI.
         add_custom_ai_model(
             AIModelTextGen(
-                name=custom_ai_name,
+                name=name,
                 tokens=custom_ai_max_tokens,
                 url=custom_ai_url,
-                config_message=custom_ai_config_message,
+                config_message=template,
+                ai_template=ai,
+                human_template=human,
+                system_template=system,
             )
         )
 
