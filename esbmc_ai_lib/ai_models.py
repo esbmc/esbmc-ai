@@ -124,7 +124,8 @@ class AIModelTextGen(AIModel):
             server_kwargs={
                 "headers": {"Authorization": f"Bearer {api_keys.huggingface}"}
             },
-            # FIXME Need to find a way to make output bigger. When token tracking for this LLM type is added.
+            # FIXME Need to find a way to make output bigger. When token
+            # tracking for this LLM type is added.
             max_new_tokens=1024,
             temperature=temperature,
             stop_sequences=["<|end|>"],
