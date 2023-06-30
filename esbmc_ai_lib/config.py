@@ -30,7 +30,7 @@ esbmc_params: list[str] = [
 temp_auto_clean: bool = True
 temp_file_dir: str = "."
 consecutive_prompt_delay: float = 20.0
-ai_model: AIModel = AIModels.gpt_3.value
+ai_model: AIModel = AIModels.GPT_3.value
 
 cfg_path: str = "./config.json"
 

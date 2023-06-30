@@ -174,11 +174,11 @@ class AIModelTextGen(AIModel):
 
 
 class AIModels(Enum):
-    gpt_3 = AIModelOpenAI(name="gpt-3.5-turbo", tokens=4096)
-    gpt_3_16k = AIModelOpenAI(name="gpt-3.5-turbo-16k", tokens=16384)
-    gpt_4 = AIModelOpenAI(name="gpt-4", tokens=8192)
-    gpt_4_32k = AIModelOpenAI(name="gpt-4-32k", tokens=32768)
-    falcon_7b = AIModelTextGen(
+    GPT_3 = AIModelOpenAI(name="gpt-3.5-turbo", tokens=4096)
+    GPT_3_16K = AIModelOpenAI(name="gpt-3.5-turbo-16k", tokens=16384)
+    GPT_4 = AIModelOpenAI(name="gpt-4", tokens=8192)
+    GPT_4_32K = AIModelOpenAI(name="gpt-4-32k", tokens=32768)
+    FALCON_7B = AIModelTextGen(
         name="falcon-7b",
         tokens=8192,
         url="https://api-inference.huggingface.co/models/tiiuae/falcon-7b-instruct",
@@ -187,7 +187,7 @@ class AIModels(Enum):
         human_template=">>QUESTION<<Human:{content}>>ANSWER<<",
         system_template="System: {content}",
     )
-    starchat_beta = AIModelTextGen(
+    STARCHAT_BETA = AIModelTextGen(
         name="starchat-beta",
         tokens=8192,
         url="https://api-inference.huggingface.co/models/HuggingFaceH4/starchat-beta",
