@@ -2,6 +2,7 @@
 
 import os
 import json
+import sys
 from typing import Any, NamedTuple, Union
 from dotenv import load_dotenv
 
@@ -119,7 +120,7 @@ def load_envs() -> None:
             cfg_path = str(value)
         else:
             print(f"Error: Invalid .env ESBMC_AI_CFG_PATH value: {value}")
-            exit(4)
+            sys.exit(4)
     else:
         print(
             f"Warning: ESBMC_AI_CFG_PATH not found in .env file... Defaulting to {cfg_path}"
@@ -153,7 +154,7 @@ def _load_config_real_number(
 def load_config(file_path: str) -> None:
     if not os.path.exists(file_path):
         print(f"Error: Config not found: {file_path}")
-        exit(4)
+        sys.exit(4)
 
     config_file = None
     with open(file_path, mode="r") as file:
@@ -201,7 +202,7 @@ def load_config(file_path: str) -> None:
         ai_model = get_ai_model_by_name(ai_model_name)
     else:
         print(f"Error: {ai_model_name} is not a valid AI model")
-        exit(4)
+        sys.exit(4)
 
     global esbmc_path
     # Health check verifies this later in the init process.
@@ -244,7 +245,7 @@ def load_args(args) -> None:
             ai_model = get_ai_model_by_name(args.ai_model)
         else:
             print(f"Error: invalid --ai-model parameter {args.ai_model}")
-            exit(4)
+            sys.exit(4)
 
     global esbmc_params
     # If append flag is set, then append.

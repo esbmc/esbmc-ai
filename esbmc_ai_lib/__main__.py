@@ -4,6 +4,7 @@
 
 import os
 import re
+import sys
 from time import sleep
 
 # Enables arrow key functionality for input(). Do not remove import.
@@ -88,7 +89,7 @@ def init_check_health(verbose: bool) -> None:
         printv("Environment file has been located")
     else:
         print("Error: .env file is not found in project directory")
-        exit(3)
+        sys.exit(3)
 
 
 def check_health() -> None:
@@ -98,7 +99,7 @@ def check_health() -> None:
         printv("ESBMC has been located")
     else:
         print(f"Error: ESBMC could not be found in {config.esbmc_path}")
-        exit(3)
+        sys.exit(3)
 
 
 def get_src(path: str) -> str:
@@ -168,7 +169,7 @@ def _run_command_mode(
 
         if error:
             print("Failed all attempts...")
-            exit(1)
+            sys.exit(1)
         else:
             print(solution)
     elif command == verify_code_command:
@@ -181,7 +182,7 @@ def _run_command_mode(
         )
     else:
         command.execute()
-    exit(0)
+    sys.exit(0)
 
 
 def parse_command(user_prompt_string: str) -> tuple[str, list[str]]:
@@ -292,10 +293,10 @@ def main() -> None:
     if exit_code == 0:
         print("Success!")
         print(esbmc_output)
-        exit(0)
+        sys.exit(0)
     elif exit_code != 1:
         print(f"ESBMC exit code: {exit_code}")
-        exit(1)
+        sys.exit(1)
 
     # Command mode: Check if command is called and call it.
     # If not, then continue to user mode.
@@ -311,7 +312,7 @@ def main() -> None:
                         source_code=source_code,
                         esbmc_output=esbmc_output,
                     )
-            exit(0)
+            sys.exit(0)
 
     printv(f"Initializing the LLM: {config.ai_model.name}\n")
     chat_llm: BaseLanguageModel = config.ai_model.create_llm(

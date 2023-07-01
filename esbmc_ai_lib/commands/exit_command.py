@@ -1,5 +1,7 @@
 # Author: Yiannis Charalambous
 
+import sys
+
 from typing_extensions import override
 from .chat_command import ChatCommand
 
@@ -14,4 +16,4 @@ class ExitCommand(ChatCommand):
     @override
     def execute(self) -> None:
         print("exiting...")
-        exit(0)
+        sys.exit(0)

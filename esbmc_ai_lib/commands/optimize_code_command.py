@@ -1,5 +1,7 @@
 # Author: Yiannis Charalambous
 
+import sys
+
 from typing_extensions import override
 from .chat_command import ChatCommand
 from ..frontend import ast
@@ -27,7 +29,7 @@ class OptimizeCodeCommand(ChatCommand):
             for function_name in function_names:
                 if function_name not in all_functions:
                     print(f"Error: {function_name} is not defined...")
-                    exit(1)
+                    sys.exit(1)
         else:
             function_names = all_functions.copy()
 
