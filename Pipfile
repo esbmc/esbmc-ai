@@ -28,10 +28,12 @@ langchain = {extras = ["llms"], version = "*"}
 
 [dev-packages]
 black = "*"
-pytest = "*"
-pytest-cov = "*"
 pylint = "*"
 ipykernel = "*"
+pytest = "*"
+pytest-cov = "*"
+pytest-regtest = "*"
+py = "*" # Dependency of pytest-regtest
 
 [requires]
 python_version = "3.11"
