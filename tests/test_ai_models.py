@@ -22,8 +22,8 @@ from esbmc_ai_lib.ai_models import (
 
 
 def test_is_valid_ai_model() -> None:
-    assert is_valid_ai_model(AIModels.falcon_7b.value)
-    assert is_valid_ai_model(AIModels.gpt_3_16k.value)
+    assert is_valid_ai_model(AIModels.FALCON_7B.value)
+    assert is_valid_ai_model(AIModels.GPT_3_16K.value)
     assert is_valid_ai_model("gpt-3.5-turbo")
     assert is_valid_ai_model("falcon-7b")
 

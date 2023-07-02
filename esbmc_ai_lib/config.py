@@ -2,6 +2,7 @@
 
 import os
 import json
+import sys
 from typing import Any, NamedTuple, Union
 from dotenv import load_dotenv
 
@@ -30,7 +31,7 @@ esbmc_params: list[str] = [
 temp_auto_clean: bool = True
 temp_file_dir: str = "."
 consecutive_prompt_delay: float = 20.0
-ai_model: AIModel = AIModels.gpt_3.value
+ai_model: AIModel = AIModels.GPT_3.value
 
 cfg_path: str = "./config.json"
 
@@ -64,6 +65,10 @@ def _load_custom_ai(config: dict) -> None:
             name="url",
         )
         assert ok, f'url field not found in "ai_custom" entry "{name}".'
+        stop_sequences, ok = _load_config_value(
+            config_file=ai_data,
+            name="stop_sequences",
+        )
         # Load the config message
         config_message: dict[str, str] = ai_data["config_message"]
         template, ok = _load_config_value(
@@ -93,6 +98,7 @@ def _load_custom_ai(config: dict) -> None:
                 ai_template=ai,
                 human_template=human,
                 system_template=system,
+                stop_sequences=stop_sequences,
             )
         )
 
@@ -114,7 +120,7 @@ def load_envs() -> None:
             cfg_path = str(value)
         else:
             print(f"Error: Invalid .env ESBMC_AI_CFG_PATH value: {value}")
-            exit(4)
+            sys.exit(4)
     else:
         print(
             f"Warning: ESBMC_AI_CFG_PATH not found in .env file... Defaulting to {cfg_path}"
@@ -148,7 +154,7 @@ def _load_config_real_number(
 def load_config(file_path: str) -> None:
     if not os.path.exists(file_path):
         print(f"Error: Config not found: {file_path}")
-        exit(4)
+        sys.exit(4)
 
     config_file = None
     with open(file_path, mode="r") as file:
@@ -196,7 +202,7 @@ def load_config(file_path: str) -> None:
         ai_model = get_ai_model_by_name(ai_model_name)
     else:
         print(f"Error: {ai_model_name} is not a valid AI model")
-        exit(4)
+        sys.exit(4)
 
     global esbmc_path
     # Health check verifies this later in the init process.
@@ -239,7 +245,7 @@ def load_args(args) -> None:
             ai_model = get_ai_model_by_name(args.ai_model)
         else:
             print(f"Error: invalid --ai-model parameter {args.ai_model}")
-            exit(4)
+            sys.exit(4)
 
     global esbmc_params
     # If append flag is set, then append.
