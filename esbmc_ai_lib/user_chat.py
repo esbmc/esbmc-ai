@@ -9,7 +9,7 @@ from .ai_models import AIModel
 from .base_chat_interface import BaseChatInterface
 
 
-class ChatInterface(BaseChatInterface):
+class UserChat(BaseChatInterface):
     solution: str = ""
 
     def __init__(
