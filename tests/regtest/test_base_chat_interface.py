@@ -1,13 +1,15 @@
 # Author: Yiannis Charalambous
 
+
 from langchain.llms.fake import FakeListLLM
-from langchain.schema import AIMessage, BaseMessage, HumanMessage, SystemMessage
+from langchain.schema import BaseMessage, HumanMessage, AIMessage, SystemMessage
+
 from esbmc_ai_lib.ai_models import AIModel
-from esbmc_ai_lib.base_chat_interface import BaseChatInterface
 from esbmc_ai_lib.chat_response import ChatResponse
+from esbmc_ai_lib.base_chat_interface import BaseChatInterface
 
 
-def test_push_message_stack() -> None:
+def test_push_message_stack(regtest) -> None:
     llm: FakeListLLM = FakeListLLM(responses=[])
 
     ai_model: AIModel = AIModel("test", 1024)
@@ -28,12 +30,12 @@ def test_push_message_stack() -> None:
     chat.push_to_message_stack(message=messages[1], protected=True)
     chat.push_to_message_stack(message=messages[2], protected=True)
 
-    assert chat.messages[0] == messages[0]
-    assert chat.messages[1] == messages[1] and chat.protected_messages[0] == messages[1]
-    assert chat.messages[2] == messages[2] and chat.protected_messages[1] == messages[2]
+    with regtest:
+        print(chat.protected_messages)
+        print(chat.messages)
 
 
-def test_send_message() -> None:
+def test_send_message(regtest) -> None:
     responses: list[str] = ["OK 1", "OK 2", "OK 3"]
     llm: FakeListLLM = FakeListLLM(responses=responses)
 
@@ -52,6 +54,7 @@ def test_send_message() -> None:
         chat.send_message("Test 3"),
     ]
 
-    assert chat_responses[0].message.content == responses[0]
-    assert chat_responses[1].message.content == responses[1]
-    assert chat_responses[2].message.content == responses[2]
+    with regtest:
+        print(chat_responses)
+        print(chat.protected_messages)
+        print(chat.messages)

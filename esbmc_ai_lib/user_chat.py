@@ -1,15 +1,16 @@
 # Author: Yiannis Charalambous 2023
 
 from typing_extensions import override
-from langchain.base_language import BaseLanguageModel
 
-from langchain.schema import AIMessage, HumanMessage, SystemMessage
+from langchain.base_language import BaseLanguageModel
+from langchain.memory import ConversationSummaryMemory, ChatMessageHistory
+from langchain.schema import AIMessage, BaseMessage, HumanMessage, SystemMessage
 
 from .ai_models import AIModel
 from .base_chat_interface import BaseChatInterface
 
 
-class ChatInterface(BaseChatInterface):
+class UserChat(BaseChatInterface):
     solution: str = ""
 
     def __init__(
@@ -60,20 +61,22 @@ class ChatInterface(BaseChatInterface):
 
     @override
     def compress_message_stack(self) -> None:
-        raise NotImplementedError()
-        # TODO Add message compression back.
-        # # Reset chat to essentials.
-        # self.messages = self.protected_messages.copy()
+        """Uses ConversationSummaryMemory from Langchain to summarize the conversation of all the non-protected
+        messages into one summary message which is added into the conversation as a SystemMessage.
+        """
+        # NOTE Need to find a solution to the problem that the protected messasges may be inbetween normal messages
+        # hence the conversation summary may be incomplete.
+        normal_messages: list[BaseMessage] = []
+        for msg in self.messages:
+            if msg not in self.protected_messages:
+                normal_messages.append(msg)
 
-        # # Get all non protected messages.
-        # unprotected_messages: list = self.messages[len(self.protected_messages) :]
-        # result: ChatResponse = self.summarizer.summarize_messages(unprotected_messages)
-        # # Let AI model know that this is the summary of the compressed conversation.
-        # self.push_to_message_stack(
-        #     "user",
-        #     "Here is a summary of the previous conversation:\n\n" + result.message,
-        # )
-        # self.push_to_message_stack(
-        #     "assistant",
-        #     "Understood, I will use this conversation as a basis for future queries.",
-        # )
+        history: ChatMessageHistory = ChatMessageHistory(messages=normal_messages)
+        memory: ConversationSummaryMemory = ConversationSummaryMemory.from_messages(
+            llm=self.llm,
+            chat_memory=history,
+        )
+
+        self.messages = self.protected_messages.copy()
+
+        self.push_to_message_stack(SystemMessage(content=memory.buffer))

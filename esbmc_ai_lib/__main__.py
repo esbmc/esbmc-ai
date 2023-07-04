@@ -26,7 +26,7 @@ from esbmc_ai_lib.commands import (
 )
 
 from esbmc_ai_lib.loading_widget import LoadingWidget
-from esbmc_ai_lib.user_chat import ChatInterface
+from esbmc_ai_lib.user_chat import UserChat
 from esbmc_ai_lib.logging import printv
 from esbmc_ai_lib.esbmc_util import esbmc
 from esbmc_ai_lib.chat_response import FinishReason, json_to_base_message, ChatResponse
@@ -41,7 +41,7 @@ optimize_code_command: OptimizeCodeCommand = OptimizeCodeCommand()
 verify_code_command: VerifyCodeCommand = VerifyCodeCommand()
 exit_command: ExitCommand = ExitCommand()
 
-chat: ChatInterface
+chat: UserChat
 
 HELP_MESSAGE: str = """Tool that passes ESBMC output into ChatGPT and allows for natural language
 explanations. Type /help in order to view available commands."""
@@ -109,7 +109,7 @@ def get_src(path: str) -> str:
 
 
 def print_assistant_response(
-    chat: ChatInterface,
+    chat: UserChat,
     response: ChatResponse,
     hide_stats: bool = False,
 ) -> None:
@@ -322,7 +322,7 @@ def main() -> None:
 
     printv("Creating user chat")
     global chat
-    chat = ChatInterface(
+    chat = UserChat(
         system_messages=[
             json_to_base_message(system_message)
             for system_message in config.chat_prompt_user_mode.system_messages

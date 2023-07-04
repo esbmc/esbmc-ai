@@ -102,7 +102,7 @@ class BaseChatInterface(object):
                 # OpenAI model error handling.
                 if e.code == AIModelOpenAI.context_length_exceeded_error:
                     response = ChatResponse(
-                        finish_reason=FinishReason.null,
+                        finish_reason=FinishReason.length,
                         total_tokens=cb.total_tokens,
                     )
                 else:
