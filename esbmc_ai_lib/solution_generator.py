@@ -52,6 +52,7 @@ class SolutionGenerator(BaseChatInterface):
 
     @override
     def compress_message_stack(self) -> None:
+        # Resets the conversation - cannot summarize code
         self.messages = self.protected_messages.copy()
 
     def generate_solution(self) -> tuple[str, FinishReason]:
