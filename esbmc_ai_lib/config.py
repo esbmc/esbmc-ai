@@ -43,7 +43,6 @@ class ChatPromptSettings(NamedTuple):
 
 chat_prompt_user_mode: ChatPromptSettings
 chat_prompt_generator_mode: ChatPromptSettings
-chat_prompt_conversation_summarizer: ChatPromptSettings
 
 
 def _load_custom_ai(config: dict) -> None:
@@ -220,13 +219,6 @@ def load_config(file_path: str) -> None:
         system_messages=config_file["chat_modes"]["generate_solution"]["system"],
         initial_prompt=config_file["chat_modes"]["generate_solution"]["initial"],
         temperature=config_file["chat_modes"]["generate_solution"]["temperature"],
-    )
-
-    global chat_prompt_conversation_summarizer
-    chat_prompt_conversation_summarizer = ChatPromptSettings(
-        system_messages=config_file["chat_modes"]["conv_summarizer"]["system"],
-        initial_prompt=config_file["chat_modes"]["conv_summarizer"]["initial"],
-        temperature=config_file["chat_modes"]["conv_summarizer"]["temperature"],
     )
 
 
