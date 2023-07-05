@@ -4,7 +4,7 @@ AI Augmented ESBMC processing. Passes the output from ESBMC to an AI model that 
 
 This is an area of active research.
 
-![ESBMC-AI Virtual Abstract](https://github.com/Yiannis128/esbmc-ai/assets/9535618/45101fa7-2fda-4603-856b-63739acee606)
+![ESBMC-AI Visual Abstract](https://github.com/Yiannis128/esbmc-ai/assets/9535618/1b51c57f-a769-4067-abd9-e81de5e7506b)
 
 ## Demonstration
 
