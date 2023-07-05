@@ -66,6 +66,7 @@ def test_ast_functions_blank() -> None:
 int a, b;
 pthread_t d;
     """
+
     cast = ast.ClangAST(file_path=file, source_code=source_code)
     functions: list[FunctionDeclaration] = cast.get_fn_decl()
     assert functions == []

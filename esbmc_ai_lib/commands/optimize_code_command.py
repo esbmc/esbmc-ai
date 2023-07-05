@@ -1,5 +1,10 @@
 # Author: Yiannis Charalambous
 
+import sys
+
+from typing_extensions import override
+
+from esbmc_ai_lib.chat_response import json_to_base_message
 from .chat_command import ChatCommand
 from .. import config
 from ..base_chat_interface import ChatResponse
@@ -31,6 +36,7 @@ class OptimizeCodeCommand(ChatCommand):
         """
 
         # Get list of function types.
+        # NOTE This crashes # FIXME
         original_ast: ast.ClangAST = ast.ClangAST(
             file_path="",
             source_code=original_source_code,
@@ -52,6 +58,7 @@ class OptimizeCodeCommand(ChatCommand):
 
         return True
 
+    @override
     def execute(
         self, file_path: str, source_code: str, function_names: list[str]
     ) -> None:
@@ -69,17 +76,23 @@ class OptimizeCodeCommand(ChatCommand):
             for function_name in function_names:
                 if function_name not in all_function_names:
                     print(f"Error: {function_name} is not defined...")
-                    exit(1)
+                    sys.exit(1)
         else:
             function_names = all_function_names.copy()
 
         print(f"Optimizing the following functions: {function_names}\n")
 
         chat: OptimizeCode = OptimizeCode(
-            system_messages=config.chat_prompt_optimize_code.system_messages,
+            system_messages=[
+                json_to_base_message(msg)
+                for msg in config.chat_prompt_optimize_code.system_messages
+            ],
             initial_message=config.chat_prompt_optimize_code.initial_prompt,
             ai_model=config.ai_model,
-            temperature=config.chat_prompt_optimize_code.temperature,
+            llm=config.ai_model.create_llm(
+                api_keys=config.api_keys,
+                temperature=config.chat_prompt_optimize_code.temperature,
+            ),
         )
 
         new_source_code: str = source_code
@@ -99,7 +112,7 @@ class OptimizeCodeCommand(ChatCommand):
                 )
 
                 if equal:
-                    new_source_code = response.message
+                    new_source_code = response.message.content
                     break
                 else:
                     print("Failed attempt", attempt)

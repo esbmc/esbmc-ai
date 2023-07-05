@@ -14,6 +14,15 @@
       "args": ["${file}"]
     },
     {
+      "name": "ESBMC-AI (Optimize Code)",
+      "type": "python",
+      "request": "launch",
+      "module": "esbmc_ai_lib",
+      "justMyCode": true,
+      "cwd": "${workspaceFolder}",
+      "args": ["-c", "optimize-code", "${file}"]
+    },
+    {
       "name": "Run tests",
       "type": "python",
       "request": "launch",
