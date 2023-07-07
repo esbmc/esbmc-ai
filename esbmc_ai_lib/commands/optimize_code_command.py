@@ -36,14 +36,13 @@ class OptimizeCodeCommand(ChatCommand):
         """
 
         # Get list of function types.
-        # NOTE This crashes # FIXME
         original_ast: ast.ClangAST = ast.ClangAST(
-            file_path="",
+            file_path="old.c",
             source_code=original_source_code,
         )
 
         new_ast: ast.ClangAST = ast.ClangAST(
-            file_path="",
+            file_path="new.c",
             source_code=new_source_code,
         )
 
