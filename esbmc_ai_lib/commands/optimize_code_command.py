@@ -1,6 +1,7 @@
 # Author: Yiannis Charalambous
 
 import sys
+from os import get_terminal_size
 
 from typing_extensions import override
 
@@ -11,6 +12,7 @@ from ..base_chat_interface import ChatResponse
 from ..optimize_code import OptimizeCode
 from ..frontend import ast
 from ..frontend.ast import FunctionDeclaration
+from ..logging import printvv
 
 
 class OptimizeCodeCommand(ChatCommand):
@@ -99,17 +101,25 @@ class OptimizeCodeCommand(ChatCommand):
         for function in function_names:
             for attempt in range(max_retries):
                 print(f"Optimizing function: {function}")
+                # Optimize the function
                 response: ChatResponse = chat.optimize_function(
                     source_code=new_source_code,
                     function_name=function,
                 )
 
+                printvv(f"\nGeneration ({function}):")
+                printvv("-" * get_terminal_size().columns)
+                printvv(response.message.content)
+                printvv("-" * get_terminal_size().columns)
+
+                # Check equivalence
                 equal: bool = self.check_function_equivalence(
                     original_source_code=source_code,
                     new_source_code=new_source_code,
                     function_name=function,
                 )
 
+                # TODO Handle cases where all attempts are failed.
                 if equal:
                     new_source_code = response.message.content
                     break
