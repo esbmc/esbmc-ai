@@ -1,28 +1,19 @@
 # Author: Yiannis Charalambous
 
 from os.path import dirname, join as path_join
-from typing import NamedTuple, Optional
+from typing import Optional
 
 import clang.native
 import clang.cindex as cindex
 from clang.cindex import Config
+
+from .ast_decl import *
 
 # Connect the Python API of Clang to the libclang.so file bundled in the libclang PyPI package.
 Config.library_file = path_join(
     dirname(clang.native.__file__),
     "libclang.so",
 )
-
-
-class Declaration(NamedTuple):
-    name: str
-    type_name: str
-
-
-class FunctionDeclaration(NamedTuple):
-    name: str
-    type_name: str
-    args: list[Declaration]
 
 
 class ClangAST(object):
