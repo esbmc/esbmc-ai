@@ -9,13 +9,13 @@ from langchain import HuggingFaceTextGenInference, PromptTemplate
 from langchain.base_language import BaseLanguageModel
 from langchain.chat_models import ChatOpenAI
 
-from openai import ChatCompletion as OpenAIChatCompletion
-
 from langchain.prompts.chat import ChatPromptValue
 from langchain.schema import (
     BaseMessage,
     PromptValue,
 )
+
+from openai import ChatCompletion as OpenAIChatCompletion
 
 from esbmc_ai_lib.api_key_collection import APIKeyCollection
 
@@ -130,7 +130,7 @@ class AIModelTextGen(AIModel):
             },
             # FIXME Need to find a way to make output bigger. When token
             # tracking for this LLM type is added.
-            max_new_tokens=1024,
+            max_new_tokens=5000,
             temperature=temperature,
             stop_sequences=self.stop_sequences,
         )
@@ -191,9 +191,9 @@ class AIModels(Enum):
         name="starchat-beta",
         tokens=8192,
         url="https://api-inference.huggingface.co/models/HuggingFaceH4/starchat-beta",
-        config_message="{history}\n\n{user_prompt}\n\n<|assistant|>",
+        config_message="{history}\n{user_prompt}\n<|assistant|>\n",
         system_template="<|system|>\n{content}\n<|end|>",
-        ai_template="<|assistant|>{content}",
+        ai_template="<|assistant|>\n{content}\n<|end|>",
         human_template="<|user|>\n{content}\n<|end|>",
         stop_sequences=["<|end|>"],
     )
