@@ -25,9 +25,9 @@ from esbmc_ai_lib.commands import (
     VerifyCodeCommand,
 )
 
-from esbmc_ai_lib.loading_widget import LoadingWidget
+from esbmc_ai_lib.loading_widget import LoadingWidget, create_loading_widget
 from esbmc_ai_lib.user_chat import UserChat
-from esbmc_ai_lib.logging import printv
+from esbmc_ai_lib.logging import printv, printvv
 from esbmc_ai_lib.esbmc_util import esbmc
 from esbmc_ai_lib.chat_response import FinishReason, json_to_base_message, ChatResponse
 from esbmc_ai_lib.ai_models import _ai_model_names
@@ -274,7 +274,7 @@ def main() -> None:
 
     check_health()
 
-    anim: LoadingWidget = LoadingWidget()
+    anim: LoadingWidget = create_loading_widget()
 
     # Read the source code and esbmc output.
     printv("Reading source code...")
@@ -282,11 +282,17 @@ def main() -> None:
     source_code: str = get_src(get_main_source_file())
 
     anim.start("ESBMC is processing... Please Wait")
-    exit_code, esbmc_output = esbmc(
+    exit_code, esbmc_output, esbmc_err_output = esbmc(
         path=get_main_source_file(),
         esbmc_params=config.esbmc_params,
     )
     anim.stop()
+
+    # Print verbose lvl 2
+    printvv("-" * os.get_terminal_size().columns)
+    printvv(esbmc_output)
+    printvv(esbmc_err_output)
+    printvv("-" * os.get_terminal_size().columns)
 
     # ESBMC will output 0 for verification success and 1 for verification
     # failed, if anything else gets thrown, it's an ESBMC error.
