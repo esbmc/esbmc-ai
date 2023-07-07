@@ -227,7 +227,7 @@ def main() -> None:
         "--verbose",
         action="count",
         default=0,
-        help="Output will be verbose.",
+        help="Show up to 3 levels of verbose output. Level 1: extra information. Level 2: show failed generations, show ESBMC output. Level 3: print hidden pushes to the message stack.",
     )
 
     parser.add_argument(
