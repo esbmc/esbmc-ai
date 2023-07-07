@@ -26,6 +26,8 @@ esbmc_params: list[str] = [
     "--floatbv",
     "--unlimited-k-steps",
     "--compact-trace",
+    "--context-bound",
+    "2",
 ]
 
 temp_auto_clean: bool = True
@@ -237,7 +239,7 @@ def load_config(file_path: str) -> None:
 
 
 def load_args(args) -> None:
-    set_verbose(1 if args.verbose else 0)
+    set_verbose(args.verbose)
 
     global ai_model
     if args.ai_model != "":

@@ -13,7 +13,9 @@
     "2",
     "--floatbv",
     "--unlimited-k-steps",
-    "--memory-leak-check"
+    "--memory-leak-check",
+    "--context-bound",
+    "2"
   ],
   "consecutive_prompt_delay": 20,
   "temp_auto_clean": false,
@@ -31,7 +33,7 @@
       "initial": "Walk me through the source code, while also explaining the output of ESBMC at the relevant parts. You shall not start the reply with an acknowledgement message such as 'Certainly'."
     },
     "generate_solution": {
-      "temperature": 1.1,
+      "temperature": 1.3,
       "system": [
         {
           "role": "System",

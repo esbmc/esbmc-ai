@@ -225,8 +225,8 @@ def main() -> None:
     parser.add_argument(
         "-v",
         "--verbose",
-        action="store_true",
-        default=False,
+        action="count",
+        default=0,
         help="Output will be verbose.",
     )
 
@@ -346,6 +346,9 @@ def main() -> None:
             protected=True,
         )
         anim.stop()
+
+        if response.finish_reason == FinishReason.length:
+            raise RuntimeError(f"The token length is too large: {chat.ai_model.tokens}")
     else:
         raise RuntimeError("User mode initial prompt not found in config.")
 
