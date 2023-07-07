@@ -64,3 +64,19 @@ class LoadingWidget(object):
         # Block until end.
         self.thread.join()
 
+
+_widgets: list[LoadingWidget] = []
+
+
+def create_loading_widget(
+    anim_speed: float = 0.1,
+    animation: list[str] = ["|", "/", "-", "\\"],
+) -> LoadingWidget:
+    w = LoadingWidget(anim_speed=anim_speed, animation=animation)
+    _widgets.append(w)
+    return w
+
+
+def stop_all() -> None:
+    for w in _widgets:
+        w.stop()

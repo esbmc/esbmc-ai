@@ -1,5 +1,6 @@
 # Author: Yiannis Charalambous
 
+from os import get_terminal_size
 from time import sleep
 from typing_extensions import override
 from langchain.schema import AIMessage, HumanMessage
@@ -13,9 +14,10 @@ from esbmc_ai_lib.chat_response import (
 from .chat_command import ChatCommand
 from .. import config
 from ..msg_bus import Signal
-from ..loading_widget import LoadingWidget
+from ..loading_widget import create_loading_widget
 from ..esbmc_util import esbmc_load_source_code
 from ..solution_generator import SolutionGenerator
+from ..logging import printvv
 
 
 class FixCodeCommand(ChatCommand):
@@ -26,7 +28,7 @@ class FixCodeCommand(ChatCommand):
             command_name="fix-code",
             help_message="Generates a solution for this code, and reevaluates it with ESBMC.",
         )
-        self.anim = LoadingWidget()
+        self.anim = create_loading_widget()
 
     @override
     def execute(self, file_name: str, source_code: str, esbmc_output: str):
@@ -34,7 +36,7 @@ class FixCodeCommand(ChatCommand):
         # Create time left animation to show how much time left between API calls
         # This is done by creating a list of all the numbers to be displayed and
         # setting the animation delay to 1 second.
-        wait_anim = LoadingWidget(
+        wait_anim = create_loading_widget(
             anim_speed=1,
             animation=[str(num) for num in range(wait_time, 0, -1)],
         )
@@ -75,16 +77,29 @@ class FixCodeCommand(ChatCommand):
                 else:
                     break
 
+            # Print verbose lvl 2
+            printvv("\nGeneration:")
+            printvv("-" * get_terminal_size().columns)
+            printvv(response)
+            printvv("-" * get_terminal_size().columns)
+            printvv("")
+
             # Pass to ESBMC, a workaround is used where the file is saved
             # to a temporary location since ESBMC needs it in file format.
             self.anim.start("Verifying with ESBMC... Please Wait")
-            exit_code, esbmc_output = esbmc_load_source_code(
+            exit_code, esbmc_output, esbmc_err_output = esbmc_load_source_code(
                 file_path=file_name,
                 source_code=str(response),
                 esbmc_params=config.esbmc_params,
                 auto_clean=config.temp_auto_clean,
             )
             self.anim.stop()
+
+            # Print verbose lvl 2
+            printvv("-" * get_terminal_size().columns)
+            printvv(esbmc_output)
+            printvv(esbmc_err_output)
+            printvv("-" * get_terminal_size().columns)
 
             if exit_code == 0:
                 self.on_solution_signal.emit(response)

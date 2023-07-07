@@ -2,7 +2,6 @@
 
 import os
 from subprocess import Popen, PIPE, STDOUT
-from tempfile import NamedTemporaryFile, TemporaryDirectory
 from pathlib import Path
 
 from . import config
@@ -23,7 +22,7 @@ def esbmc(path: str, esbmc_params: list):
     exit_code = process.wait()
     output: str = str(output_bytes).replace("\\n", "\n")
     err: str = str(err_bytes).replace("\\n", "\n")
-    return exit_code, output
+    return exit_code, output, err
 
 
 def esbmc_load_source_code(

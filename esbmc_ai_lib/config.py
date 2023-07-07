@@ -26,6 +26,8 @@ esbmc_params: list[str] = [
     "--floatbv",
     "--unlimited-k-steps",
     "--compact-trace",
+    "--context-bound",
+    "2",
 ]
 
 temp_auto_clean: bool = True
@@ -44,6 +46,7 @@ class ChatPromptSettings(NamedTuple):
 
 chat_prompt_user_mode: ChatPromptSettings
 chat_prompt_generator_mode: ChatPromptSettings
+chat_prompt_optimize_code: ChatPromptSettings
 
 
 def _load_custom_ai(config: dict) -> None:
@@ -227,9 +230,16 @@ def load_config(file_path: str) -> None:
         temperature=config_file["chat_modes"]["generate_solution"]["temperature"],
     )
 
+    global chat_prompt_optimize_code
+    chat_prompt_optimize_code = ChatPromptSettings(
+        system_messages=config_file["chat_modes"]["optimize_code"]["system"],
+        initial_prompt=config_file["chat_modes"]["optimize_code"]["initial"],
+        temperature=config_file["chat_modes"]["optimize_code"]["temperature"],
+    )
+
 
 def load_args(args) -> None:
-    set_verbose(1 if args.verbose else 0)
+    set_verbose(args.verbose)
 
     global ai_model
     if args.ai_model != "":

@@ -13,7 +13,9 @@
     "2",
     "--floatbv",
     "--unlimited-k-steps",
-    "--memory-leak-check"
+    "--memory-leak-check",
+    "--context-bound",
+    "2"
   ],
   "consecutive_prompt_delay": 20,
   "temp_auto_clean": false,
@@ -31,7 +33,7 @@
       "initial": "Walk me through the source code, while also explaining the output of ESBMC at the relevant parts. You shall not start the reply with an acknowledgement message such as 'Certainly'."
     },
     "generate_solution": {
-      "temperature": 1.1,
+      "temperature": 1.3,
       "system": [
         {
           "role": "System",
@@ -40,6 +42,17 @@
         { "role": "AI", "content": "OK" }
       ],
       "initial": "Generate a correction for the source code provided. Show the code only. Do not reply with acknowledgements."
+    },
+    "optimize_code": {
+      "temperature": 1.0,
+      "system": [
+        {
+          "role": "System",
+          "content": "You are a code optimizer. You are given code, along with a function to optimize and you return optimized version of the function with the rest of the code unchanged. The optimized function should be smaller than the original function if possible and also execute faster than the original. The optimized function that you generate needs to have the same functionality as the original. From this point on, you can only reply in source code. You shall only output source code as whole, replace the function that is requested to be optimized. Reply OK if you understand."
+        },
+        { "role": "AI", "content": "OK" }
+      ],
+      "initial": "Optimize the function \"%s\". Reoply with the entire source file back."
     }
   }
 }
