@@ -1,37 +1,46 @@
 #include <stdlib.h>
+#include <assert.h>
 
-struct linear {
+#define NUM_ONE 1
+#define NUM_TWO 2
+
+struct linear
+{
     int value;
-}
+};
 
 typedef struct linear LinearTypeDef;
 
-typedef struct {
+typedef struct
+{
     int x;
     int y;
 } Point;
 
 Point a;
-Point* b;
+Point *b;
 
 int c;
 
-char* d;
+char *d;
 
-typedef enum Types {
-    ONE, TWO, THREE
+typedef enum Types
+{
+    ONE,
+    TWO,
+    THREE
 } Typest;
-
 
 enum Types e = ONE;
 
 Typest f = TWO;
 
-union Combines {
+union Combines
+{
     int a;
     int b;
     int c;
-}
+};
 
 typedef union Combines CombinesTypeDef;
 
