@@ -69,29 +69,11 @@ class ClangAST(object):
                 and node.storage_class == cindex.StorageClass.NONE
                 and kind == cindex.CursorKind.FUNCTION_DECL
             ):
-                # Get function parameters.
-                arg: cindex.Cursor
-                function_params: list[Declaration] = []
-                for arg in node.get_arguments():
-                    param_type: cindex.Type = arg.type
-                    param: Declaration = Declaration(
-                        name=arg.spelling,
-                        type_name=param_type.spelling,
-                        cursor=arg,
-                    )
-                    function_params.append(param)
-
-                function_declaration: FunctionDeclaration = FunctionDeclaration(
-                    name=node.spelling,
-                    type_name=node.type.get_result().spelling,
-                    args=function_params,
-                    cursor=node,
-                )
-                functions.append(function_declaration)
+                functions.append(FunctionDeclaration.from_cursor(node))
         return functions
 
-    def get_type_decl(self) -> list[Declaration]:
-        typedefs: list[Declaration] = []
+    def get_type_decl(self) -> list[TypeDeclaration]:
+        typedefs: list[TypeDeclaration] = []
         node: cindex.Cursor
         for node in self.root.get_children():
             kind: cindex.CursorKind = node.kind
@@ -103,18 +85,11 @@ class ClangAST(object):
                 and (
                     kind == cindex.CursorKind.STRUCT_DECL
                     or kind == cindex.CursorKind.UNION_DECL
+                    or kind == cindex.CursorKind.ENUM_DECL
                     or kind == cindex.CursorKind.TYPEDEF_DECL
                 )
             ):
-                node_type: cindex.Type = node.type
-                typedefs.append(
-                    TypeDeclaration(
-                        name=node_type.get_canonical().spelling,
-                        type_name=node_type.get_typedef_name(),
-                        is_union=kind == cindex.CursorKind.UNION_DECL,
-                        cursor=node,
-                    )
-                )
+                typedefs.append(TypeDeclaration.from_cursor(node))
 
         return typedefs
 
@@ -128,29 +103,16 @@ class ClangAST(object):
                 and node.storage_class == cindex.StorageClass.NONE
                 and kind == cindex.CursorKind.VAR_DECL
             ):
-                variables.append(
-                    Declaration(
-                        name=node.spelling,
-                        type_name=node.type.spelling,
-                        cursor=node,
-                    )
-                )
+                variables.append(Declaration.from_cursor(node))
         return variables
 
-    def get_enum_decl(self) -> list[Declaration]:
-        enums: list[Declaration] = []
-        node: cindex.Cursor
-        for node in self.root.get_children():
-            kind: cindex.CursorKind = node.kind
-            if kind.is_declaration() and kind == cindex.CursorKind.ENUM_DECL:
-                enums.append(
-                    Declaration(
-                        name=node.spelling,
-                        type_name="enum",
-                        cursor=node,
-                    )
-                )
-        return enums
+    def get_include_directives(self) -> list[InclusionDirective]:
+        includes: list[InclusionDirective] = []
+        include: cindex.FileInclusion
+        for include in self.tu.get_includes():
+            if include.depth == 1:
+                includes.append(InclusionDirective(path=str(include.include)))
+        return includes
 
     def get_all_decl(self) -> list[Declaration]:
         """Returns all local declarations."""
