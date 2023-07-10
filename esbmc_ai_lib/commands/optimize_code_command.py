@@ -10,6 +10,7 @@ from string import Template
 from clang.cindex import TranslationUnit
 
 from esbmc_ai_lib.chat_response import json_to_base_messages
+from esbmc_ai_lib.frontend.ast_decl import InclusionDirective
 from .chat_command import ChatCommand
 from .. import config
 from ..base_chat_interface import ChatResponse
@@ -54,10 +55,10 @@ class OptimizeCodeCommand(ChatCommand):
 
     def _build_comparison_script(
         self,
-        old: ast.ClangAST,
-        new: ast.ClangAST,
-        old_decl: FunctionDeclaration,
-        new_decl: FunctionDeclaration,
+        old_ast: ast.ClangAST,
+        new_ast: ast.ClangAST,
+        old_function: FunctionDeclaration,
+        new_function: FunctionDeclaration,
     ) -> str:
         """Builds an ESBMC C source code script that insturcts ESBMC to compare the two functions
         together. A script template is used."""
@@ -67,31 +68,33 @@ class OptimizeCodeCommand(ChatCommand):
             template_str: str = file.read()
         template: Template = Template(template=template_str)
 
-        # TODO Get includes from both files, and include it
-        old_includes: str = "OLD"
-        new_includes: str = "NEW"
-        includes: str = old_includes + "\n" + new_includes
-
-        raise NotImplementedError()
+        # Get includes from both files, and include it
+        includes: set[InclusionDirective] = set(old_ast.get_include_directives())
+        includes.update(new_ast.get_include_directives())
 
         # Get source code of old and new functions.
-        old_source_code: str = old.get_source_code(declaration=old_decl)
-        new_source_code: str = new.get_source_code(declaration=new_decl)
+        old_source_code: str = old_ast.get_source_code(declaration=old_function)
+        new_source_code: str = new_ast.get_source_code(declaration=new_function)
 
         # Modify names of underlying cursor before generating source code.
+        # TODO Use rename function (when ready)
         old_source_code = old_source_code.replace(
-            old_decl.name, old_decl.name + "_old", 1
+            old_function.name, old_function.name + "_old", 1
         )
         new_source_code = new_source_code.replace(
-            new_decl.name, new_decl.name + "_new", 1
+            new_function.name, new_function.name + "_new", 1
         )
+
+        # TODO Add global scope variables that old and new functions use.
+        # TODO Global scope variables will need to be renamed with new and old appended to their
+        # names.
 
         # TODO build parameter list
 
         script: str = template.substitute(
             function_old=old_source_code,
             function_new=new_source_code,
-            includes=includes,
+            includes="\n".join([str(include) for include in includes]),
         )
 
         return script
@@ -146,10 +149,10 @@ class OptimizeCodeCommand(ChatCommand):
             raise Exception()
 
         esbmc_script: str = self._build_comparison_script(
-            old=original_ast,
-            new=new_ast,
-            old_decl=old_function,
-            new_decl=new_function,
+            old_ast=original_ast,
+            new_ast=new_ast,
+            old_function=old_function,
+            new_function=new_function,
         )
 
         # TODO Run script with ESBMC.
