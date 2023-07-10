@@ -1,10 +1,10 @@
 # Author: Yiannis Charalambous
 
 
-from typing import Optional
+from typing import Optional, final
 from typing_extensions import override
 
-from clang.cindex import Cursor
+from clang.cindex import Cursor, SourceLocation, SourceRange
 import clang.cindex as cindex
 
 
@@ -47,18 +47,49 @@ class Declaration(object):
     def __str__(self) -> str:
         return self.name + ":" + self.type_name
 
-    def rename(self, new_name: str) -> None:
+    @final
+    def get_location(self) -> SourceLocation:
+        assert self.cursor
+        return self.cursor.location
+
+    @final
+    def get_extent(self) -> SourceRange:
+        assert self.cursor
+        return self.cursor.extent
+
+    def rename(self, new_name: str, source_code: str) -> str:
         """Renames the declaration along with any references to it. Requires cursor to be defined."""
         assert self.cursor
+
         # TODO: Consider an update method for all other Declarations to be kept valid when renaming occurs.
         # TODO A method to check for this is for each element:
         # 1. Does it have the same name & type_name
         # 2. Is it in the same location (after offsets have been calculated from the rename)
 
+        # In reverse order replace names
+
         refs: list[Declaration] = self.get_references()
 
-        raise NotImplementedError()
+        extents: list[SourceRange] = [ref.get_extent() for ref in refs]
 
+        # Rename each ref and update all other refs.
+        delta: int = len(new_name) - len(self.name)
+        size_offset: int = 0
+        for extent in extents:
+            start_offset: int = extent.start.offset + size_offset
+            end_offset: int = extent.end.offset + size_offset
+            # Get the reference
+            ref: str = source_code[start_offset:end_offset]
+            # Replace it
+            ref = ref.replace(self.name, new_name, 1)
+            # Place replacement in source code
+            source_code = source_code[:start_offset] + ref + source_code[end_offset:]
+            # Add delta offset so next references are offset by the change in character.
+            size_offset += delta
+
+        return source_code
+
+    @final
     def get_references(self) -> list["Declaration"]:
         """Finds all references to a specific declaration."""
         assert self.cursor
