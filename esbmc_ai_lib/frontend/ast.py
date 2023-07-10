@@ -23,6 +23,9 @@ class ClangAST(object):
     tu: cindex.TranslationUnit
     root: cindex.Cursor
 
+    declarations: list[Declaration] = []
+    preprocessing_directives: list[PreProcessingDirective] = []
+
     def __init__(
         self,
         file_path: str,
@@ -30,23 +33,73 @@ class ClangAST(object):
     ) -> None:
         super().__init__()
 
-        self.file_path = file_path
         self.index = cindex.Index.create()
+        self.init_ast(file_path, source_code)
 
-        if source_code == "":
+    def init_ast(self, file_path: str, source_code: Optional[str] = None) -> None:
+        if file_path == "":
             raise ValueError("file_path provided cannot be empty string...")
+
+        self.file_path = file_path
 
         if source_code is None:
             # Load from file
-            self.tu = self.index.parse(path=file_path)
+            self.tu = self.index.parse(path=self.file_path)
         else:
             self.source_code = source_code
             # Load from string
             self.tu = self.index.parse(
-                path=file_path,
-                unsaved_files=[(file_path, source_code)],
+                path=self.file_path,
+                unsaved_files=[(self.file_path, source_code)],
             )
         self.root = self.tu.cursor
+
+    def get_references(self, declaration: Declaration) -> list["Declaration"]:
+        """Finds all references to a specific declaration."""
+        refs: list = []
+
+        def traverse_children(node: Cursor) -> None:
+            if node.referenced and node.referenced == declaration.cursor:
+                refs.append(declaration.from_cursor(node))
+
+            for child in node.get_children():
+                traverse_children(child)
+
+        for child in self.root.get_children():
+            traverse_children(child)
+
+        return refs
+
+    def rename_declaration(self, declaration: Declaration, new_name: str) -> str:
+        """Renames the declaration along with any references to it."""
+
+        refs: list[Declaration] = self.get_references(declaration)
+
+        extents: list[SourceRange] = [ref.get_extent() for ref in refs]
+
+        # Rename each ref and update all other refs.
+        delta: int = len(new_name) - len(declaration.name)
+        size_offset: int = 0
+        for extent in extents:
+            start_offset: int = extent.start.offset + size_offset
+            end_offset: int = extent.end.offset + size_offset
+            # Get the reference
+            ref: str = self.source_code[start_offset:end_offset]
+            # Replace it
+            ref = ref.replace(declaration.name, new_name, 1)
+            # Place replacement in source code
+            self.source_code = (
+                self.source_code[:start_offset] + ref + self.source_code[end_offset:]
+            )
+            # Add delta offset so next references are offset by the change in character.
+            size_offset += delta
+
+        # TODO: Consider an update method for all other Declarations to be kept valid when renaming occurs.
+        # TODO A method to check for this is for each element:
+        # 1. Does it have the same name & type_name
+        # 2. Is it in the same location (after offsets have been calculated from the rename)
+
+        return self.source_code
 
     def get_source_code(self, declaration: Declaration) -> str:
         if declaration.cursor is None:
@@ -70,6 +123,8 @@ class ClangAST(object):
                 and kind == cindex.CursorKind.FUNCTION_DECL
             ):
                 functions.append(FunctionDeclaration.from_cursor(node))
+
+        self.declarations.extend(functions)
         return functions
 
     def get_type_decl(self) -> list[TypeDeclaration]:
@@ -91,6 +146,7 @@ class ClangAST(object):
             ):
                 typedefs.append(TypeDeclaration.from_cursor(node))
 
+        self.declarations.extend(typedefs)
         return typedefs
 
     def get_variable_decl(self) -> list[Declaration]:
@@ -104,6 +160,8 @@ class ClangAST(object):
                 and kind == cindex.CursorKind.VAR_DECL
             ):
                 variables.append(Declaration.from_cursor(node))
+
+        self.declarations.extend(variables)
         return variables
 
     def get_include_directives(self) -> list[InclusionDirective]:
@@ -112,6 +170,8 @@ class ClangAST(object):
         for include in self.tu.get_includes():
             if include.depth == 1:
                 includes.append(InclusionDirective(path=str(include.include)))
+
+        self.preprocessing_directives.extend(includes)
         return includes
 
     def get_all_decl(self) -> list[Declaration]:
@@ -120,6 +180,5 @@ class ClangAST(object):
         declarations.extend(self.get_fn_decl())
         declarations.extend(self.get_type_decl())
         declarations.extend(self.get_variable_decl())
-        declarations.extend(self.get_enum_decl())
         # TODO add more...
         return declarations

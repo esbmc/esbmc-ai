@@ -57,57 +57,6 @@ class Declaration(object):
         assert self.cursor
         return self.cursor.extent
 
-    def rename(self, new_name: str, source_code: str) -> str:
-        """Renames the declaration along with any references to it. Requires cursor to be defined."""
-        assert self.cursor
-
-        # TODO: Consider an update method for all other Declarations to be kept valid when renaming occurs.
-        # TODO A method to check for this is for each element:
-        # 1. Does it have the same name & type_name
-        # 2. Is it in the same location (after offsets have been calculated from the rename)
-
-        # In reverse order replace names
-
-        refs: list[Declaration] = self.get_references()
-
-        extents: list[SourceRange] = [ref.get_extent() for ref in refs]
-
-        # Rename each ref and update all other refs.
-        delta: int = len(new_name) - len(self.name)
-        size_offset: int = 0
-        for extent in extents:
-            start_offset: int = extent.start.offset + size_offset
-            end_offset: int = extent.end.offset + size_offset
-            # Get the reference
-            ref: str = source_code[start_offset:end_offset]
-            # Replace it
-            ref = ref.replace(self.name, new_name, 1)
-            # Place replacement in source code
-            source_code = source_code[:start_offset] + ref + source_code[end_offset:]
-            # Add delta offset so next references are offset by the change in character.
-            size_offset += delta
-
-        return source_code
-
-    @final
-    def get_references(self) -> list["Declaration"]:
-        """Finds all references to a specific declaration."""
-        assert self.cursor
-        refs: list = []
-        root: Cursor = self.cursor.translation_unit.cursor
-
-        def traverse_children(node: Cursor) -> None:
-            if node.referenced and node.referenced == self.cursor:
-                refs.append(self.from_cursor(node))
-
-            for child in node.get_children():
-                traverse_children(child)
-
-        for child in root.get_children():
-            traverse_children(child)
-
-        return refs
-
 
 class FunctionDeclaration(Declaration):
     args: list[Declaration] = []
@@ -152,15 +101,6 @@ class FunctionDeclaration(Declaration):
         arg: list[str] = [f"{arg.name}: {arg.type_name}" for arg in self.args]
         args: str = ", ".join(arg)
         return f"{self.name}({args})"
-
-    @override
-    def rename(self, new_name: str) -> None:
-        assert self.cursor is not None
-        # 1. Get the locations where cursor is referenced.
-        # self.cursor.
-        # 2. In each location, change the name in the source code.
-        # 3. Call ClangAST object again and read the new source code.
-        return
 
 
 class TypeDeclaration(Declaration):
