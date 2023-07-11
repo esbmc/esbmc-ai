@@ -5,7 +5,7 @@ from typing import Optional
 
 import clang.native
 import clang.cindex as cindex
-from clang.cindex import Config
+from clang.cindex import Config, Type as ClangType
 
 from .ast_decl import *
 
@@ -15,6 +15,9 @@ Config.library_file = path_join(
     "libclang.so",
 )
 
+# NOTE A possible optimization is to traverse children of depth 1.
+# A lot of functions traverse all children.
+
 
 class ClangAST(object):
     file_path: str
@@ -23,8 +26,8 @@ class ClangAST(object):
     tu: cindex.TranslationUnit
     root: cindex.Cursor
 
-    declarations: list[Declaration] = []
-    preprocessing_directives: list[PreProcessingDirective] = []
+    declarations: set[Declaration] = set()
+    preprocessing_directives: set[PreProcessingDirective] = set()
 
     def __init__(
         self,
@@ -54,50 +57,95 @@ class ClangAST(object):
             )
         self.root = self.tu.cursor
 
-    def get_references(self, declaration: Declaration) -> list["Declaration"]:
+    def get_references(self, target: Declaration) -> list["Declaration"]:
         """Finds all references to a specific declaration."""
-        refs: list = []
+        # Refs is a list not a set in order to maintain the order.
+        refs: list[Declaration] = []
+        locations: list[SourceLocation] = []
 
-        def traverse_children(node: Cursor) -> None:
-            if node.referenced and node.referenced == declaration.cursor:
-                refs.append(declaration.from_cursor(node))
+        assert target.cursor
+        target_type: cindex.Type = target.cursor.type
+
+        def traverse_child_node(node: Cursor) -> None:
+            node_type: cindex.Type = node.type
+            if (
+                node.referenced
+                and node.referenced == target.cursor
+                and node_type.kind == target_type.kind
+            ):
+                new_decl: Declaration = target.from_cursor(node)
+                if new_decl not in refs:
+                    refs.append(new_decl)
+                    locations.append(new_decl.get_location())
 
             for child in node.get_children():
-                traverse_children(child)
+                traverse_child_node(child)
 
         for child in self.root.get_children():
-            traverse_children(child)
+            traverse_child_node(child)
 
+        self.declarations.update(refs)
         return refs
+
+    def _refresh_cursors(self) -> None:
+        """Walks through each declaration and ensures that the cursor uses the current AST.
+        If an outdated AST is found, then the cursor is reset."""
+
+        def is_node_outdated(d: Declaration) -> bool:
+            """Declaration is outdated if cursor is defined and the translation unit defers
+            from the current one."""
+            return bool(d.cursor) and d.cursor.translation_unit != self.tu
+
+        def get_cursor(d: Declaration) -> Cursor:
+            assert d.cursor
+            d_type: cindex.Type = d.cursor.type
+            d_type_kind: cindex.TypeKind = d_type.kind
+
+            child: Cursor
+            for child in self.root.get_children():
+                ch_type: cindex.Type = child.type
+                ch_type_kind: cindex.TypeKind = ch_type.kind
+                # Check if similar to old cursor.
+                if ch_type.is_node_outdated == d_type and ch_type_kind == d_type_kind:
+                    print("UPDATE")
+
+            # TODO
+            return d.cursor
+
+        child: Declaration
+        for child in self.declarations:
+            if is_node_outdated(child):
+                # Update declaration ast.
+                child.cursor = get_cursor(child)
 
     def rename_declaration(self, declaration: Declaration, new_name: str) -> str:
         """Renames the declaration along with any references to it."""
 
         refs: list[Declaration] = self.get_references(declaration)
-
         extents: list[SourceRange] = [ref.get_extent() for ref in refs]
+        source_code: str = self.source_code
+        delta: int = len(new_name) - len(declaration.name)
 
         # Rename each ref and update all other refs.
-        delta: int = len(new_name) - len(declaration.name)
         size_offset: int = 0
         for extent in extents:
             start_offset: int = extent.start.offset + size_offset
             end_offset: int = extent.end.offset + size_offset
             # Get the reference
-            ref: str = self.source_code[start_offset:end_offset]
+            ref: str = source_code[start_offset:end_offset]
             # Replace it
             ref = ref.replace(declaration.name, new_name, 1)
             # Place replacement in source code
-            self.source_code = (
-                self.source_code[:start_offset] + ref + self.source_code[end_offset:]
-            )
+            source_code = source_code[:start_offset] + ref + source_code[end_offset:]
             # Add delta offset so next references are offset by the change in character.
             size_offset += delta
 
-        # TODO: Consider an update method for all other Declarations to be kept valid when renaming occurs.
-        # TODO A method to check for this is for each element:
-        # 1. Does it have the same name & type_name
-        # 2. Is it in the same location (after offsets have been calculated from the rename)
+        # Switch to new AST.
+        self.tu.reparse(unsaved_files=[(self.file_path, source_code)])
+        self.source_code = source_code
+
+        # Existing declarations need updating in order for them to receive new AST.
+        # self._refresh_cursors()
 
         return self.source_code
 
@@ -124,7 +172,7 @@ class ClangAST(object):
             ):
                 functions.append(FunctionDeclaration.from_cursor(node))
 
-        self.declarations.extend(functions)
+        self.declarations.update(functions)
         return functions
 
     def get_type_decl(self) -> list[TypeDeclaration]:
@@ -146,7 +194,7 @@ class ClangAST(object):
             ):
                 typedefs.append(TypeDeclaration.from_cursor(node))
 
-        self.declarations.extend(typedefs)
+        self.declarations.update(typedefs)
         return typedefs
 
     def get_variable_decl(self) -> list[Declaration]:
@@ -161,7 +209,7 @@ class ClangAST(object):
             ):
                 variables.append(Declaration.from_cursor(node))
 
-        self.declarations.extend(variables)
+        self.declarations.update(variables)
         return variables
 
     def get_include_directives(self) -> list[InclusionDirective]:
@@ -171,7 +219,7 @@ class ClangAST(object):
             if include.depth == 1:
                 includes.append(InclusionDirective(path=str(include.include)))
 
-        self.preprocessing_directives.extend(includes)
+        self.preprocessing_directives.update(includes)
         return includes
 
     def get_all_decl(self) -> list[Declaration]:

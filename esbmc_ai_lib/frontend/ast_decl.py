@@ -3,6 +3,7 @@
 
 from typing import Optional, final
 from typing_extensions import override
+from zlib import adler32
 
 from clang.cindex import Cursor, SourceLocation, SourceRange
 import clang.cindex as cindex
@@ -11,9 +12,7 @@ import clang.cindex as cindex
 class Declaration(object):
     name: str
     type_name: str
-    cursor: Optional[Cursor]
-    """Optional and not used in any checks, used to provide the underlying Cursor object that this
-    Declaration represents."""
+    token: Optional[Cursor]
 
     def __init__(
         self, name: str, type_name: str, cursor: Optional[Cursor] = None
@@ -25,22 +24,55 @@ class Declaration(object):
     @classmethod
     def from_cursor(cls, cursor: Cursor) -> "Declaration":
         """Constructs a declaration from a Cursor."""
+        node_type: cindex.Type = cursor.type
         return Declaration(
             name=cursor.spelling,
-            type_name=cursor.type.spelling,
+            type_name=node_type.get_canonical().spelling,
             cursor=cursor,
+        )
+
+    def is_same_declaration(self, other: object) -> bool:
+        """Checks if this is the same declaration as `other`, but not location."""
+        return (
+            isinstance(other, Declaration)
+            and self.name == other.name
+            and self.type_name == other.type_name
         )
 
     @override
     def __hash__(self) -> int:
-        return self.name.__hash__() + self.type_name.__hash__()
+        # If cursor is not defined for either then compare without location.
+        start_offset: int = 0
+        end_offset: int = 0
+        if self.cursor:
+            extent: SourceRange = self.get_extent()
+            start_offset = extent.start.offset
+            end_offset = extent.end.offset
+
+        # Adler32 is used because str hashes are non deterministic.
+        return (
+            adler32(bytes(self.name, "utf-8"))
+            + adler32(bytes(self.type_name, "utf-8"))
+            + start_offset.__hash__()
+            + end_offset.__hash__()
+        )
 
     @override
     def __eq__(self, __value: object) -> bool:
+        if not isinstance(__value, Declaration):
+            return False
+
+        # If cursor is not defined for either then compare without location.
+        if not self.cursor or not __value.cursor:
+            return self.is_same_declaration(__value)
+
+        extent: SourceRange = self.get_extent()
+        other_extent: SourceRange = __value.get_extent()
         return (
-            isinstance(__value, Declaration)
-            and self.name == __value.name
+            self.name == __value.name
             and self.type_name == __value.type_name
+            and extent.start.offset == other_extent.start.offset
+            and extent.end.offset == other_extent.end.offset
         )
 
     @override
@@ -82,19 +114,34 @@ class FunctionDeclaration(Declaration):
         )
 
     @override
+    def is_same_declaration(self, other: object) -> bool:
+        if not isinstance(other, FunctionDeclaration):
+            return False
+
+        args_equal: bool = True
+        for arg1, arg2 in zip(self.args, other.args):
+            args_equal &= arg1 == arg2
+
+        return args_equal and super().is_same_declaration(other)
+
+    @override
     def __hash__(self) -> int:
-        hash_result: int = 0
+        arg_hash: int = 0
         for arg in self.args:
-            hash_result += arg.__hash__()
-        return super().__hash__() + hash_result
+            arg_hash += arg.__hash__()
+
+        return super().__hash__() + arg_hash
 
     @override
     def __eq__(self, __value: object) -> bool:
-        return (
-            isinstance(__value, FunctionDeclaration)
-            and self.args == __value.args
-            and super().__eq__(__value)
-        )
+        if not isinstance(__value, FunctionDeclaration):
+            return False
+
+        args_equal: bool = True
+        for arg1, arg2 in zip(self.args, __value.args):
+            args_equal &= arg1 == arg2
+
+        return args_equal and super().__eq__(__value)
 
     @override
     def __str__(self) -> str:
@@ -110,6 +157,7 @@ class TypeDeclaration(Declaration):
     * The name will be the struct/union name assigned.
     * The is_union shows if this is a union instead of a struct."""
 
+    elements: list[Declaration]
     is_union: bool
 
     def __init__(
@@ -146,6 +194,14 @@ class TypeDeclaration(Declaration):
 
     def is_typedef(self) -> bool:
         return len(self.type_name) > 0
+
+    @override
+    def is_same_declaration(self, other: object) -> bool:
+        return (
+            isinstance(other, TypeDeclaration)
+            and self.is_union == other.is_union
+            and super().is_same_declaration(other)
+        )
 
     @override
     def __hash__(self) -> int:
