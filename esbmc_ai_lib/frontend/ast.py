@@ -5,7 +5,7 @@ from typing import Optional
 
 import clang.native
 import clang.cindex as cindex
-from clang.cindex import Config, Type as ClangType
+from clang.cindex import Config
 
 from .ast_decl import *
 
@@ -37,15 +37,15 @@ class ClangAST(object):
         super().__init__()
 
         self.index = cindex.Index.create()
-        self.init_ast(file_path, source_code)
 
-    def init_ast(self, file_path: str, source_code: Optional[str] = None) -> None:
         if file_path == "":
             raise ValueError("file_path provided cannot be empty string...")
 
         self.file_path = file_path
 
         if source_code is None:
+            with open(self.file_path, "r") as file:
+                self.source_code = file.read()
             # Load from file
             self.tu = self.index.parse(path=self.file_path)
         else:
@@ -87,61 +87,31 @@ class ClangAST(object):
         self.declarations.update(refs)
         return refs
 
-    def _refresh_cursors(self) -> None:
-        """Walks through each declaration and ensures that the cursor uses the current AST.
-        If an outdated AST is found, then the cursor is reset."""
-
-        def is_node_outdated(d: Declaration) -> bool:
-            """Declaration is outdated if cursor is defined and the translation unit defers
-            from the current one."""
-            return bool(d.cursor) and d.cursor.translation_unit != self.tu
-
-        def get_cursor(d: Declaration) -> Cursor:
-            assert d.cursor
-            d_type: cindex.Type = d.cursor.type
-            d_type_kind: cindex.TypeKind = d_type.kind
-
-            child: Cursor
-            for child in self.root.get_children():
-                ch_type: cindex.Type = child.type
-                ch_type_kind: cindex.TypeKind = ch_type.kind
-                # Check if similar to old cursor.
-                if ch_type.is_node_outdated == d_type and ch_type_kind == d_type_kind:
-                    print("UPDATE")
-
-            # TODO
-            return d.cursor
-
-        child: Declaration
-        for child in self.declarations:
-            if is_node_outdated(child):
-                # Update declaration ast.
-                child.cursor = get_cursor(child)
-
     def rename_declaration(self, declaration: Declaration, new_name: str) -> str:
         """Renames the declaration along with any references to it."""
 
         refs: list[Declaration] = self.get_references(declaration)
-        extents: list[SourceRange] = [ref.get_extent() for ref in refs]
         source_code: str = self.source_code
         delta: int = len(new_name) - len(declaration.name)
 
         # Rename each ref and update all other refs.
         size_offset: int = 0
-        for extent in extents:
+        for ref in refs:
+            extent: SourceRange = ref.get_extent()
             start_offset: int = extent.start.offset + size_offset
             end_offset: int = extent.end.offset + size_offset
             # Get the reference
-            ref: str = source_code[start_offset:end_offset]
+            change: str = source_code[start_offset:end_offset]
             # Replace it
-            ref = ref.replace(declaration.name, new_name, 1)
+            change = change.replace(declaration.name, new_name, 1)
             # Place replacement in source code
-            source_code = source_code[:start_offset] + ref + source_code[end_offset:]
+            source_code = source_code[:start_offset] + change + source_code[end_offset:]
             # Add delta offset so next references are offset by the change in character.
             size_offset += delta
 
         # Switch to new AST.
         self.tu.reparse(unsaved_files=[(self.file_path, source_code)])
+        self.root = self.tu.cursor
         self.source_code = source_code
 
         # Existing declarations need updating in order for them to receive new AST.
