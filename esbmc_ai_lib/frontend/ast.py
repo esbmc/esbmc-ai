@@ -57,11 +57,18 @@ class ClangAST(object):
             )
         self.root = self.tu.cursor
 
-    def get_references(self, target: Declaration) -> list["Declaration"]:
-        """Finds all references to a specific declaration."""
+    # def get_references(self, target: Declaration) -> list[Declaration]:
+    #     refs = self._get_references(target)
+    #     # FIXME Before enabling this function, it creates duplicate
+    #     # references need method to filter them out first.
+    #     self.declarations.update(refs)
+    #     return refs
+
+    def _get_references(self, target: Declaration) -> list[Declaration]:
+        """Finds all references to a specific declaration. The returned
+        Declarations are not subscribed to the the declarations set."""
         # Refs is a list not a set in order to maintain the order.
         refs: list[Declaration] = []
-        locations: list[SourceLocation] = []
 
         assert target.cursor
         target_type: cindex.Type = target.cursor.type
@@ -76,7 +83,6 @@ class ClangAST(object):
                 new_decl: Declaration = target.from_cursor(node)
                 if new_decl not in refs:
                     refs.append(new_decl)
-                    locations.append(new_decl.get_location())
 
             for child in node.get_children():
                 traverse_child_node(child)
@@ -84,38 +90,62 @@ class ClangAST(object):
         for child in self.root.get_children():
             traverse_child_node(child)
 
-        self.declarations.update(refs)
         return refs
 
     def rename_declaration(self, declaration: Declaration, new_name: str) -> str:
         """Renames the declaration along with any references to it."""
 
-        refs: list[Declaration] = self.get_references(declaration)
+        refs: list[Declaration] = self._get_references(declaration)
         source_code: str = self.source_code
         delta: int = len(new_name) - len(declaration.name)
 
-        # Rename each ref and update all other refs.
+        # Get sorted list of declarations.
+        declarations: list[Declaration] = sorted(
+            self.declarations,
+            key=lambda d: d.get_location().offset,
+        )
+
+        # When assigning new cursors, the new location of each cursor needs to be calculated
+        # by applying an offset to every declaration based on the previous size changes of
+        # tokens.
+        offsets: list[int] = []
+
+        # Rename each ref and record all offsets for each declaration after reparsing TU.
         size_offset: int = 0
-        for ref in refs:
-            extent: SourceRange = ref.get_extent()
-            start_offset: int = extent.start.offset + size_offset
-            end_offset: int = extent.end.offset + size_offset
-            # Get the reference
-            change: str = source_code[start_offset:end_offset]
-            # Replace it
-            change = change.replace(declaration.name, new_name, 1)
-            # Place replacement in source code
-            source_code = source_code[:start_offset] + change + source_code[end_offset:]
-            # Add delta offset so next references are offset by the change in character.
-            size_offset += delta
+        for decl in declarations:
+            # Check if current declaration is to be renamed or should be adjusted.
+            if decl in refs:
+                extent: SourceRange = decl.get_extent()
+                start_offset: int = extent.start.offset + size_offset
+                end_offset: int = extent.end.offset + size_offset
+                # Get the reference
+                change: str = source_code[start_offset:end_offset]
+                # Replace it
+                change = change.replace(declaration.name, new_name, 1)
+                # Place replacement in source code
+                source_code = (
+                    source_code[:start_offset] + change + source_code[end_offset:]
+                )
+
+                offsets.append(size_offset)
+
+                # Add delta offset so next references are offset by the change in character.
+                size_offset += delta
+            else:
+                offsets.append(size_offset)
 
         # Switch to new AST.
         self.tu.reparse(unsaved_files=[(self.file_path, source_code)])
         self.root = self.tu.cursor
         self.source_code = source_code
 
-        # Existing declarations need updating in order for them to receive new AST.
-        # self._refresh_cursors()
+        # Reparse declarations to assign new TU cursors.
+        for offset, decl in zip(offsets, declarations):
+            new_loc: SourceLocation = self.tu.get_location(
+                filename=self.file_path,
+                position=decl.get_location().offset + offset,
+            )
+            decl.cursor = Cursor.from_location(self.tu, new_loc)
 
         return self.source_code
 
