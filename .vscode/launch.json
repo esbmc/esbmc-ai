@@ -11,16 +11,30 @@
       "module": "esbmc_ai_lib",
       "justMyCode": true,
       "cwd": "${workspaceFolder}",
-      "args": ["${file}"]
+      "args": [
+        "${file}"
+      ]
     },
     {
-      "name": "ESBMC-AI (Optimize Code)",
+      "name": "Optimize Code on Open File",
       "type": "python",
       "request": "launch",
       "module": "esbmc_ai_lib",
       "justMyCode": true,
       "cwd": "${workspaceFolder}",
-      "args": ["-c", "optimize-code", "${file}"]
+      "args": [
+        "-c",
+        "optimize-code",
+        "${file}"
+      ]
+    },
+    {
+      "name": "Python: Current File",
+      "type": "python",
+      "request": "launch",
+      "program": "${file}",
+      "console": "integratedTerminal",
+      "justMyCode": true
     },
     {
       "name": "Run tests",
@@ -29,7 +43,9 @@
       "module": "pytest",
       "justMyCode": true,
       "cwd": "${workspaceFolder}",
-      "args": ["-v"]
+      "args": [
+        "-v"
+      ]
     },
     {
       "name": "Run coverage tests",
@@ -38,7 +54,10 @@
       "module": "pytest",
       "justMyCode": true,
       "cwd": "${workspaceFolder}",
-      "args": ["-v", "--cov"]
+      "args": [
+        "-v",
+        "--cov"
+      ]
     }
   ]
 }
