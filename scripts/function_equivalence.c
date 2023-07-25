@@ -1,17 +1,31 @@
 #include <assert.h>
-$includes
 
-$function_old
+///////////////////////////////////////////
+///////////// OLD /////////////////////////
+///////////////////////////////////////////
 
-$function_new
+$function_old;
+
+///////////////////////////////////////////
+///////////// NEW /////////////////////////
+///////////////////////////////////////////
+
+$function_new;
+
+///////////////////////////////////////////
+///////////// ESBMC MAIN //////////////////
+///////////////////////////////////////////
 
 int main()
 {
-    // TODO Need to dynamically build parameters to supply.
+    // Need to dynamically build parameters to supply.
+    $parameters_list;
 
-    // TODO Need to call old and new functions and compare results.
+    // Need to call old and new functions and compare results.
+    $function_call;
 
-    // check whether both functions produce the same output
+    // Check whether both functions produce the same output
+    $function_assert;
     // assert(output1 == output2);
 
     return 0;
