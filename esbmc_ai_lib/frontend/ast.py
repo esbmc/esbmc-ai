@@ -19,16 +19,14 @@ Config.library_file = path_join(
 # A lot of functions traverse all children.
 
 
+# TODO Adjust storage class checks and add file checks for each get_x_decl
+
+# TODO Make declaration not use Cursor, instead move everything to Declaration
+# since inbetween calls, each Cursor can change. (Calls to get_children() will
+# yield different Cursors)
+
+
 class ClangAST(object):
-    file_path: str
-    source_code: str
-    index: cindex.Index
-    tu: cindex.TranslationUnit
-    root: cindex.Cursor
-
-    declarations: set[Declaration] = set()
-    preprocessing_directives: set[PreProcessingDirective] = set()
-
     def __init__(
         self,
         file_path: str,
@@ -36,53 +34,77 @@ class ClangAST(object):
     ) -> None:
         super().__init__()
 
-        self.index = cindex.Index.create()
+        self.index: cindex.Index = cindex.Index.create()
 
         if file_path == "":
             raise ValueError("file_path provided cannot be empty string...")
 
-        self.file_path = file_path
+        self.file_path: str = file_path
 
         if source_code is None:
             with open(self.file_path, "r") as file:
-                self.source_code = file.read()
+                self.source_code: str = file.read()
             # Load from file
-            self.tu = self.index.parse(path=self.file_path)
+            self.tu: cindex.TranslationUnit = self.index.parse(path=self.file_path)
         else:
-            self.source_code = source_code
+            self.source_code: str = source_code
             # Load from string
-            self.tu = self.index.parse(
+            self.tu: cindex.TranslationUnit = self.index.parse(
                 path=self.file_path,
                 unsaved_files=[(self.file_path, source_code)],
             )
-        self.root = self.tu.cursor
+        self.root: cindex.Cursor = self.tu.cursor
 
-    # def get_references(self, target: Declaration) -> list[Declaration]:
-    #     refs = self._get_references(target)
-    #     # FIXME Before enabling this function, it creates duplicate
-    #     # references need method to filter them out first.
-    #     self.declarations.update(refs)
-    #     return refs
+    def _sort_declarations(self, declarations: list[Declaration]) -> list[Declaration]:
+        return sorted(
+            declarations,
+            key=lambda d: d.get_location().offset,
+        )
+
+    def _get_type_references_by_cursor(
+        self, cursor: cindex.Cursor
+    ) -> list[Declaration]:
+        name: str = cursor.type.spelling
+        # Remove the tag type (first word) which should be struct/enum/union.
+        name = name.split(" ", 1)[1]
+        d: Declaration = Declaration(
+            name=name,
+            type_name="",
+            cursor=cursor,
+        )
+        return self._get_references(d)
 
     def _get_references(self, target: Declaration) -> list[Declaration]:
         """Finds all references to a specific declaration. The returned
         Declarations are not subscribed to the the declarations set."""
         # Refs is a list not a set in order to maintain the order.
-        refs: list[Declaration] = []
-
         assert target.cursor
-        target_type: cindex.Type = target.cursor.type
+
+        refs: list[Declaration] = []
+        added_locs: list[tuple[int, int]] = []
 
         def traverse_child_node(node: Cursor) -> None:
-            node_type: cindex.Type = node.type
+            kind: cindex.CursorKind = node.kind
+            loc: tuple[int, int] = (node.location.line, node.location.column)
             if (
                 node.referenced
-                and node.referenced == target.cursor
-                and node_type.kind == target_type.kind
+                and node.referenced.spelling == target.name
+                # TODO Evaluate in testing because target.extent might be
+                # wrong after repeated renaming.
+                # and node.referenced.extent == target.extent
+                and (
+                    kind.is_expression()
+                    or kind.is_declaration()
+                    or kind.is_reference()
+                    or kind
+                    == cindex.CursorKind.FUNCTION_DECL  # TODO This may be removable
+                )
+                and loc not in added_locs
             ):
-                new_decl: Declaration = target.from_cursor(node)
-                if new_decl not in refs:
-                    refs.append(new_decl)
+                # Make sure not to add a cursor in this location again.
+                added_locs.append(loc)
+                # Create and add decleration.
+                refs.append(target.from_cursor(node))
 
             for child in node.get_children():
                 traverse_child_node(child)
@@ -92,23 +114,26 @@ class ClangAST(object):
 
         return refs
 
-    def rename_declaration(self, declaration: Declaration, new_name: str) -> str:
-        """Renames the declaration along with any references to it."""
+    def rename_declaration(
+        self,
+        declaration: Declaration,
+        new_name: str,
+        inplace: bool = True,
+    ) -> str:
+        """Renames the declaration along with any references to it, returns the new code."""
+
+        # TODO Add edge case: Do not rename for #include calls... Check and
+        # rename only in same file as declaration.
 
         refs: list[Declaration] = self._get_references(declaration)
         source_code: str = self.source_code
         delta: int = len(new_name) - len(declaration.name)
+        old_name: str = declaration.name
 
         # Get sorted list of declarations.
-        declarations: list[Declaration] = sorted(
-            self.declarations,
-            key=lambda d: d.get_location().offset,
-        )
-
-        # When assigning new cursors, the new location of each cursor needs to be calculated
-        # by applying an offset to every declaration based on the previous size changes of
-        # tokens.
-        offsets: list[int] = []
+        # TODO ensure that this is needed, as call to _get_references
+        # should in theory return the list sorted by position.
+        declarations: list[Declaration] = self._sort_declarations(refs)
 
         # Rename each ref and record all offsets for each declaration after reparsing TU.
         size_offset: int = 0
@@ -121,37 +146,27 @@ class ClangAST(object):
                 # Get the reference
                 change: str = source_code[start_offset:end_offset]
                 # Replace it
-                change = change.replace(declaration.name, new_name, 1)
+                change = change.replace(old_name, new_name, 1)
                 # Place replacement in source code
                 source_code = (
                     source_code[:start_offset] + change + source_code[end_offset:]
                 )
 
-                offsets.append(size_offset)
-
                 # Add delta offset so next references are offset by the change in character.
                 size_offset += delta
-            else:
-                offsets.append(size_offset)
 
         # Switch to new AST.
         self.tu.reparse(unsaved_files=[(self.file_path, source_code)])
         self.root = self.tu.cursor
-        self.source_code = source_code
 
-        # Reparse declarations to assign new TU cursors.
-        for offset, decl in zip(offsets, declarations):
-            new_loc: SourceLocation = self.tu.get_location(
-                filename=self.file_path,
-                position=decl.get_location().offset + offset,
-            )
-            decl.cursor = Cursor.from_location(self.tu, new_loc)
+        if inplace:
+            self.source_code = source_code
 
-        return self.source_code
+        return source_code
 
     def get_source_code(self, declaration: Declaration) -> str:
         if declaration.cursor is None:
-            raise ValueError("")
+            raise ValueError("Get source code, cursor is null: " + declaration.name)
         node: cindex.Cursor = declaration.cursor
         loc: cindex.SourceRange = node.extent
         start: cindex.SourceLocation = loc.start
@@ -172,7 +187,6 @@ class ClangAST(object):
             ):
                 functions.append(FunctionDeclaration.from_cursor(node))
 
-        self.declarations.update(functions)
         return functions
 
     def get_type_decl(self) -> list[TypeDeclaration]:
@@ -180,10 +194,12 @@ class ClangAST(object):
         node: cindex.Cursor
         for node in self.root.get_children():
             kind: cindex.CursorKind = node.kind
+            node_file: str = node.location.file.name
             if (
                 kind.is_declaration()
                 # NOTE StorageClass.INVALID for some reason is what works here instead of NONE.
                 # This may be a bug that's fixed in future versions of libclang.
+                and node_file == self.file_path
                 and node.storage_class == cindex.StorageClass.INVALID
                 and (
                     kind == cindex.CursorKind.STRUCT_DECL
@@ -194,7 +210,6 @@ class ClangAST(object):
             ):
                 typedefs.append(TypeDeclaration.from_cursor(node))
 
-        self.declarations.update(typedefs)
         return typedefs
 
     def get_variable_decl(self) -> list[Declaration]:
@@ -209,17 +224,15 @@ class ClangAST(object):
             ):
                 variables.append(Declaration.from_cursor(node))
 
-        self.declarations.update(variables)
         return variables
 
     def get_include_directives(self) -> list[InclusionDirective]:
         includes: list[InclusionDirective] = []
-        include: cindex.FileInclusion
-        for include in self.tu.get_includes():
-            if include.depth == 1:
-                includes.append(InclusionDirective(path=str(include.include)))
+        file_inclusion: cindex.FileInclusion
+        for file_inclusion in self.tu.get_includes():
+            if file_inclusion.depth == 1:
+                includes.append(InclusionDirective(path=str(file_inclusion.include)))
 
-        self.preprocessing_directives.update(includes)
         return includes
 
     def get_all_decl(self) -> list[Declaration]:
@@ -228,5 +241,6 @@ class ClangAST(object):
         declarations.extend(self.get_fn_decl())
         declarations.extend(self.get_type_decl())
         declarations.extend(self.get_variable_decl())
+        # TODO Make sure no clones.
         # TODO add more...
         return declarations

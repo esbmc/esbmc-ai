@@ -1,6 +1,7 @@
 # Author: Yiannis Charalambous
 
 
+from enum import Enum
 from typing import Optional, final
 from typing_extensions import override
 from zlib import adler32
@@ -10,16 +11,12 @@ import clang.cindex as cindex
 
 
 class Declaration(object):
-    name: str
-    type_name: str
-    token: Optional[Cursor]
-
     def __init__(
         self, name: str, type_name: str, cursor: Optional[Cursor] = None
     ) -> None:
-        self.name = name
-        self.type_name = type_name
-        self.cursor = cursor
+        self.name: str = name
+        self.type_name: str = type_name
+        self.cursor: Optional[Cursor] = cursor
 
     @classmethod
     def from_cursor(cls, cursor: Cursor) -> "Declaration":
@@ -31,7 +28,7 @@ class Declaration(object):
             cursor=cursor,
         )
 
-    def is_same_declaration(self, other: object) -> bool:
+    def is_equivalent(self, other: object) -> bool:
         """Checks if this is the same declaration as `other`, but not location."""
         return (
             isinstance(other, Declaration)
@@ -40,44 +37,16 @@ class Declaration(object):
         )
 
     @override
-    def __hash__(self) -> int:
-        # If cursor is not defined for either then compare without location.
-        start_offset: int = 0
-        end_offset: int = 0
-        if self.cursor:
-            extent: SourceRange = self.get_extent()
-            start_offset = extent.start.offset
-            end_offset = extent.end.offset
-
-        # Adler32 is used because str hashes are non deterministic.
-        return (
-            adler32(bytes(self.name, "utf-8"))
-            + adler32(bytes(self.type_name, "utf-8"))
-            + start_offset.__hash__()
-            + end_offset.__hash__()
-        )
-
-    @override
-    def __eq__(self, __value: object) -> bool:
-        if not isinstance(__value, Declaration):
-            return False
-
-        # If cursor is not defined for either then compare without location.
-        if not self.cursor or not __value.cursor:
-            return self.is_same_declaration(__value)
-
-        extent: SourceRange = self.get_extent()
-        other_extent: SourceRange = __value.get_extent()
-        return (
-            self.name == __value.name
-            and self.type_name == __value.type_name
-            and extent.start.offset == other_extent.start.offset
-            and extent.end.offset == other_extent.end.offset
-        )
-
-    @override
     def __str__(self) -> str:
         return self.name + ":" + self.type_name
+
+    @property
+    def extent(self) -> SourceRange:
+        return self.get_extent()
+
+    @property
+    def location(self) -> SourceLocation:
+        return self.get_location()
 
     @final
     def get_location(self) -> SourceLocation:
@@ -89,10 +58,35 @@ class Declaration(object):
         assert self.cursor
         return self.cursor.extent
 
+    @override
+    def __eq__(self, __value: object) -> bool:
+        """The values are compared with all other values."""
+        if not isinstance(__value, Declaration):
+            return False
+
+        # Dont compare the cursor...
+        attributes_1 = self.__dict__.copy()
+        del attributes_1["cursor"]
+        attributes_2 = self.__dict__.copy()
+        del attributes_2["cursor"]
+
+        return tuple(sorted(attributes_1.items())) == tuple(
+            sorted(attributes_2.items())
+        )
+
+    def _get_attr_hashes(self, attributes: dict) -> int:
+        assert id(attributes) != id(
+            self.__dict__
+        ), "attributes needs to be a copy of __dict__"
+        del attributes["cursor"]
+        return hash(tuple(sorted(attributes.items())))
+
+    @override
+    def __hash__(self):
+        return self._get_attr_hashes(self.__dict__.copy())
+
 
 class FunctionDeclaration(Declaration):
-    args: list[Declaration] = []
-
     def __init__(
         self,
         name: str,
@@ -101,7 +95,7 @@ class FunctionDeclaration(Declaration):
         cursor: Optional[Cursor] = None,
     ) -> None:
         super().__init__(name, type_name, cursor=cursor)
-        self.args = args
+        self.args: list[Declaration] = args
 
     @override
     @classmethod
@@ -114,7 +108,7 @@ class FunctionDeclaration(Declaration):
         )
 
     @override
-    def is_same_declaration(self, other: object) -> bool:
+    def is_equivalent(self, other: object) -> bool:
         if not isinstance(other, FunctionDeclaration):
             return False
 
@@ -122,26 +116,22 @@ class FunctionDeclaration(Declaration):
         for arg1, arg2 in zip(self.args, other.args):
             args_equal &= arg1 == arg2
 
-        return args_equal and super().is_same_declaration(other)
-
-    @override
-    def __hash__(self) -> int:
-        arg_hash: int = 0
-        for arg in self.args:
-            arg_hash += arg.__hash__()
-
-        return super().__hash__() + arg_hash
+        return args_equal and super().is_equivalent(other)
 
     @override
     def __eq__(self, __value: object) -> bool:
-        if not isinstance(__value, FunctionDeclaration):
-            return False
+        return isinstance(__value, FunctionDeclaration) and super().__eq__(__value)
 
-        args_equal: bool = True
-        for arg1, arg2 in zip(self.args, __value.args):
-            args_equal &= arg1 == arg2
+    @override
+    def _get_attr_hashes(self, attributes: dict) -> int:
+        # Dont sort args since order matters
+        args_hash = hash(tuple(self.args))
+        del attributes["args"]
+        return super()._get_attr_hashes(attributes) + args_hash
 
-        return args_equal and super().__eq__(__value)
+    @override
+    def __hash__(self):
+        return self._get_attr_hashes(self.__dict__.copy())
 
     @override
     def __str__(self) -> str:
@@ -157,74 +147,129 @@ class TypeDeclaration(Declaration):
     * The name will be the struct/union name assigned.
     * The is_union shows if this is a union instead of a struct."""
 
-    elements: list[Declaration]
-    is_union: bool
+    class ConstructTypes(Enum):
+        STRUCT = 0
+        UNION = 1
+        ENUM = 2
+
+        @override
+        def __str__(self) -> str:
+            if self == TypeDeclaration.ConstructTypes.STRUCT:
+                return "struct"
+            elif self == TypeDeclaration.ConstructTypes.UNION:
+                return "union"
+            elif self == TypeDeclaration.ConstructTypes.ENUM:
+                return "enum"
+            else:
+                return super().__str__()
 
     def __init__(
         self,
         name: str,
         type_name: str,
+        construct_type: ConstructTypes,
         elements: list[Declaration] = [],
-        is_union: bool = False,
         cursor: Optional[Cursor] = None,
     ) -> None:
         super().__init__(name, type_name, cursor=cursor)
 
         self.elements = elements
-        self.is_union = is_union
+        self.construct_type: TypeDeclaration.ConstructTypes = construct_type
 
     @classmethod
     @override
     def from_cursor(cls, cursor: Cursor) -> "TypeDeclaration":
+        node_type: cindex.Type = cursor.type
+        name: str = cursor.spelling
+        type_name: str = node_type.get_typedef_name()
+        construct_type: TypeDeclaration.ConstructTypes
+
+        # Check first if it's a typedef, if it is, then get information
+        # from underlying type.
+        kind: cindex.CursorKind = cursor.kind
+        if kind == cindex.CursorKind.TYPEDEF_DECL:
+            underlying_type: cindex.Type = cursor.underlying_typedef_type
+            decl_cursor: cindex.Cursor = underlying_type.get_declaration()
+            kind = decl_cursor.kind
+            name = decl_cursor.spelling
+
+        if kind == cindex.CursorKind.STRUCT_DECL:
+            construct_type = TypeDeclaration.ConstructTypes.STRUCT
+        elif kind == cindex.CursorKind.UNION_DECL:
+            construct_type = TypeDeclaration.ConstructTypes.UNION
+        elif kind == cindex.CursorKind.ENUM_DECL:
+            construct_type = TypeDeclaration.ConstructTypes.ENUM
+        else:
+            raise ValueError(f'Unkown type construct (tag): "{kind}" "{name}"')
+
         elements: list[Declaration] = []
         # Get Elements
         element: Cursor
         for element in cursor.get_children():
-            elements.append(Declaration.from_cursor(element))
+            elements.append(Declaration.from_cursor(element.get_definition()))
 
-        node_type: cindex.Type = cursor.type
-        kind: cindex.CursorKind = cursor.kind
         return TypeDeclaration(
-            name=node_type.get_canonical().spelling,
-            type_name=node_type.get_typedef_name(),
-            is_union=kind == cindex.CursorKind.UNION_DECL,
-            cursor=cursor,
+            name=name,
+            type_name=type_name,
+            construct_type=construct_type,
             elements=elements,
+            cursor=cursor,
         )
 
+    def is_anonymous(self) -> bool:
+        """If the type has no name associated, it is anonymous."""
+        return len(self.name) == 0
+
     def is_typedef(self) -> bool:
+        """If the type has a typedef, the name will be the name of the original
+        construct."""
         return len(self.type_name) > 0
 
     @override
-    def is_same_declaration(self, other: object) -> bool:
-        return (
-            isinstance(other, TypeDeclaration)
-            and self.is_union == other.is_union
-            and super().is_same_declaration(other)
-        )
+    def is_equivalent(self, other: object) -> bool:
+        if not isinstance(other, TypeDeclaration):
+            return False
 
-    @override
-    def __hash__(self) -> int:
-        hash_result: int = 0
-        for e in self.elements:
-            hash_result += e.__hash__()
-        return super().__hash__() + hash_result
+        # Check elements
+        equal_elements: bool = True
+        for e1, e2 in zip(self.elements, other.elements):
+            equal_elements = equal_elements and e1.is_equivalent(e2)
+        return equal_elements and super().is_equivalent(other)
 
     @override
     def __eq__(self, __value: object) -> bool:
-        return (
-            isinstance(__value, TypeDeclaration)
-            and self.is_union == __value.is_union
-            and super().__eq__(__value)
-        )
+        return isinstance(__value, TypeDeclaration) and super().__eq__(__value)
+
+    @override
+    def _get_attr_hashes(self, attributes: dict) -> int:
+        elements_hash = hash(tuple(self.elements))
+        del attributes["elements"]
+        return super()._get_attr_hashes(attributes) + elements_hash
+
+    @override
+    def __hash__(self):
+        return self._get_attr_hashes(self.__dict__.copy())
 
     @override
     def __str__(self) -> str:
+        construct_type_str: str
+        if self.construct_type == TypeDeclaration.ConstructTypes.STRUCT:
+            construct_type_str = "struct"
+        elif self.construct_type == TypeDeclaration.ConstructTypes.UNION:
+            construct_type_str = "union"
+        elif self.construct_type == TypeDeclaration.ConstructTypes.ENUM:
+            construct_type_str = "enum"
+        else:
+            raise ValueError(
+                "No construct type found for type "
+                f"{self.name} ({self.type_name}): {self.construct_type}"
+            )
+
         elements: list[str] = [f"{e.name}: {e.type_name}" for e in self.elements]
         elements_string: str = ", ".join(elements)
         return (
             (f"typedef ({self.type_name}) " if self.is_typedef() else "")
-            + self.name
+            + f"{construct_type_str} {self.name}"
             + (" {" + elements_string if len(elements_string) > 0 else " {")
             + "}"
         )
@@ -241,17 +286,15 @@ class PreProcessingDirective(object):
 class InclusionDirective(PreProcessingDirective):
     """Represents an inclusion directive."""
 
-    path: str
-    """Path to the inclusion directive.
-    `#include <path>`"""
-
     def __init__(self, path: str) -> None:
         super().__init__()
-        self.path = path
+        self.path: str = path
+        """Path to the inclusion directive.
+        `#include <path>`"""
 
     @override
     def __hash__(self) -> int:
-        return self.path.__hash__()
+        return adler32(bytes(self.path, "utf-8"))
 
     @override
     def __eq__(self, __value: object) -> bool:
