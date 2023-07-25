@@ -51,6 +51,10 @@ For full documentation, see the [ESBMC-AI Wiki](https://github.com/Yiannis128/es
 6. Further, adjust the `config.json` file as required. Be careful when editing AI model messages as incorrect messages can break the flow of the program, or introduce incorrect results. In general, it's recommended to leave those options alone.
 7. You can now run ESBMC-AI. See usage instructions below.
 
+### Additional
+
+Make sure to install `gcc` and have `libc` installed, as some parts of ESBMC-AI use `libclang`.
+
 ## Settings
 
 ### .env
