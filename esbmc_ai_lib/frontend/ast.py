@@ -61,19 +61,6 @@ class ClangAST(object):
             key=lambda d: d.get_location().offset,
         )
 
-    def _get_type_references_by_cursor(
-        self, cursor: cindex.Cursor
-    ) -> list[Declaration]:
-        name: str = cursor.type.spelling
-        # Remove the tag type (first word) which should be struct/enum/union.
-        name = name.split(" ", 1)[1]
-        d: Declaration = Declaration(
-            name=name,
-            type_name="",
-            cursor=cursor,
-        )
-        return self._get_references(d)
-
     def _get_references(self, target: Declaration) -> list[Declaration]:
         """Finds all references to a specific declaration. The returned
         Declarations are not subscribed to the the declarations set."""
@@ -89,15 +76,10 @@ class ClangAST(object):
             if (
                 node.referenced
                 and node.referenced.spelling == target.name
-                # TODO Evaluate in testing because target.extent might be
-                # wrong after repeated renaming.
-                # and node.referenced.extent == target.extent
                 and (
-                    kind.is_expression()
+                    (kind.is_expression() and kind != cindex.CursorKind.UNEXPOSED_EXPR)
                     or kind.is_declaration()
                     or kind.is_reference()
-                    or kind
-                    == cindex.CursorKind.FUNCTION_DECL  # TODO This may be removable
                 )
                 and loc not in added_locs
             ):
@@ -106,10 +88,7 @@ class ClangAST(object):
                 # Create and add decleration.
                 refs.append(target.from_cursor(node))
 
-            for child in node.get_children():
-                traverse_child_node(child)
-
-        for child in self.root.get_children():
+        for child in self.root.walk_preorder():
             traverse_child_node(child)
 
         return refs
@@ -120,7 +99,7 @@ class ClangAST(object):
         new_name: str,
         inplace: bool = True,
     ) -> str:
-        """Renames the declaration along with any references to it, returns the new code."""
+        """Renames the declaration returns the new code."""
 
         # TODO Add edge case: Do not rename for #include calls... Check and
         # rename only in same file as declaration.
@@ -140,9 +119,25 @@ class ClangAST(object):
         for decl in declarations:
             # Check if current declaration is to be renamed or should be adjusted.
             if decl in refs:
-                extent: SourceRange = decl.get_extent()
-                start_offset: int = extent.start.offset + size_offset
-                end_offset: int = extent.end.offset + size_offset
+                assert decl.cursor
+                start_offset: Optional[int] = None
+                end_offset: Optional[int] = None
+                # Instead of getting the cursor start and end offsets, tokenize the cursor
+                # to get the exact location where the identifier is at. Since cursors can be
+                # abstract sometimes and show the location at the start of the line instead of
+                # at the identifier that needs renaming such as in test:
+                # tests/test_ast.py::test_rename_global_variable
+                for token in decl.cursor.get_tokens():
+                    if (
+                        token.kind == cindex.TokenKind.IDENTIFIER
+                        and token.spelling == decl.name
+                    ):
+                        start_offset = token.extent.start.offset + size_offset
+                        end_offset = token.extent.end.offset + size_offset
+                        break
+
+                assert start_offset != None and end_offset != None
+
                 # Get the reference
                 change: str = source_code[start_offset:end_offset]
                 # Replace it
@@ -244,3 +239,38 @@ class ClangAST(object):
         # TODO Make sure no clones.
         # TODO add more...
         return declarations
+
+    def _get_type_references_by_cursor(
+        self, cursor: cindex.Cursor
+    ) -> list[Declaration]:
+        """Wrapper for _get_references, consturcts a Declaration and uses the declaration
+        type name as the name of the Declaration. Proceeds to call _get_references.
+
+        This effectively finds the TypeDeclarations related to this cursor."""
+        # TODO Test this function
+
+        name: str = cursor.type.spelling
+
+        # Remove the tag type (first word) which should be struct/enum/union.
+        name = name.split(" ", 1)[1]
+        d: Declaration = Declaration(
+            name=name,
+            type_name="",
+            cursor=cursor,
+        )
+        return self._get_references(d)
+
+    def _get_type_declaration_from_cursor(
+        self, cursor: cindex.Cursor
+    ) -> Optional[TypeDeclaration]:
+        """Uses a cursor to construct a type declaration. The way it does this is
+        by getting type references of the cursor, then finding the declaration."""
+        # TODO
+        refs: list[Declaration] = self._get_type_references_by_cursor(cursor)
+
+        for ref in refs:
+            assert ref.cursor
+            kind: cindex.CursorKind = ref.cursor.kind
+            if kind.is_declaration():
+                return TypeDeclaration.from_cursor(ref.cursor)
+        return None
