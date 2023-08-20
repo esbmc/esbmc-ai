@@ -1,11 +1,19 @@
 # Author: Yiannis Charalambous
 
-import clang.cindex as cindex
+from typing import Callable, Optional
 
-from typing import Optional
+import clang.cindex as cindex
 
 from .ast import ClangAST
 from .ast_decl import Declaration, TypeDeclaration, FunctionDeclaration
+
+
+"""Note about how `assign_to` and `init` work:
+* `assign_to: Optional[str] = None`: By default the result will not be a statement,
+but will generate a value. By assigning "", a statement will be returned. By assigning
+a string name, a value will be assigned to that string name.
+* `init: bool = False`: This does not matter, unless `assign_to != None` and has a value other
+than "", will initialize the variable by appending the type information before the name."""
 
 
 class ESBMCCodeGenerator(object):
@@ -58,8 +66,14 @@ class ESBMCCodeGenerator(object):
     def __init__(self, ast: ClangAST) -> None:
         self.ast = ast
 
+    def is_primitive_type(self, type_name: str) -> bool:
+        return type_name in self._primitives_base_defaults.keys()
+
     def statement_primitive_construct(
-        self, d: Declaration, result_name: str = ""
+        self,
+        d: Declaration,
+        assign_to: Optional[str] = None,
+        init: bool = False,
     ) -> str:
         """Returns the primitive construction of a variable/value. Will be
         __VERIFIER_nondet_X(). The list of available ESBMC functions is taken
@@ -68,12 +82,20 @@ class ESBMCCodeGenerator(object):
 
         value: str = ESBMCCodeGenerator._primitives_base_defaults[d.type_name]
 
-        return value
+        if assign_to == None:
+            return value
+        else:
+            if assign_to == "":
+                return value + ";"
+            else:
+                return (d.type_name + " " if init else "") + f"{assign_to} = {value};"
 
     def statement_type_construct(
         self,
         d: TypeDeclaration,
-        assign_to: str = "",
+        assign_to: Optional[str] = None,
+        init: bool = False,
+        primitive_assignment_fn: Optional[Callable[[Declaration], str]] = None,
     ) -> str:
         """Constructs a statement to  that is represented by decleration d."""
         assert d.cursor
@@ -84,38 +106,30 @@ class ESBMCCodeGenerator(object):
         if len(list(d.cursor.get_children())) == 0:
             return self.statement_primitive_construct(d)
 
-        cmd = "{"
+        cmd = "(" + (d.type_name if d.is_typedef() else f"struct {d.name}") + "){"
 
         # Loop through each element of the data type.
         elements: list[str] = []
         for element in d.elements:
             # Check if element is a primitive type. If not, it will need to be
             # further broken.
-            if element.type_name in self._primitives_base_defaults.keys():
-                element_code: str = self.statement_primitive_construct(element)
+            if self.is_primitive_type(element.type_name):
+                element_code: str
+                # Call primitive assignment function if available in order to
+                # assign a value. If not, then assign primitive using default
+                # way.
+                if primitive_assignment_fn != None:
+                    element_code = primitive_assignment_fn(element)
+                else:
+                    element_code = self.statement_primitive_construct(element)
                 elements.append(element_code)
             else:
                 assert element.cursor
                 # Need to convert element Declaration to TypeDeclaration
 
-                # Start by getting the references using the cursor.
-                # Cannot use normal _get_references(element) because
-                # element (kind) is a FIELD_DECL inside of the struct.
-                refs: list[Declaration] = self.ast._get_type_references_by_cursor(
-                    cursor=element.cursor
-                )
-
-                type_declaration: Optional[TypeDeclaration] = None
-                # Need to find the type declaration for the element in the AST.
-                for ref in refs:
-                    assert ref.cursor
-                    ref_kind: cindex.CursorKind = ref.cursor.kind
-                    if (
-                        ref_kind.is_declaration()
-                        and ref_kind != cindex.CursorKind.FIELD_DECL
-                    ):
-                        type_declaration = TypeDeclaration.from_cursor(ref.cursor)
-                        break
+                type_declaration: Optional[
+                    TypeDeclaration
+                ] = self.ast._get_type_declaration_from_cursor(element.cursor)
 
                 assert (
                     type_declaration != None
@@ -128,19 +142,78 @@ class ESBMCCodeGenerator(object):
         cmd += ",".join(elements) + "}"
 
         # If this construction should be an assignment call.
-        if assign_to != "":
-            assign_type: str = d.type_name
-            if d.type_name == "":
-                assign_type = f"{d.construct_type} {d.name}"
+        if assign_to != None:
+            if assign_to == "":
+                cmd = cmd + ";"
+            elif d.type_name != "void":
+                # Check if assignment variable should be initialized.
+                if init:
+                    assign_type: str = d.type_name
+                    if d.type_name == "":
+                        assign_type = f"{d.construct_type} {d.name}"
 
-            cmd = f"{assign_type} {assign_to} = {cmd};"
+                    cmd = f"{assign_type} {assign_to} = {cmd};"
+                else:
+                    cmd = f"{assign_to} = {cmd};"
 
         return cmd
 
     def statement_function_call(
         self,
         fn: FunctionDeclaration,
-        result: Optional[Declaration] = None,
+        params: Optional[list[str]] = None,
+        assign_to: Optional[str] = None,
+        init: bool = False,
     ) -> str:
         """Calls a function fn, returns to result."""
-        raise NotImplementedError()
+
+        assert fn.cursor
+
+        cmd: str = fn.name + "("
+
+        # Parameter generation
+        if params != None:
+            # Given parameters
+            cmd += ", ".join(params) + ")"
+        else:
+            # Walk through arguments
+            arg_cmds: list[str] = []
+            for arg in fn.args:
+                assert arg.cursor
+
+                # Check if primitive type.
+                if self.is_primitive_type(arg.type_name):
+                    arg_cmds.append(self.statement_primitive_construct(arg))
+                else:
+                    # Current cursor kind is CursorKind.PARAM_DECL, need to
+                    # get underlying type.
+                    underlying_type: cindex.Type = arg.cursor.type.get_canonical()
+                    underlying_cursor: cindex.Cursor = underlying_type.get_declaration()
+
+                    arg_type: Optional[
+                        TypeDeclaration
+                    ] = self.ast._get_type_declaration_from_cursor(underlying_cursor)
+
+                    if arg_type is None:
+                        raise ValueError(
+                            "Statement function call: Could not find declaration for"
+                            + arg.name
+                            + " "
+                            + arg.type_name
+                        )
+                    arg_cmds.append(self.statement_type_construct(d=arg_type))
+
+            cmd += ", ".join(arg_cmds) + ")"
+
+        # If this construction should be an assignment call.
+        if assign_to != None:
+            if assign_to == "":
+                cmd = cmd + ";"
+            elif fn.type_name != "void":
+                if init:
+                    assign_type: str = fn.type_name
+                    cmd = f"{assign_type} {assign_to} = {cmd};"
+                else:
+                    cmd = f"{assign_to} = {cmd};"
+
+        return cmd
