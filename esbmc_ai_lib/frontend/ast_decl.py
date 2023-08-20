@@ -184,14 +184,22 @@ class TypeDeclaration(Declaration):
         type_name: str = node_type.get_typedef_name()
         construct_type: TypeDeclaration.ConstructTypes
 
+        # Get the definition if it's a TYPE_REF.
+        kind: cindex.CursorKind = cursor.kind
+        if kind == cindex.CursorKind.TYPE_REF:
+            def_cursor: cindex.Cursor = cursor.get_definition()
+            kind = def_cursor.kind
+            name = def_cursor.spelling
+            type_name = ""
+
         # Check first if it's a typedef, if it is, then get information
         # from underlying type.
-        kind: cindex.CursorKind = cursor.kind
         if kind == cindex.CursorKind.TYPEDEF_DECL:
             underlying_type: cindex.Type = cursor.underlying_typedef_type
             decl_cursor: cindex.Cursor = underlying_type.get_declaration()
             kind = decl_cursor.kind
             name = decl_cursor.spelling
+            type_name = cursor.canonical.spelling
 
         if kind == cindex.CursorKind.STRUCT_DECL:
             construct_type = TypeDeclaration.ConstructTypes.STRUCT
