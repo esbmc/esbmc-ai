@@ -22,11 +22,12 @@ int main()
     $parameters_list;
 
     // Need to call old and new functions and compare results.
-    $function_call;
+    $function_call_old;
+
+    $function_call_new;
 
     // Check whether both functions produce the same output
-    $function_assert;
-    // assert(output1 == output2);
+    assert($function_assert_old == $function_assert_new);
 
     return 0;
 }
