@@ -3,14 +3,15 @@
 import os
 import sys
 from os import get_terminal_size
-from typing import Optional
+from typing import Iterable, Optional
 from typing_extensions import override
 from string import Template
-
-from clang.cindex import TranslationUnit
+from random import randint
 
 from esbmc_ai_lib.chat_response import json_to_base_messages
-from esbmc_ai_lib.frontend.ast_decl import InclusionDirective
+from esbmc_ai_lib.frontend.ast_decl import Declaration, TypeDeclaration
+from esbmc_ai_lib.frontend.esbmc_code_generator import ESBMCCodeGenerator
+from esbmc_ai_lib.esbmc_util import esbmc_load_source_code
 from .chat_command import ChatCommand
 from .. import config
 from ..base_chat_interface import ChatResponse
@@ -68,44 +69,127 @@ class OptimizeCodeCommand(ChatCommand):
             template_str: str = file.read()
         template: Template = Template(template=template_str)
 
-        # Get includes from both files, and include it
-        includes: set[InclusionDirective] = set(old_ast.get_include_directives())
-        includes.update(new_ast.get_include_directives())
+        def rename_append_declaration(ast: ast.ClangAST, append: str):
+            """Appends a string to all declarations related to the passed one in an AST"""
+            declarations: list[Declaration] = ast.get_all_decl()
+            for declaration in declarations:
+                ast.rename_declaration(
+                    declaration=declaration,
+                    new_name=declaration.name + append,
+                )
 
-        # Get source code of old and new functions.
-        old_source_code: str = old_ast.get_source_code(declaration=old_function)
-        new_source_code: str = new_ast.get_source_code(declaration=new_function)
+        # Rename all elements from each code by appending _old and _new to names.
+        rename_append_declaration(old_ast, "_old")
 
-        # Modify names of underlying cursor before generating source code.
-        # TODO Use rename function (when ready)
-        old_source_code = old_source_code.replace(
-            old_function.name, old_function.name + "_old", 1
+        # Update reference to old_function
+        old_fns: list[FunctionDeclaration] = old_ast.get_fn_decl()
+        for old_fn in old_fns:
+            if old_fn.name == old_function.name + "_old":
+                old_function = old_fn
+                break
+
+        # Rename new functions
+        rename_append_declaration(new_ast, "_new")
+
+        # Update reference to new_function
+        new_fns: list[FunctionDeclaration] = new_ast.get_fn_decl()
+        for new_fn in new_fns:
+            if new_fn.name == new_function.name + "_new":
+                new_function = new_fn
+                break
+
+        # Assume that if old_function and new_function are equal before the
+        # rename, they are equal after the rename, so no need to check
+        # old_ast and new_ast after the rename.
+
+        # Generate the code
+        code_gen_old: ESBMCCodeGenerator = ESBMCCodeGenerator(old_ast)
+        code_gen_new: ESBMCCodeGenerator = ESBMCCodeGenerator(new_ast)
+
+        # This Callable is used to record the primitive types that the parameters of each
+        # function take. They will be injected into the main method and supplied to
+        # both old and new function calls. Since they have the same function, they will
+        # generate the same code.
+        def primitive_assignemnt_old(decl: Declaration) -> str:
+            name: str = f"param_{decl.type_name}_{randint(a=0, b=99999)}"
+            statement: str = code_gen_old.statement_primitive_construct(
+                d=decl,
+                assign_to=name,
+                init=True,
+            )
+            decl_statements.append(statement)
+            decl_statement_names.append(name)
+
+            return name
+
+        def primitive_assignemnt_new(_: Declaration) -> str:
+            return decl_statement_names.pop(0)
+
+        # Generate parameters using same function call of __VERIFIER_nondet_X for primitives.
+        # The parameters will be inlined into the function.
+        decl_statements: list[str] = []
+        decl_statement_names: list[str] = []
+        fn_params_old: list[str] = []
+        fn_params_new: list[str] = []
+        for arg_old, arg_new in zip(old_function.args, new_function.args):
+            # Convert to type
+            assert arg_old.cursor and arg_new.cursor
+            arg_old_type: Optional[
+                TypeDeclaration
+            ] = old_ast._get_type_declaration_from_cursor(arg_old.cursor)
+            arg_new_type: Optional[
+                TypeDeclaration
+            ] = new_ast._get_type_declaration_from_cursor(arg_new.cursor)
+            assert arg_old_type and arg_new_type
+            # Create statements and save them.
+            statement_old = code_gen_old.statement_type_construct(
+                d=arg_old_type,
+                init=False,
+                primitive_assignment_fn=primitive_assignemnt_old,
+            )
+            fn_params_old.append(statement_old)
+            statement_new = code_gen_new.statement_type_construct(
+                d=arg_new_type,
+                init=False,
+                primitive_assignment_fn=primitive_assignemnt_new,
+            )
+            fn_params_new.append(statement_new)
+
+        # Generate the function call & arguments
+        old_params_src: str = code_gen_old.statement_function_call(
+            fn=old_function,
+            assign_to="old_fn_result",
+            params=fn_params_old,
+            init=True,
         )
-        new_source_code = new_source_code.replace(
-            new_function.name, new_function.name + "_new", 1
+        new_params_src: str = code_gen_new.statement_function_call(
+            fn=new_function,
+            assign_to="new_fn_result",
+            params=fn_params_new,
+            init=True,
         )
-
-        # TODO Add global scope variables that old and new functions use.
-        # TODO Global scope variables will need to be renamed with new and old appended to their
-        # names.
-
-        # TODO build parameter list
 
         script: str = template.substitute(
-            function_old=old_source_code,
-            function_new=new_source_code,
-            includes="\n".join([str(include) for include in includes]),
+            function_old=old_ast.source_code,
+            function_new=new_ast.source_code,
+            parameters_list="\n".join(decl_statements),
+            function_call_old=old_params_src,
+            function_call_new=new_params_src,
+            function_assert_old="old_fn_result",
+            function_assert_new="new_fn_result",
         )
 
         return script
 
-    def check_function_equivalence(
+    def check_function_pequivalence(
         self,
         original_source_code: str,
         new_source_code: str,
         function_name: str,
     ) -> bool:
-        """Function equivalence checking"""
+        """Function partial equivalence checking. Checks if the `function_name`
+        function exists in `original_source_code` and `new_source_code`. Then,
+        builds a comparison script and checks it with ESBMC."""
 
         original_ast: ast.ClangAST = ast.ClangAST(
             file_path="old.c",
@@ -118,35 +202,39 @@ class OptimizeCodeCommand(ChatCommand):
         )
 
         # Get list of function types.
-        orig_functions: set[FunctionDeclaration] = set(original_ast.get_fn_decl())
-        new_functions: set[FunctionDeclaration] = set(new_ast.get_fn_decl())
+        # TODO: Need to double check that set needs to be used instead of list here
+        # as the list may return duplicates.
+        old_functions: list[FunctionDeclaration] = original_ast.get_fn_decl()
+        new_functions: list[FunctionDeclaration] = new_ast.get_fn_decl()
 
         # Need to ensure that the functions have the same composition:
+        def get_function_from_collection(
+            function_name: str,
+            functions: Iterable[FunctionDeclaration],
+        ) -> Optional[FunctionDeclaration]:
+            for fn in functions:
+                if fn.name == function_name:
+                    return fn
+            return None
 
         # First get original function declaration from source code.
-        old_function: Optional[FunctionDeclaration] = None
-        for fn in orig_functions:
-            if fn.name == function_name:
-                old_function = fn
-                break
+        old_function: Optional[FunctionDeclaration] = get_function_from_collection(
+            function_name=function_name,
+            functions=old_functions,
+        )
+
+        if old_function is None:
+            return False
 
         # Check that the new functions set also has this function. The equivalence of
         # function declarations will ensure that args are also checked.
-        if old_function is None or old_function not in new_functions:
-            return False
-
-        # Get new function
         new_function: Optional[FunctionDeclaration] = None
         for fn in new_functions:
-            # The old function and new function are identical, except they have different
-            # underlying cursors.
-            if fn == old_function:
+            if old_function.is_equivalent(fn):
                 new_function = fn
-                break
 
         if new_function is None:
-            # TODO handle properly
-            raise Exception()
+            return False
 
         esbmc_script: str = self._build_comparison_script(
             old_ast=original_ast,
@@ -159,14 +247,16 @@ class OptimizeCodeCommand(ChatCommand):
         save_path: str = os.path.join(
             config.temp_file_dir, os.path.basename(self.eq_script_path)
         )
-        with open(save_path, "w") as file:
-            file.write(esbmc_script)
 
-        # TODO Remove me
-        print(esbmc_script)
-        exit(0)
+        # Ignore ESBMC stdout and stderr
+        esbmc_exit_code, _, _ = esbmc_load_source_code(
+            file_path=save_path,
+            source_code=esbmc_script,
+            esbmc_params=config.esbmc_params,
+            auto_clean=config.temp_auto_clean,
+        )
 
-        return True
+        return esbmc_exit_code == 0
 
     @override
     def execute(
@@ -218,7 +308,7 @@ class OptimizeCodeCommand(ChatCommand):
                 # Check equivalence
                 # TODO Get response.message.content code extracted
                 # using the method of solution generation.
-                equal: bool = self.check_function_equivalence(
+                equal: bool = self.check_function_pequivalence(
                     original_source_code=source_code,
                     new_source_code=response.message.content,
                     function_name=fn_name,
