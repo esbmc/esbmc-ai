@@ -185,7 +185,7 @@ class ClangAST(object):
         return functions
 
     def get_type_decl(self) -> list[TypeDeclaration]:
-        typedefs: list[TypeDeclaration] = []
+        type_declarations: list[TypeDeclaration] = []
         node: cindex.Cursor
         for node in self.root.get_children():
             kind: cindex.CursorKind = node.kind
@@ -200,10 +200,27 @@ class ClangAST(object):
                     kind == cindex.CursorKind.STRUCT_DECL
                     or kind == cindex.CursorKind.UNION_DECL
                     or kind == cindex.CursorKind.ENUM_DECL
-                    or kind == cindex.CursorKind.TYPEDEF_DECL
                 )
             ):
-                typedefs.append(TypeDeclaration.from_cursor(node))
+                type_declarations.append(TypeDeclaration.from_cursor(node))
+
+        return type_declarations
+
+    def get_typedef_decl(self) -> list[TypedefDeclaration]:
+        typedefs: list[TypedefDeclaration] = []
+        node: cindex.Cursor
+        for node in self.root.get_children():
+            kind: cindex.CursorKind = node.kind
+            node_file: str = node.location.file.name
+            if (
+                kind.is_declaration()
+                # NOTE StorageClass.INVALID for some reason is what works here instead of NONE.
+                # This may be a bug that's fixed in future versions of libclang.
+                and node_file == self.file_path
+                and node.storage_class == cindex.StorageClass.INVALID
+                and kind == cindex.CursorKind.TYPEDEF_DECL
+            ):
+                typedefs.append(TypedefDeclaration.from_cursor(node))
 
         return typedefs
 
@@ -235,6 +252,7 @@ class ClangAST(object):
         declarations: list[Declaration] = []
         declarations.extend(self.get_fn_decl())
         declarations.extend(self.get_type_decl())
+        declarations.extend(self.get_typedef_decl())
         declarations.extend(self.get_variable_decl())
         # TODO Make sure no clones.
         # TODO add more...
