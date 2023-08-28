@@ -30,6 +30,7 @@ class Declaration(object):
 
     def is_equivalent(self, other: object) -> bool:
         """Checks if this is the same declaration as `other`, but not location."""
+        # TODO Remove me
         return (
             isinstance(other, Declaration)
             and self.name == other.name
@@ -67,12 +68,13 @@ class Declaration(object):
         # Dont compare the cursor...
         attributes_1 = self.__dict__.copy()
         del attributes_1["cursor"]
-        attributes_2 = self.__dict__.copy()
+        attributes_2 = __value.__dict__.copy()
         del attributes_2["cursor"]
 
-        return tuple(sorted(attributes_1.items())) == tuple(
-            sorted(attributes_2.items())
-        )
+        compare_1 = tuple(sorted(attributes_1.items()))
+        compare_2 = tuple(sorted(attributes_2.items()))
+
+        return compare_1 == compare_2
 
     def _get_attr_hashes(self, attributes: dict) -> int:
         assert id(attributes) != id(
@@ -144,8 +146,7 @@ class TypeDeclaration(Declaration):
     """Represents a type declaration. The following fields declare the type of declaration
     that this object is:
     * The type_name will be the typedef name assigned.
-    * The name will be the struct/union name assigned.
-    * The is_union shows if this is a union instead of a struct."""
+    * The name will be the struct/union name assigned."""
 
     class ConstructTypes(Enum):
         STRUCT = 0
@@ -180,9 +181,9 @@ class TypeDeclaration(Declaration):
     @override
     def from_cursor(cls, cursor: Cursor) -> "TypeDeclaration":
         node_type: cindex.Type = cursor.type
-        name: str = cursor.spelling
         type_name: str = node_type.get_typedef_name()
-        construct_type: TypeDeclaration.ConstructTypes
+
+        name: str = TypeDeclaration._parse_name_from_construct_cursor(cursor)
 
         # Get the definition if it's a TYPE_REF.
         kind: cindex.CursorKind = cursor.kind
@@ -192,15 +193,7 @@ class TypeDeclaration(Declaration):
             name = def_cursor.spelling
             type_name = ""
 
-        # Check first if it's a typedef, if it is, then get information
-        # from underlying type.
-        if kind == cindex.CursorKind.TYPEDEF_DECL:
-            underlying_type: cindex.Type = cursor.underlying_typedef_type
-            decl_cursor: cindex.Cursor = underlying_type.get_declaration()
-            kind = decl_cursor.kind
-            name = decl_cursor.spelling
-            type_name = cursor.canonical.spelling
-
+        construct_type: TypeDeclaration.ConstructTypes
         if kind == cindex.CursorKind.STRUCT_DECL:
             construct_type = TypeDeclaration.ConstructTypes.STRUCT
         elif kind == cindex.CursorKind.UNION_DECL:
@@ -210,8 +203,8 @@ class TypeDeclaration(Declaration):
         else:
             raise ValueError(f'Unkown type construct (tag): "{kind}" "{name}"')
 
-        elements: list[Declaration] = []
         # Get Elements
+        elements: list[Declaration] = []
         element: Cursor
         for element in cursor.get_children():
             elements.append(Declaration.from_cursor(element.get_definition()))
@@ -224,8 +217,23 @@ class TypeDeclaration(Declaration):
             cursor=cursor,
         )
 
+    @classmethod
+    def _parse_name_from_construct_cursor(cls, cursor: cindex.Cursor) -> str:
+        """Parses the tokens of a construct (struct/enum/union) to extract the
+        struct name. The cursor needs to be pointing to that struct. If the
+        name returned is empty, then there is no name associated with this struct."""
+        for token in cursor.get_tokens():
+            if token.kind == cindex.TokenKind.IDENTIFIER:
+                return str(token.spelling)
+            elif token.kind == cindex.TokenKind.PUNCTUATION:
+                # TokenKind.PUNCTUATION is the opening brace, if that is
+                # encountered, then the struct doesn't have an identifier.
+                return ""
+        return ""
+
     def is_anonymous(self) -> bool:
         """If the type has no name associated, it is anonymous."""
+        # TODO: in C this is not what anonymous structs are. Need to remove this method.
         return len(self.name) == 0
 
     def is_typedef(self) -> bool:
@@ -281,6 +289,59 @@ class TypeDeclaration(Declaration):
             + (" {" + elements_string if len(elements_string) > 0 else " {")
             + "}"
         )
+
+
+class TypedefDeclaration(Declaration):
+    """Typedef declarations define the following fields as such:
+    * `name`: Name of the typedef.
+    * `type_name`: Always blank.
+    * `underlying_type`: The underlying TypeDeclaration that the Typedef
+    encompasses.
+
+    In the case of anonymous structs (etc.), the type_name will be blank."""
+
+    def __init__(
+        self,
+        name: str,
+        type_name: str,
+        underlying_type: TypeDeclaration,
+        cursor: Optional[Cursor] = None,
+    ) -> None:
+        super().__init__(name, type_name, cursor)
+
+        self.underlying_type: TypeDeclaration = underlying_type
+
+    @classmethod
+    @override
+    def from_cursor(cls, cursor: Cursor) -> "TypedefDeclaration":
+        kind: cindex.CursorKind = cursor.kind
+        if kind != cindex.CursorKind.TYPEDEF_DECL:
+            raise ValueError(
+                f"cursor kind is not a TYPEDEF_DECL: {cursor.spelling} {cursor.kind}"
+            )
+
+        underlying_type: cindex.Type = cursor.underlying_typedef_type
+        decl_cursor: cindex.Cursor = underlying_type.get_declaration()
+        underlying_type_decl = TypeDeclaration.from_cursor(decl_cursor)
+
+        return TypedefDeclaration(
+            name=cursor.spelling,
+            type_name="",
+            underlying_type=underlying_type_decl,
+            cursor=cursor,
+        )
+
+    @override
+    def __eq__(self, __value: object) -> bool:
+        return isinstance(__value, TypedefDeclaration) and super().__eq__(__value)
+
+    @override
+    def __hash__(self):
+        return self._get_attr_hashes(self.__dict__.copy())
+
+    @override
+    def __str__(self) -> str:
+        return f"typedef ({self.name}/{self.type_name}) {self.underlying_type}"
 
 
 class PreProcessingDirective(object):
