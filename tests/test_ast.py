@@ -2,7 +2,11 @@
 
 import esbmc_ai_lib.frontend.ast as ast
 from esbmc_ai_lib.frontend.ast import ClangAST, FunctionDeclaration, Declaration
-from esbmc_ai_lib.frontend.ast_decl import InclusionDirective, TypeDeclaration
+from esbmc_ai_lib.frontend.ast_decl import (
+    InclusionDirective,
+    TypeDeclaration,
+    TypedefDeclaration,
+)
 
 
 def test_get_source_code() -> None:
@@ -114,20 +118,11 @@ def test_get_type_decl() -> None:
     int value;
 };
 
-typedef struct linear LinearTypeDef;
-
 typedef struct
 {
     int x;
     int y;
 } Point;
-
-Point a;
-Point *b;
-
-int c;
-
-char *d;
 
 typedef enum Types
 {
@@ -153,25 +148,117 @@ enum extra { A, B, C};
 
 typedef enum extra ExtraEnum;"""
 
+    answers: list = [
+        TypeDeclaration(
+            name="linear",
+            type_name="",
+            construct_type=TypeDeclaration.ConstructTypes.STRUCT,
+            elements=[Declaration("value", "int")],
+        ),
+        TypeDeclaration(
+            name="",
+            type_name="",
+            construct_type=TypeDeclaration.ConstructTypes.STRUCT,
+            elements=[Declaration("x", "int"), Declaration("y", "int")],
+        ),
+        TypeDeclaration(
+            name="Types",
+            type_name="",
+            construct_type=TypeDeclaration.ConstructTypes.ENUM,
+            elements=[
+                Declaration("ONE", "int"),
+                Declaration("TWO", "int"),
+                Declaration("THREE", "int"),
+            ],
+        ),
+        TypeDeclaration(
+            name="Combines",
+            type_name="",
+            construct_type=TypeDeclaration.ConstructTypes.UNION,
+            elements=[
+                Declaration(name="a", type_name="int"),
+                Declaration(name="b", type_name="int"),
+                Declaration(name="c", type_name="int"),
+            ],
+        ),
+    ]
+
     ast: ClangAST = ClangAST("test.c", source_code)
     types: list[TypeDeclaration] = ast.get_type_decl()
-    types_str: list[str] = [str(t) for t in types]
 
-    assert types_str[0] == "struct linear {value: int}"
-    assert (
-        types_str[1]
-        == "typedef (LinearTypeDef) struct linear {struct linear: struct linear}"
-    )
-    assert types_str[2] == "Point {x: int, y: int}"
-    assert types_str[3] == "typedef (Point) Point {Point: Point}"
-    assert types_str[4] == "enum Types {ONE: int, TWO: int, THREE: int}"
-    assert types_str[5] == "typedef (Typest) enum Types {Types: enum Types}"
-    assert types_str[6] == "union Combines {a: int, b: int, c: int}"
-    assert types_str[6] == "union Combines {a: int, b: int, c: int}"
-    assert (
-        types_str[7]
-        == "typedef (CombinesTypeDef) union Combines {union Combines: union Combines}"
-    )
+    for type_declaration, answer in zip(types, answers):
+        assert (
+            type_declaration == answer
+        ), f'not equal: "{type_declaration}" and "{answer}"'
+
+
+def test_get_typedef_decl() -> None:
+    source_code = """struct linear
+{
+    int value;
+};
+
+typedef struct linear LinearTypeDef;
+
+typedef struct
+{
+    int x;
+    int y;
+} Point;
+
+union Combines
+{
+    int a;
+    int b;
+    int c;
+};
+
+typedef union Combines CombinesTypeDef;"""
+
+    answers: list[TypedefDeclaration] = [
+        TypedefDeclaration(
+            name="LinearTypeDef",
+            type_name="",
+            underlying_type=TypeDeclaration(
+                name="linear",
+                type_name="",
+                construct_type=TypeDeclaration.ConstructTypes.STRUCT,
+                elements=[Declaration("value", "int")],
+            ),
+        ),
+        TypedefDeclaration(
+            name="Point",
+            type_name="",
+            underlying_type=TypeDeclaration(
+                name="",
+                type_name="",
+                construct_type=TypeDeclaration.ConstructTypes.STRUCT,
+                elements=[Declaration("x", "int"), Declaration("y", "int")],
+            ),
+        ),
+        TypedefDeclaration(
+            name="CombinesTypeDef",
+            type_name="",
+            underlying_type=TypeDeclaration(
+                name="Combines",
+                type_name="",
+                construct_type=TypeDeclaration.ConstructTypes.UNION,
+                elements=[
+                    Declaration(name="a", type_name="int"),
+                    Declaration(name="b", type_name="int"),
+                    Declaration(name="c", type_name="int"),
+                ],
+            ),
+        ),
+    ]
+
+    ast: ClangAST = ClangAST("test.c", source_code)
+    typedefs: list[TypedefDeclaration] = ast.get_typedef_decl()
+
+    print()
+
+    for typedef, answer in zip(typedefs, answers):
+        assert typedef == answer, f'not equal: "{typedef}" and "{answer}"'
 
 
 def test_get_variable_decl() -> None:
@@ -193,13 +280,193 @@ float f = 0.1f;"""
 
 
 def test_get_include_directives() -> None:
-    source_code: str = """#include <assert.h>
+    source_code: str = """#include "assert.h"
 #include <stdlib.h>"""
 
-    ast: ClangAST = ClangAST("test.c", source_code)
+    ast: ClangAST = ClangAST(file_path="test.c", source_code=source_code)
     includes: list[InclusionDirective] = ast.get_include_directives()
+
+    assert (
+        len(includes) == 2
+    ), "Could not detect all includes. Make sure that libc is installed (or gcc)."
+
     includes[0].path = "assert.h"
     includes[1].path = "stdlib.h"
 
     assert str(includes[0]) == '#include "assert.h"'
     assert str(includes[1]) == '#include "stdlib.h"'
+
+
+def test_get_references_variables() -> None:
+    source_code: str = """int a, b;
+int main(int argc, char**argv) {
+    a = 1;
+    b = 2;
+    return 0;
+}"""
+
+    ast: ClangAST = ClangAST("test.c", source_code)
+    variables: list[Declaration] = ast.get_variable_decl()
+
+    answers: list = [
+        {
+            "name": "a",
+            "type_name": "int",
+        },
+        {
+            "name": "b",
+            "type_name": "int",
+        },
+    ]
+
+    for variable, answer in zip(variables, answers):
+        assert variable.name == answer["name"]
+        assert variable.type_name == answer["type_name"]
+
+
+# TODO
+# def test_get_references_functions() -> None:
+#     pass
+
+# TODO
+# def test_get_references_types() -> None:
+#     pass
+
+
+def test_rename_function() -> None:
+    source_code: str = """int a, b;
+
+int add() {
+    return a + b;
+}
+
+int sub() {
+    return a - b;
+}
+
+int main(int argc, char**argv) {
+    a = 1;
+    b = 2;
+    add();
+    sub();
+    add();
+    return 0;
+}"""
+
+    ast: ClangAST = ClangAST("test.c", source_code)
+    functions: list[FunctionDeclaration] = ast.get_fn_decl()
+
+
+# TODO
+# def test_rename_type() -> None:
+#     pass
+
+
+def test_rename_typedef() -> None:
+    source_code: str = """
+struct Point_t
+{
+    int x, y;
+};
+
+typedef struct Point_t Point;
+
+typedef struct {
+    float radius;
+} Circle;"""
+
+    answer: str = """
+struct Point_t
+{
+    int x, y;
+};
+
+typedef struct Point_t_renamed Point;
+
+typedef struct {
+    float radius;
+} Circle_renamed;"""
+
+    ast: ClangAST = ClangAST("test.c", source_code)
+    typedefs: list[TypedefDeclaration] = ast.get_typedef_decl()
+
+    print("Found total typedefs:", len(typedefs))
+
+    for typedef in typedefs:
+        ast.rename_declaration(typedef, typedef.name + "_renamed")
+
+    assert ast.source_code == answer
+
+
+def test_rename_global_variable() -> None:
+    source_code: str = """#include <assert.h>
+
+struct Point_t
+{
+    int x, y;
+};
+
+typedef struct Point_t Point;
+
+int a, b = 0;
+
+int add_point(struct Point_t p)
+{
+    return p.x + p.y;
+}
+
+int add(int val1, int val2)
+{
+    return val1 + val2;
+}
+
+int main()
+{
+    a = add(2, 2);
+    b = add(6, 0);
+
+    struct Point_t p1 = {a, b};
+    a = add_point(p1);
+
+    assert(a == 9);
+}"""
+
+    answer: str = """#include <assert.h>
+
+struct Point_t
+{
+    int x, y;
+};
+
+typedef struct Point_t Point;
+
+int a_renamed, b_renamed = 0;
+
+int add_point(struct Point_t p)
+{
+    return p.x + p.y;
+}
+
+int add(int val1, int val2)
+{
+    return val1 + val2;
+}
+
+int main()
+{
+    a_renamed = add(2, 2);
+    b_renamed = add(6, 0);
+
+    struct Point_t p1 = {a_renamed, b_renamed};
+    a_renamed = add_point(p1);
+
+    assert(a_renamed == 9);
+}"""
+
+    ast: ClangAST = ClangAST("test.c", source_code)
+    variables: list[Declaration] = ast.get_variable_decl()
+
+    for variable in variables:
+        ast.rename_declaration(variable, variable.name + "_renamed")
+
+    assert ast.source_code == answer
