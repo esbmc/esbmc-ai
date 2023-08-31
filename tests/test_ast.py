@@ -322,13 +322,12 @@ int main(int argc, char**argv) {
         assert variable.type_name == answer["type_name"]
 
 
-# TODO
-# def test_get_references_functions() -> None:
-#     pass
+def test_get_references_functions() -> None:
+    assert False, "Not implemented"
 
-# TODO
-# def test_get_references_types() -> None:
-#     pass
+
+def test_get_references_types() -> None:
+    assert False, "Not implemented"
 
 
 def test_rename_function() -> None:
@@ -351,13 +350,36 @@ int main(int argc, char**argv) {
     return 0;
 }"""
 
+    answer: str = """int a, b;
+
+int add_renamed() {
+    return a + b;
+}
+
+int sub_renamed() {
+    return a - b;
+}
+
+int main_renamed(int argc, char**argv) {
+    a = 1;
+    b = 2;
+    add_renamed();
+    sub_renamed();
+    add_renamed();
+    return 0;
+}"""
+
     ast: ClangAST = ClangAST("test.c", source_code)
     functions: list[FunctionDeclaration] = ast.get_fn_decl()
 
+    for fn in functions:
+        ast.rename_declaration(fn, fn.name + "_renamed")
 
-# TODO
-# def test_rename_type() -> None:
-#     pass
+    assert ast.source_code == answer
+
+
+def test_rename_type() -> None:
+    assert False, "Not implemented..."
 
 
 def test_rename_typedef() -> None:
