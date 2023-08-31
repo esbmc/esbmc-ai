@@ -255,8 +255,6 @@ typedef union Combines CombinesTypeDef;"""
     ast: ClangAST = ClangAST("test.c", source_code)
     typedefs: list[TypedefDeclaration] = ast.get_typedef_decl()
 
-    print()
-
     for typedef, answer in zip(typedefs, answers):
         assert typedef == answer, f'not equal: "{typedef}" and "{answer}"'
 
