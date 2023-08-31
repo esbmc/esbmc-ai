@@ -341,7 +341,7 @@ class TypedefDeclaration(Declaration):
 
     @override
     def __str__(self) -> str:
-        return f"typedef ({self.name}/{self.type_name}) {self.underlying_type}"
+        return f"typedef ({self.name}) {self.underlying_type}"
 
 
 class PreProcessingDirective(object):
