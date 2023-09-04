@@ -279,8 +279,11 @@ def main() -> None:
     printv("Reading source code...")
     print(f"Running ESBMC with {config.esbmc_params}\n")
 
+    # Cast to string (for language servers)
+    args.filename = str(args.filename)
+
     # Read source code
-    with open(get_main_source_file_path(), mode="r") as file:
+    with open(args.filename, mode="r") as file:
         # Add the main source file to the solution explorer.
         set_main_source_file(SourceFile(args.filename, file.read()))
 
