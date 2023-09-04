@@ -52,7 +52,15 @@
         },
         { "role": "AI", "content": "OK" }
       ],
-      "initial": "Optimize the function \"%s\". Reoply with the entire source file back."
+      "initial": "Optimize the function \"%s\". Reoply with the entire source file back.",
+      "esbmc_params": [
+        "--incremental-bmc",
+        "--no-bounds-check",
+        "--no-pointer-check",
+        "--no-div-by-zero-check",
+        "--max-k-step",
+        "10"
+      ]
     }
   }
 }

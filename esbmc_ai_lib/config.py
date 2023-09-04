@@ -48,6 +48,13 @@ chat_prompt_user_mode: ChatPromptSettings
 chat_prompt_generator_mode: ChatPromptSettings
 chat_prompt_optimize_code: ChatPromptSettings
 
+esbmc_params_optimize_code: list[str] = [
+    "--incremental-bmc",
+    "--no-bounds-check",
+    "--no-pointer-check",
+    "--no-div-by-zero-check",
+]
+
 
 def _load_custom_ai(config: dict) -> None:
     ai_custom: dict = config
@@ -235,6 +242,13 @@ def load_config(file_path: str) -> None:
         system_messages=config_file["chat_modes"]["optimize_code"]["system"],
         initial_prompt=config_file["chat_modes"]["optimize_code"]["initial"],
         temperature=config_file["chat_modes"]["optimize_code"]["temperature"],
+    )
+
+    global esbmc_params_optimize_code
+    esbmc_params_optimize_code, _ = _load_config_value(
+        config_file["chat_modes"]["optimize_code"],
+        "esbmc_params",
+        esbmc_params_optimize_code,
     )
 
 
