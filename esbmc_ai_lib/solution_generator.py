@@ -55,12 +55,10 @@ class SolutionGenerator(BaseChatInterface):
         # Resets the conversation - cannot summarize code
         self.messages = self.protected_messages.copy()
 
-    def generate_solution(self) -> tuple[str, FinishReason]:
-        response: ChatResponse = self.send_message(self.initial_prompt, False)
-        solution: str = response.message.content
-
-        # Strip the source code of any leftover text as sometimes the AI model
-        # will generate text and formatting despite being told not to.
+    @classmethod
+    def get_code_from_solution(cls, solution: str) -> str:
+        """Strip the source code of any leftover text as sometimes the AI model
+        will generate text and formatting despite being told not to."""
         try:
             code_start: int = solution.index("```") + 3
             # Remove up until the new line, because usually there's a language
@@ -70,5 +68,13 @@ class SolutionGenerator(BaseChatInterface):
             solution = solution[code_start:code_end]
         except ValueError:
             pass
+        finally:
+            return solution
+
+    def generate_solution(self) -> tuple[str, FinishReason]:
+        response: ChatResponse = self.send_message(self.initial_prompt, False)
+        solution: str = response.message.content
+
+        solution = SolutionGenerator.get_code_from_solution(solution)
 
         return solution, response.finish_reason
