@@ -22,7 +22,7 @@ from esbmc_ai_lib.commands import (
     HelpCommand,
     ExitCommand,
     OptimizeCodeCommand,
-    VerifyCodeCommand,
+    # VerifyCodeCommand,
 )
 
 from esbmc_ai_lib.loading_widget import LoadingWidget, create_loading_widget
@@ -38,7 +38,7 @@ command_names: list[str]
 help_command: HelpCommand = HelpCommand()
 fix_code_command: FixCodeCommand = FixCodeCommand()
 optimize_code_command: OptimizeCodeCommand = OptimizeCodeCommand()
-verify_code_command: VerifyCodeCommand = VerifyCodeCommand()
+# verify_code_command: VerifyCodeCommand = VerifyCodeCommand()
 exit_command: ExitCommand = ExitCommand()
 
 chat: UserChat
@@ -102,12 +102,6 @@ def check_health() -> None:
         sys.exit(3)
 
 
-def get_src(path: str) -> str:
-    with open(path, mode="r") as file:
-        content = file.read()
-        return str(content)
-
-
 def print_assistant_response(
     chat: UserChat,
     response: ChatResponse,
@@ -133,7 +127,7 @@ def init_commands_list() -> None:
             exit_command,
             fix_code_command,
             optimize_code_command,
-            verify_code_command,
+            # verify_code_command,
         ]
     )
     help_command.set_commands(commands)
@@ -150,8 +144,7 @@ def init_commands() -> None:
 
     # Let the AI model know about the corrected code.
     fix_code_command.on_solution_signal.add_listener(chat.set_solution)
-    fix_code_command.on_solution_signal.add_listener(verify_code_command.set_solution)
-    pass
+    fix_code_command.on_solution_signal.add_listener(optimize_code_command.set_solution)
 
 
 def _run_command_mode(
@@ -172,8 +165,8 @@ def _run_command_mode(
             sys.exit(1)
         else:
             print(solution)
-    elif command == verify_code_command:
-        raise NotImplementedError()
+    # elif command == verify_code_command:
+    #     raise NotImplementedError()
     elif command == optimize_code_command:
         optimize_code_command.execute(
             file_path=get_main_source_file(),
@@ -279,7 +272,10 @@ def main() -> None:
     # Read the source code and esbmc output.
     printv("Reading source code...")
     print(f"Running ESBMC with {config.esbmc_params}\n")
-    source_code: str = get_src(get_main_source_file())
+
+    # Read source code
+    with open(get_main_source_file(), mode="r") as file:
+        source_code: str = file.read()
 
     anim.start("ESBMC is processing... Please Wait")
     exit_code, esbmc_output, esbmc_err_output = esbmc(
@@ -372,6 +368,7 @@ def main() -> None:
             command, command_args = parse_command(user_message)
             command = command[1:]  # Remove the /
             if command == fix_code_command.command_name:
+                # Fix Code command
                 print()
                 print("ESBMC-AI will generate a fix for the code...")
 
@@ -388,6 +385,7 @@ def main() -> None:
                     print(f"```\n{solution}\n```")
                 continue
             elif command == optimize_code_command.command_name:
+                # Optimize Code command
                 optimize_code_command.execute(
                     file_path=get_main_source_file(),
                     source_code=source_code,
