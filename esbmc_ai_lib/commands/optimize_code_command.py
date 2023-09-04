@@ -10,8 +10,10 @@ from random import randint
 
 from esbmc_ai_lib.chat_response import json_to_base_messages
 from esbmc_ai_lib.frontend.ast_decl import Declaration, TypeDeclaration
+from esbmc_ai_lib.frontend.c_types import is_primitive_type
 from esbmc_ai_lib.frontend.esbmc_code_generator import ESBMCCodeGenerator
 from esbmc_ai_lib.esbmc_util import esbmc_load_source_code
+from esbmc_ai_lib.solution_generator import SolutionGenerator
 from .chat_command import ChatCommand
 from .. import config
 from ..base_chat_interface import ChatResponse
@@ -27,7 +29,7 @@ class OptimizeCodeCommand(ChatCommand):
     def __init__(self) -> None:
         super().__init__(
             command_name="optimize-code",
-            help_message="Optimizes the code of a specific function or the entire file if a function is not specified. Usage: optimize-code [function_name]",
+            help_message="(EXPERIMENTAL) Optimizes the code of a specific function or the entire file if a function is not specified. Usage: optimize-code [function_name]",
         )
 
     def _get_functions_list(
@@ -111,7 +113,9 @@ class OptimizeCodeCommand(ChatCommand):
         # both old and new function calls. Since they have the same function, they will
         # generate the same code.
         def primitive_assignemnt_old(decl: Declaration) -> str:
-            name: str = f"param_{decl.type_name}_{randint(a=0, b=99999)}"
+            name: str = (
+                f"param_{decl.type_name.replace(' ', '')}_{randint(a=0, b=99999)}"
+            )
             statement: str = code_gen_old.statement_primitive_construct(
                 d=decl,
                 assign_to=name,
@@ -127,33 +131,49 @@ class OptimizeCodeCommand(ChatCommand):
 
         # Generate parameters using same function call of __VERIFIER_nondet_X for primitives.
         # The parameters will be inlined into the function.
+        # Declaration statements for the variables
         decl_statements: list[str] = []
+        # Name of the variables
         decl_statement_names: list[str] = []
+        # Params for each function
         fn_params_old: list[str] = []
         fn_params_new: list[str] = []
         for arg_old, arg_new in zip(old_function.args, new_function.args):
             # Convert to type
             assert arg_old.cursor and arg_new.cursor
-            arg_old_type: Optional[
-                TypeDeclaration
-            ] = old_ast._get_type_declaration_from_cursor(arg_old.cursor)
-            arg_new_type: Optional[
-                TypeDeclaration
-            ] = new_ast._get_type_declaration_from_cursor(arg_new.cursor)
-            assert arg_old_type and arg_new_type
-            # Create statements and save them.
-            statement_old = code_gen_old.statement_type_construct(
-                d=arg_old_type,
-                init=False,
-                primitive_assignment_fn=primitive_assignemnt_old,
-            )
-            fn_params_old.append(statement_old)
-            statement_new = code_gen_new.statement_type_construct(
-                d=arg_new_type,
-                init=False,
-                primitive_assignment_fn=primitive_assignemnt_new,
-            )
-            fn_params_new.append(statement_new)
+
+            if is_primitive_type(arg_old.type_name):
+                name: str = f"param_{arg_old.type_name.replace(' ', '')}_{randint(a=0, b=99999)}"
+                statement = code_gen_old.statement_primitive_construct(
+                    d=arg_old,
+                    assign_to=name,
+                    init=True,
+                )
+                fn_params_old.append(name)
+                fn_params_new.append(name)
+
+                decl_statements.append(statement)
+            else:
+                arg_old_type: Optional[
+                    TypeDeclaration
+                ] = old_ast._get_type_declaration_from_cursor(arg_old.cursor)
+                arg_new_type: Optional[
+                    TypeDeclaration
+                ] = new_ast._get_type_declaration_from_cursor(arg_new.cursor)
+                assert arg_old_type and arg_new_type
+                # Create statements and save them.
+                statement_old = code_gen_old.statement_type_construct(
+                    d=arg_old_type,
+                    init=False,
+                    primitive_assignment_fn=primitive_assignemnt_old,
+                )
+                fn_params_old.append(statement_old)
+                statement_new = code_gen_new.statement_type_construct(
+                    d=arg_new_type,
+                    init=False,
+                    primitive_assignment_fn=primitive_assignemnt_new,
+                )
+                fn_params_new.append(statement_new)
 
         # Generate the function call & arguments
         old_params_src: str = code_gen_old.statement_function_call(
@@ -243,7 +263,7 @@ class OptimizeCodeCommand(ChatCommand):
             new_function=new_function,
         )
 
-        # TODO Run script with ESBMC.
+        # Run script with ESBMC.
         save_path: str = os.path.join(
             config.temp_file_dir, os.path.basename(self.eq_script_path)
         )
@@ -252,7 +272,7 @@ class OptimizeCodeCommand(ChatCommand):
         esbmc_exit_code, _, _ = esbmc_load_source_code(
             file_path=save_path,
             source_code=esbmc_script,
-            esbmc_params=config.esbmc_params,
+            esbmc_params=config.esbmc_params_optimize_code,
             auto_clean=config.temp_auto_clean,
         )
 
@@ -300,24 +320,28 @@ class OptimizeCodeCommand(ChatCommand):
                     function_name=fn_name,
                 )
 
+                new_source_code: str = SolutionGenerator.get_code_from_solution(
+                    response.message.content
+                )
+
                 printvv(f"\nGeneration ({fn_name}):")
                 printvv("-" * get_terminal_size().columns)
-                printvv(response.message.content)
+                printvv(new_source_code)
                 printvv("-" * get_terminal_size().columns)
 
                 # Check equivalence
-                # TODO Get response.message.content code extracted
-                # using the method of solution generation.
                 equal: bool = self.check_function_pequivalence(
                     original_source_code=source_code,
-                    new_source_code=response.message.content,
+                    new_source_code=new_source_code,
                     function_name=fn_name,
                 )
 
-                # TODO Handle cases where all attempts are failed.
                 if equal:
                     new_source_code = response.message.content
                     break
+                elif attempt == max_retries - 1:
+                    print("Failed all attempts...")
+                    exit(1)
                 else:
                     print("Failed attempt", attempt)
 
