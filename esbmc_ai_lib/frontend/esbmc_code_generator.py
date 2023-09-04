@@ -6,6 +6,7 @@ import clang.cindex as cindex
 
 from .ast import ClangAST
 from .ast_decl import Declaration, TypeDeclaration, FunctionDeclaration
+from .c_types import is_primitive_type
 
 
 """Note about how `assign_to` and `init` work:
@@ -66,9 +67,6 @@ class ESBMCCodeGenerator(object):
     def __init__(self, ast: ClangAST) -> None:
         self.ast = ast
 
-    def is_primitive_type(self, type_name: str) -> bool:
-        return type_name in self._primitives_base_defaults.keys()
-
     def statement_primitive_construct(
         self,
         d: Declaration,
@@ -113,7 +111,7 @@ class ESBMCCodeGenerator(object):
         for element in d.elements:
             # Check if element is a primitive type. If not, it will need to be
             # further broken.
-            if self.is_primitive_type(element.type_name):
+            if is_primitive_type(element.type_name):
                 element_code: str
                 # Call primitive assignment function if available in order to
                 # assign a value. If not, then assign primitive using default
@@ -182,7 +180,7 @@ class ESBMCCodeGenerator(object):
                 assert arg.cursor
 
                 # Check if primitive type.
-                if self.is_primitive_type(arg.type_name):
+                if is_primitive_type(arg.type_name):
                     arg_cmds.append(self.statement_primitive_construct(arg))
                 else:
                     # Current cursor kind is CursorKind.PARAM_DECL, need to
