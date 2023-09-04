@@ -289,6 +289,9 @@ class OptimizeCodeCommand(ChatCommand):
 
         try:
             function_names = self._get_functions_list(clang_ast, function_names)
+            # Remove main method if it exists.
+            if "main" in function_names:
+                function_names.remove("main")
         except ValueError as e:
             print(e)
             sys.exit(1)
@@ -341,7 +344,7 @@ class OptimizeCodeCommand(ChatCommand):
                     break
                 elif attempt == max_retries - 1:
                     print("Failed all attempts...")
-                    exit(1)
+                    return
                 else:
                     print("Failed attempt", attempt)
 
