@@ -7,6 +7,8 @@ import clang.native
 import clang.cindex as cindex
 from clang.cindex import Config
 
+from esbmc_ai_lib.frontend.c_types import is_primitive_type
+
 from .ast_decl import *
 
 # Connect the Python API of Clang to the libclang.so file bundled in the libclang PyPI package.
@@ -270,7 +272,9 @@ class ClangAST(object):
         name: str = cursor.type.spelling
 
         # Remove the tag type (first word) which should be struct/enum/union.
-        name = name.split(" ", 1)[1]
+        if not is_primitive_type(name):
+            name = name.split(" ", 1)[1]
+
         d: Declaration = Declaration(
             name=name,
             type_name="",
@@ -282,8 +286,11 @@ class ClangAST(object):
         self, cursor: cindex.Cursor
     ) -> Optional[TypeDeclaration]:
         """Uses a cursor to construct a type declaration. The way it does this is
-        by getting type references of the cursor, then finding the declaration."""
-        # TODO
+        by getting type references of the cursor, then finding the declaration.
+
+        Note: Make sure the type is not primitive."""
+        # TODO Test me
+
         refs: list[Declaration] = self._get_type_references_by_cursor(cursor)
 
         for ref in refs:
