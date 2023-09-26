@@ -36,6 +36,7 @@ consecutive_prompt_delay: float = 20.0
 ai_model: AIModel = AIModels.GPT_3.value
 
 loading_hints: bool = False
+allow_successful: bool = False
 
 cfg_path: str = "./config.json"
 
@@ -212,6 +213,13 @@ def load_config(file_path: str) -> None:
         config_file,
         "temp_file_dir",
         temp_file_dir,
+    )
+
+    global allow_successful
+    allow_successful = _load_config_bool(
+        config_file,
+        "allow_successful",
+        False,
     )
 
     global loading_hints

@@ -2,6 +2,7 @@
   "ai_model": "gpt-3.5-turbo-16k",
   "ai_custom": {},
   "esbmc_path": "./esbmc",
+  "allow_successful": true,
   "esbmc_params": [
     "--interval-analysis",
     "--goto-unwind",
