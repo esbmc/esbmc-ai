@@ -3,7 +3,7 @@
 import os
 import sys
 from os import get_terminal_size
-from typing import Iterable, Optional
+from typing import Iterable, Optional, Tuple
 from typing_extensions import override
 from string import Template
 from random import randint
@@ -13,6 +13,7 @@ from esbmc_ai_lib.frontend.ast_decl import Declaration, TypeDeclaration
 from esbmc_ai_lib.frontend.c_types import is_primitive_type
 from esbmc_ai_lib.frontend.esbmc_code_generator import ESBMCCodeGenerator
 from esbmc_ai_lib.esbmc_util import esbmc_load_source_code
+from esbmc_ai_lib.msg_bus import Signal
 from esbmc_ai_lib.solution_generator import SolutionGenerator
 from .chat_command import ChatCommand
 from .. import config
@@ -31,6 +32,7 @@ class OptimizeCodeCommand(ChatCommand):
             command_name="optimize-code",
             help_message="(EXPERIMENTAL) Optimizes the code of a specific function or the entire file if a function is not specified. Usage: optimize-code [function_name]",
         )
+        self.on_solution_signal: Signal = Signal()
 
     def _get_functions_list(
         self,
@@ -280,8 +282,19 @@ class OptimizeCodeCommand(ChatCommand):
 
     @override
     def execute(
-        self, file_path: str, source_code: str, function_names: list[str]
-    ) -> None:
+        self,
+        file_path: str,
+        source_code: str,
+        function_names: list[str],
+    ) -> Tuple[bool, str]:
+        """Executes the Optimize Code command. The command takes the following inputs:
+        * file_path: The path of the source code file.
+        * source_code: The source code file contents.
+        * function_names: List of function names to optimize. Main is always excluded.
+
+        Returns a `Tuple[bool, str]` which is the flag if there was an error, and the
+        source code from the LLM.
+        """
         clang_ast: ast.ClangAST = ast.ClangAST(
             file_path=file_path,
             source_code=source_code,
@@ -323,7 +336,7 @@ class OptimizeCodeCommand(ChatCommand):
                     function_name=fn_name,
                 )
 
-                new_source_code: str = SolutionGenerator.get_code_from_solution(
+                optimized_source_code: str = SolutionGenerator.get_code_from_solution(
                     response.message.content
                 )
 
@@ -335,19 +348,17 @@ class OptimizeCodeCommand(ChatCommand):
                 # Check equivalence
                 equal: bool = self.check_function_pequivalence(
                     original_source_code=source_code,
-                    new_source_code=new_source_code,
+                    new_source_code=optimized_source_code,
                     function_name=fn_name,
                 )
 
                 if equal:
-                    new_source_code = response.message.content
+                    # If equal, then return with explanation.
+                    new_source_code = optimized_source_code
                     break
                 elif attempt == max_retries - 1:
-                    print("Failed all attempts...")
-                    return
+                    return True, "Failed all attempts..."
                 else:
                     print("Failed attempt", attempt)
 
-        print("\nOptimizations Completed:\n")
-        print(new_source_code)
-        print()
+        return False, new_source_code

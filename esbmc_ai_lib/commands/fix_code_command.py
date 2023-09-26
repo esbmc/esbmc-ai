@@ -2,6 +2,7 @@
 
 from os import get_terminal_size
 from time import sleep
+from typing import Tuple
 from typing_extensions import override
 from langchain.schema import AIMessage, HumanMessage
 
@@ -31,7 +32,9 @@ class FixCodeCommand(ChatCommand):
         self.anim = create_loading_widget()
 
     @override
-    def execute(self, file_name: str, source_code: str, esbmc_output: str):
+    def execute(
+        self, file_name: str, source_code: str, esbmc_output: str
+    ) -> Tuple[bool, str]:
         wait_time: int = int(config.consecutive_prompt_delay)
         # Create time left animation to show how much time left between API calls
         # This is done by creating a list of all the numbers to be displayed and

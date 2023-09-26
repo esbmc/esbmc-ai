@@ -10,11 +10,14 @@ from sys import stdout as terminal
 from time import sleep
 from itertools import cycle
 from threading import Thread
+from typing import Optional
+
+from esbmc_ai_lib import config
 
 
 class LoadingWidget(object):
     done: bool = False
-    thread: Thread
+    thread: Optional[Thread]
     loading_text: str
     animation: list[str]
     anim_speed: float
@@ -53,6 +56,8 @@ class LoadingWidget(object):
         terminal.flush()
 
     def start(self, text: str = "Please Wait") -> None:
+        if not config.loading_hints:
+            return
         self.done = False
         self.loading_text = text
         self.thread = Thread(target=self._animate)
@@ -62,7 +67,8 @@ class LoadingWidget(object):
     def stop(self) -> None:
         self.done = True
         # Block until end.
-        self.thread.join()
+        if self.thread:
+            self.thread.join()
 
 
 _widgets: list[LoadingWidget] = []

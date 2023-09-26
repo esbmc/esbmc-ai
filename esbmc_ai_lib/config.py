@@ -35,6 +35,9 @@ temp_file_dir: str = "."
 consecutive_prompt_delay: float = 20.0
 ai_model: AIModel = AIModels.GPT_3.value
 
+loading_hints: bool = False
+allow_successful: bool = False
+
 cfg_path: str = "./config.json"
 
 
@@ -146,6 +149,21 @@ def _load_config_value(
         return default, False
 
 
+def _load_config_bool(
+    config_file: dict,
+    name: str,
+    default: bool = False,
+) -> bool:
+    value, _ = _load_config_value(config_file, name, default)
+    if isinstance(value, bool):
+        return value
+    else:
+        raise TypeError(
+            f"Error: config invalid {name} value: {value} "
+            + "Make sure it is a bool value."
+        )
+
+
 def _load_config_real_number(
     config_file: dict, name: str, default: object = None
 ) -> Union[int, float]:
@@ -195,6 +213,20 @@ def load_config(file_path: str) -> None:
         config_file,
         "temp_file_dir",
         temp_file_dir,
+    )
+
+    global allow_successful
+    allow_successful = _load_config_bool(
+        config_file,
+        "allow_successful",
+        False,
+    )
+
+    global loading_hints
+    loading_hints = _load_config_bool(
+        config_file,
+        "loading_hints",
+        True,
     )
 
     # Load the custom ai configs.

@@ -2,6 +2,7 @@
   "ai_model": "gpt-3.5-turbo-16k",
   "ai_custom": {},
   "esbmc_path": "./esbmc",
+  "allow_successful": true,
   "esbmc_params": [
     "--interval-analysis",
     "--goto-unwind",
@@ -20,6 +21,7 @@
   "consecutive_prompt_delay": 20,
   "temp_auto_clean": false,
   "temp_file_dir": "./temp",
+  "loading_hints": true,
   "chat_modes": {
     "user_chat": {
       "temperature": 1.0,

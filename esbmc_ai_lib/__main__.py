@@ -155,6 +155,9 @@ def init_commands() -> None:
     fix_code_command.on_solution_signal.add_listener(chat.set_solution)
     fix_code_command.on_solution_signal.add_listener(update_solution)
 
+    optimize_code_command.on_solution_signal.add_listener(chat.set_solution)
+    optimize_code_command.on_solution_signal.add_listener(update_solution)
+
 
 def _run_command_mode(
     command: ChatCommand,
@@ -174,14 +177,15 @@ def _run_command_mode(
             sys.exit(1)
         else:
             print(solution)
-    # elif command == verify_code_command:
-    #     raise NotImplementedError()
     elif command == optimize_code_command:
-        optimize_code_command.execute(
+        error, solution = optimize_code_command.execute(
             file_path=get_main_source_file_path(),
             source_code=source_code,
             function_names=args,
         )
+
+        print(solution)
+        sys.exit(1 if error else 0)
     else:
         command.execute()
     sys.exit(0)
@@ -302,12 +306,13 @@ def main() -> None:
 
     # ESBMC will output 0 for verification success and 1 for verification
     # failed, if anything else gets thrown, it's an ESBMC error.
-    if exit_code == 0:
+    if not config.allow_successful and exit_code == 0:
         print("Success!")
         print(esbmc_output)
         sys.exit(0)
-    elif exit_code != 1:
+    elif exit_code != 0 and exit_code != 1:
         print(f"ESBMC exit code: {exit_code}")
+        print(f"ESBMC Output:\n\n{esbmc_err_output}")
         sys.exit(1)
 
     # Command mode: Check if command is called and call it.
@@ -396,11 +401,18 @@ def main() -> None:
                 continue
             elif command == optimize_code_command.command_name:
                 # Optimize Code command
-                optimize_code_command.execute(
+                error, solution = optimize_code_command.execute(
                     file_path=get_main_source_file_path(),
                     source_code=get_main_source_file().content,
                     function_names=command_args,
                 )
+
+                if error:
+                    # Print error
+                    print("\n" + solution + "\n")
+                else:
+                    print(f"\nOptimizations Completed:\n```c\n{solution}```\n")
+
                 continue
             else:
                 # Commands without parameters or returns are handled automatically.
