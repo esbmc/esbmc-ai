@@ -59,6 +59,19 @@ class UserChat(BaseChatInterface):
             message=AIMessage(content="Understood"), protected=True
         )
 
+    def set_optimized_solution(self, source_code: str) -> None:
+        self.solution = source_code
+        self.push_to_message_stack(
+            message=HumanMessage(
+                content=f"Here is the optimized code:\n\n{source_code}"
+            ),
+            protected=True,
+        )
+
+        self.push_to_message_stack(
+            message=AIMessage(content="Understood"), protected=True
+        )
+
     @override
     def compress_message_stack(self) -> None:
         """Uses ConversationSummaryMemory from Langchain to summarize the conversation of all the non-protected
