@@ -28,15 +28,6 @@ class Declaration(object):
             cursor=cursor,
         )
 
-    def is_equivalent(self, other: object) -> bool:
-        """Checks if this is the same declaration as `other`, but not location."""
-        # TODO Remove me
-        return (
-            isinstance(other, Declaration)
-            and self.name == other.name
-            and self.type_name == other.type_name
-        )
-
     @override
     def __str__(self) -> str:
         return self.name + ":" + self.type_name
@@ -108,17 +99,6 @@ class FunctionDeclaration(Declaration):
             args=[Declaration.from_cursor(arg) for arg in cursor.get_arguments()],
             cursor=cursor,
         )
-
-    @override
-    def is_equivalent(self, other: object) -> bool:
-        if not isinstance(other, FunctionDeclaration):
-            return False
-
-        args_equal: bool = True
-        for arg1, arg2 in zip(self.args, other.args):
-            args_equal &= arg1 == arg2
-
-        return args_equal and super().is_equivalent(other)
 
     @override
     def __eq__(self, __value: object) -> bool:
@@ -240,17 +220,6 @@ class TypeDeclaration(Declaration):
         """If the type has a typedef, the name will be the name of the original
         construct."""
         return len(self.type_name) > 0
-
-    @override
-    def is_equivalent(self, other: object) -> bool:
-        if not isinstance(other, TypeDeclaration):
-            return False
-
-        # Check elements
-        equal_elements: bool = True
-        for e1, e2 in zip(self.elements, other.elements):
-            equal_elements = equal_elements and e1.is_equivalent(e2)
-        return equal_elements and super().is_equivalent(other)
 
     @override
     def __eq__(self, __value: object) -> bool:
