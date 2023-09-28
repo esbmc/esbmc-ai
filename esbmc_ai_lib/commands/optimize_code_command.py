@@ -162,7 +162,9 @@ class OptimizeCodeCommand(ChatCommand):
                 arg_new_type: Optional[
                     TypeDeclaration
                 ] = new_ast._get_type_declaration_from_cursor(arg_new.cursor)
-                assert arg_old_type and arg_new_type
+                assert (
+                    arg_old_type and arg_new_type
+                ), f"Assert failed: {arg_old} or {arg_new}"
                 # Create statements and save them.
                 statement_old = code_gen_old.statement_type_construct(
                     d=arg_old_type,
@@ -229,21 +231,11 @@ class OptimizeCodeCommand(ChatCommand):
         old_functions: list[FunctionDeclaration] = original_ast.get_fn_decl()
         new_functions: list[FunctionDeclaration] = new_ast.get_fn_decl()
 
-        # Need to ensure that the functions have the same composition:
-        def get_function_from_collection(
-            function_name: str,
-            functions: Iterable[FunctionDeclaration],
-        ) -> Optional[FunctionDeclaration]:
-            for fn in functions:
-                if fn.name == function_name:
-                    return fn
-            return None
-
         # First get original function declaration from source code.
-        old_function: Optional[FunctionDeclaration] = get_function_from_collection(
-            function_name=function_name,
-            functions=old_functions,
-        )
+        old_function: Optional[FunctionDeclaration] = None
+        for fn in old_functions:
+            if fn.name == function_name:
+                old_function = fn
 
         if old_function is None:
             return False
@@ -252,10 +244,11 @@ class OptimizeCodeCommand(ChatCommand):
         # function declarations will ensure that args are also checked.
         new_function: Optional[FunctionDeclaration] = None
         for fn in new_functions:
-            if old_function.is_equivalent(fn):
+            if old_function == fn:
                 new_function = fn
 
         if new_function is None:
+            print(f"Error: Could not match new function to old one...")
             return False
 
         esbmc_script: str = self._build_comparison_script(
@@ -342,7 +335,7 @@ class OptimizeCodeCommand(ChatCommand):
 
                 printvv(f"\nGeneration ({fn_name}):")
                 printvv("-" * get_terminal_size().columns)
-                printvv(new_source_code)
+                printvv(optimized_source_code)
                 printvv("-" * get_terminal_size().columns)
 
                 # Check equivalence
