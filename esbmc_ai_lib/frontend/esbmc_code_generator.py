@@ -111,7 +111,7 @@ class ESBMCCodeGenerator(object):
         for element in d.elements:
             # Check if element is a primitive type. If not, it will need to be
             # further broken.
-            if is_primitive_type(element.type_name):
+            if is_primitive_type(element):
                 element_code: str
                 # Call primitive assignment function if available in order to
                 # assign a value. If not, then assign primitive using default
@@ -180,7 +180,7 @@ class ESBMCCodeGenerator(object):
                 assert arg.cursor
 
                 # Check if primitive type.
-                if is_primitive_type(arg.type_name):
+                if is_primitive_type(arg):
                     arg_cmds.append(self.statement_primitive_construct(arg))
                 else:
                     # Current cursor kind is CursorKind.PARAM_DECL, need to

@@ -1,3 +1,6 @@
+from esbmc_ai_lib.frontend.ast_decl import Declaration
+
+
 _primitives_base_defaults: list[str] = [
     # Bool
     "bool",
@@ -41,5 +44,12 @@ _primitives_base_defaults: list[str] = [
 """Assign the following values for each primitive data type."""
 
 
-def is_primitive_type(type_name: str) -> bool:
-    return type_name in _primitives_base_defaults
+def get_base_type(type_name: str) -> str:
+    type_name = type_name.replace("*", "")
+    type_name = type_name.replace("[]", "")
+    return type_name.strip()
+
+
+def is_primitive_type(d: Declaration) -> bool:
+    # Strip pointer and array info before checking if is primitive type.
+    return get_base_type(d.type_name) in _primitives_base_defaults

@@ -271,8 +271,10 @@ class ClangAST(object):
 
         name: str = cursor.type.spelling
 
-        # Remove the tag type (first word) which should be struct/enum/union.
-        if not is_primitive_type(name):
+        # Remove the "tag" type (first word) which should be struct/enum/union. Create a
+        # temp Declaration because is_primitive_type accepts declaration (but uses type_name)
+        # inside anyway.
+        if not is_primitive_type(Declaration("", name)):
             name = name.split(" ", 1)[1]
 
         d: Declaration = Declaration(
