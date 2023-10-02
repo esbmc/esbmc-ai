@@ -78,6 +78,10 @@ class Declaration(object):
     def __hash__(self):
         return self._get_attr_hashes(self.__dict__.copy())
 
+    def is_pointer_type(self) -> bool:
+        """Checks if the type name is a pointer type."""
+        return self.type_name.endswith(("*", "[]"))
+
 
 class FunctionDeclaration(Declaration):
     def __init__(
@@ -211,15 +215,15 @@ class TypeDeclaration(Declaration):
                 return ""
         return ""
 
-    def is_anonymous(self) -> bool:
-        """If the type has no name associated, it is anonymous."""
-        # TODO: in C this is not what anonymous structs are. Need to remove this method.
-        return len(self.name) == 0
-
     def is_typedef(self) -> bool:
         """If the type has a typedef, the name will be the name of the original
         construct."""
         return len(self.type_name) > 0
+
+    @override
+    def is_pointer_type(self) -> bool:
+        """Type declarations don't have pointers."""
+        return False
 
     @override
     def __eq__(self, __value: object) -> bool:
@@ -311,6 +315,11 @@ class TypedefDeclaration(Declaration):
     @override
     def __str__(self) -> str:
         return f"typedef ({self.name}) {self.underlying_type}"
+
+    @override
+    def is_pointer_type(self) -> bool:
+        """Typedef declarations are a type declaration so they don't have pointers."""
+        return False
 
 
 class PreProcessingDirective(object):
