@@ -45,9 +45,13 @@ _primitives_base_defaults: list[str] = [
 
 
 def get_base_type(type_name: str) -> str:
-    type_name = type_name.replace("*", "")
-    type_name = type_name.replace("[]", "")
-    return type_name.strip()
+    type_name = type_name.replace("*", "").replace("[]", "").strip()
+    # FIXME This is to get rid of modifiers such as const. But this REALLY needs to be replaced
+    # with tokenization because of the fact that such keywords can vary in position.
+    spl = type_name.split(" ")
+    if len(spl) > 1:
+        type_name = spl[1]
+    return type_name
 
 
 def is_primitive_type(d: Declaration) -> bool:
