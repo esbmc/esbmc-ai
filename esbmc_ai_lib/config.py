@@ -58,6 +58,11 @@ esbmc_params_optimize_code: list[str] = [
     "--no-div-by-zero-check",
 ]
 
+ocm_array_expansion: int
+"""Used for allocating continuous memory. Arrays and pointers will be initialized using this."""
+ocm_init_max_depth: int
+"""Max depth that structs will be initialized into, afterwards initializes with NULL."""
+
 
 def _load_custom_ai(config: dict) -> None:
     ai_custom: dict = config
@@ -227,6 +232,20 @@ def load_config(file_path: str) -> None:
         config_file,
         "loading_hints",
         True,
+    )
+
+    global ocm_array_expansion
+    ocm_array_expansion, _ = _load_config_value(
+        config_file=config_file["chat_modes"]["optimize_code"],
+        name="array_expansion",
+        default=20,
+    )
+
+    global ocm_init_max_depth
+    ocm_init_max_depth, _ = _load_config_value(
+        config_file=config_file["chat_modes"]["optimize_code"],
+        name="init_max_depth",
+        default=10,
     )
 
     # Load the custom ai configs.

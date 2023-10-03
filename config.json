@@ -63,10 +63,8 @@
         "--max-k-step",
         "10"
       ],
-      "array_expansion": {
-        "min": 0,
-        "max": 20
-      }
+      "array_expansion": 5,
+      "init_max_depth": 4
     }
   }
 }
