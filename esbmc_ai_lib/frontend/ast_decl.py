@@ -94,6 +94,16 @@ class FunctionDeclaration(Declaration):
         super().__init__(name, type_name, cursor=cursor)
         self.args: list[Declaration] = args
 
+    def returns_pointer(self) -> bool:
+        # Call the super method, because it checks the type_name which
+        # for function declarations is the return type.
+        return super().is_pointer_type()
+
+    @override
+    def is_pointer_type(self) -> bool:
+        "Functions cannot be pointers."
+        return False
+
     @override
     @classmethod
     def from_cursor(cls, cursor: Cursor) -> "FunctionDeclaration":
@@ -222,7 +232,7 @@ class TypeDeclaration(Declaration):
 
     @override
     def is_pointer_type(self) -> bool:
-        """Type declarations don't have pointers."""
+        """Type declarations cannot be pointers."""
         return False
 
     @override
