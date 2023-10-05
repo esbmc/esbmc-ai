@@ -1,6 +1,5 @@
 # Author: Yiannis Charalambous
 
-from os import get_terminal_size
 from time import sleep
 from typing import Tuple
 from typing_extensions import override
@@ -11,6 +10,7 @@ from esbmc_ai_lib.chat_response import (
     json_to_base_messages,
 )
 
+from esbmc_ai_lib.term import get_terminal_width
 
 from .chat_command import ChatCommand
 from .. import config
@@ -81,9 +81,9 @@ class FixCodeCommand(ChatCommand):
 
             # Print verbose lvl 2
             printvv("\nGeneration:")
-            printvv("-" * get_terminal_size().columns)
+            printvv("-" * get_terminal_width())
             printvv(response)
-            printvv("-" * get_terminal_size().columns)
+            printvv("-" * get_terminal_width())
             printvv("")
 
             # Pass to ESBMC, a workaround is used where the file is saved
@@ -98,10 +98,10 @@ class FixCodeCommand(ChatCommand):
             self.anim.stop()
 
             # Print verbose lvl 2
-            printvv("-" * get_terminal_size().columns)
+            printvv("-" * get_terminal_width())
             printvv(esbmc_output)
             printvv(esbmc_err_output)
-            printvv("-" * get_terminal_size().columns)
+            printvv("-" * get_terminal_width())
 
             if exit_code == 0:
                 self.on_solution_signal.emit(response)

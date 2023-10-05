@@ -2,12 +2,12 @@
 
 import os
 import sys
-from os import get_terminal_size
 from typing import Optional, Tuple
 from typing_extensions import override
 from string import Template
 from random import randint
 
+from esbmc_ai_lib.term import get_terminal_width
 from esbmc_ai_lib.chat_response import json_to_base_messages
 from esbmc_ai_lib.frontend.ast_decl import Declaration, TypeDeclaration
 from esbmc_ai_lib.frontend.c_types import is_primitive_type, get_base_type
@@ -389,9 +389,9 @@ class OptimizeCodeCommand(ChatCommand):
                 )
 
                 printvv(f"\nGeneration ({fn_name}):")
-                printvv("-" * get_terminal_size().columns)
+                printvv("-" * get_terminal_width())
                 printvv(optimized_source_code)
-                printvv("-" * get_terminal_size().columns)
+                printvv("-" * get_terminal_width())
 
                 # Check equivalence
                 equal: bool = self.check_function_pequivalence(

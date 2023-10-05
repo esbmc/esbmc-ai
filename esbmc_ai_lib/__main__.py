@@ -27,9 +27,9 @@ from esbmc_ai_lib.commands import (
     HelpCommand,
     ExitCommand,
     OptimizeCodeCommand,
-    # VerifyCodeCommand,
 )
 
+from esbmc_ai_lib.term import get_terminal_width
 from esbmc_ai_lib.loading_widget import LoadingWidget, create_loading_widget
 from esbmc_ai_lib.user_chat import UserChat
 from esbmc_ai_lib.logging import printv, printvv
@@ -299,10 +299,10 @@ def main() -> None:
     anim.stop()
 
     # Print verbose lvl 2
-    printvv("-" * os.get_terminal_size().columns)
+    printvv("-" * get_terminal_width())
     printvv(esbmc_output)
     printvv(esbmc_err_output)
-    printvv("-" * os.get_terminal_size().columns)
+    printvv("-" * get_terminal_width())
 
     # ESBMC will output 0 for verification success and 1 for verification
     # failed, if anything else gets thrown, it's an ESBMC error.
