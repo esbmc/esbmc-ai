@@ -61,7 +61,7 @@
         "--no-pointer-check",
         "--no-div-by-zero-check",
         "--max-k-step",
-        "10"
+        "50"
       ],
       "array_expansion": 5,
       "init_max_depth": 4
