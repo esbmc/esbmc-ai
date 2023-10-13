@@ -3,7 +3,7 @@
 import os
 import json
 import sys
-from typing import Any, NamedTuple, Union
+from typing import Any, NamedTuple, Union, Literal
 from dotenv import load_dotenv
 
 from .logging import *
@@ -62,7 +62,8 @@ ocm_array_expansion: int
 """Used for allocating continuous memory. Arrays and pointers will be initialized using this."""
 ocm_init_max_depth: int
 """Max depth that structs will be initialized into, afterwards initializes with NULL."""
-
+ocm_partial_equivalence_check: Literal["basic", "deep"] = "basic"
+"""Mode to check for partial equivalence on the return value."""
 
 def _load_custom_ai(config: dict) -> None:
     ai_custom: dict = config
@@ -246,6 +247,13 @@ def load_config(file_path: str) -> None:
         config_file=config_file["chat_modes"]["optimize_code"],
         name="init_max_depth",
         default=10,
+    )
+
+    global ocm_partial_equivalence_check
+    ocm_partial_equivalence_check, _ = _load_config_value(
+        config_file=config_file["chat_modes"]["optimize_code"],
+        name="partial_equivalence_check",
+        default="basic",
     )
 
     # Load the custom ai configs.

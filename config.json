@@ -64,7 +64,8 @@
         "50"
       ],
       "array_expansion": 5,
-      "init_max_depth": 4
+      "init_max_depth": 4,
+      "partial_equivalence_check": "deep"
     }
   }
 }
