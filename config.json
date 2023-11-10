@@ -35,6 +35,7 @@
       "initial": "Walk me through the source code, while also explaining the output of ESBMC at the relevant parts. You shall not start the reply with an acknowledgement message such as 'Certainly'."
     },
     "generate_solution": {
+      "max_attempts": 10,
       "temperature": 1.3,
       "system": [
         {

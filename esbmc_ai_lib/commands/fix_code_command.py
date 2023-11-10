@@ -33,7 +33,11 @@ class FixCodeCommand(ChatCommand):
 
     @override
     def execute(
-        self, file_name: str, source_code: str, esbmc_output: str
+        self,
+        file_name: str,
+        source_code: str,
+        esbmc_output: str,
+        max_retries: int = 10,
     ) -> Tuple[bool, str]:
         wait_time: int = int(config.consecutive_prompt_delay)
         # Create time left animation to show how much time left between API calls
@@ -62,7 +66,6 @@ class FixCodeCommand(ChatCommand):
 
         print()
 
-        max_retries: int = 10
         for idx in range(max_retries):
             # Get a response. Use while loop to account for if the message stack
             # gets full, then need to compress and retry.
