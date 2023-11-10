@@ -64,7 +64,7 @@ ocm_init_max_depth: int
 """Max depth that structs will be initialized into, afterwards initializes with NULL."""
 ocm_partial_equivalence_check: Literal["basic", "deep"] = "basic"
 """Mode to check for partial equivalence on the return value."""
-fix_code_max_attempts: int = 5
+fix_code_max_attempts: int = 10
 """Max attempts to fix a code."""
 
 
