@@ -93,20 +93,6 @@ For all the options, run ESBMC with -h as a parameter:
 """
 
 
-def init_check_health(verbose: bool) -> None:
-    def printv(m) -> None:
-        if verbose:
-            print(m)
-
-    printv("Performing init health check...")
-    # Check that the .env file exists.
-    if os.path.exists(".env"):
-        printv("Environment file has been located")
-    else:
-        print("Error: .env file is not found in project directory")
-        sys.exit(3)
-
-
 def check_health() -> None:
     printv("Performing health check...")
     # Check that ESBMC exists.
@@ -180,6 +166,7 @@ def _run_command_mode(
             file_name=get_main_source_file_path(),
             source_code=source_code,
             esbmc_output=esbmc_output,
+            max_retries=config.fix_code_max_attempts,
         )
 
         if error:
@@ -224,7 +211,7 @@ def main() -> None:
         description=HELP_MESSAGE,
         # argparse.RawDescriptionHelpFormatter allows the ESBMC_HELP to display properly.
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="GitHub: https://github.com/Yiannis128/esbmc-ai"
+        epilog="GitHub: https://github.com/Yiannis128/esbmc-ai",
     )
 
     parser.add_argument(
@@ -236,6 +223,13 @@ def main() -> None:
         "remaining",
         nargs=argparse.REMAINDER,
         help="Any arguments after the filename will be passed to ESBMC as parameters. Any ESBMC-AI parameters will need to be included before the filename.",
+    )
+
+    parser.add_argument(
+        "-e",
+        "--env",
+        default=None,
+        help="Override the default .env file location, which is in the current working directory.",
     )
 
     parser.add_argument(
@@ -265,13 +259,13 @@ def main() -> None:
 
     parser.add_argument(
         "--version",
-        action='version',
-        version=f'ESBMC-AI v{version}',
+        action="version",
+        version=f"ESBMC-AI v{version}",
     )
 
     command_mode_parser = parser.add_argument_group(
         title="Command Mode",
-        description="Run the program in command mode, this will skip User Chat Mode and automatically run a command. The program will exit after the command ends with an exit code."
+        description="Run the program in command mode, this will skip User Chat Mode and automatically run a command. The program will exit after the command ends with an exit code.",
     )
 
     command_mode_parser.add_argument(
@@ -279,9 +273,7 @@ def main() -> None:
         "--command",
         choices=command_names,
         metavar="",
-        help="Specify the command to run. Options: {"
-        + ", ".join(command_names)
-        + "}",
+        help="Specify the command to run. Options: {" + ", ".join(command_names) + "}",
     )
 
     command_mode_parser.add_argument(
@@ -301,9 +293,7 @@ def main() -> None:
     print(PROLOGUE)
     print()
 
-    init_check_health(args.verbose)
-
-    config.load_envs()
+    config.load_envs(args.env)
     config.load_config(config.cfg_path)
     config.load_args(args)
 
@@ -423,6 +413,7 @@ def main() -> None:
                     file_name=get_main_source_file_path(),
                     source_code=get_main_source_file().content,
                     esbmc_output=esbmc_output,
+                    max_retries=config.fix_code_max_attempts,
                 )
 
                 if not error:
