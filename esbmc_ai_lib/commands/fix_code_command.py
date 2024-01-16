@@ -31,7 +31,6 @@ class FixCodeCommand(ChatCommand):
         )
         self.anim = create_loading_widget()
 
-    @override
     def execute(
         self, file_name: str, source_code: str, esbmc_output: str
     ) -> Tuple[bool, str]:

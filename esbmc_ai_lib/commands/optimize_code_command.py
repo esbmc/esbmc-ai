@@ -280,7 +280,6 @@ class OptimizeCodeCommand(ChatCommand):
 
         return esbmc_exit_code == 0
 
-    @override
     def execute(
         self,
         file_path: str,
@@ -337,7 +336,7 @@ class OptimizeCodeCommand(ChatCommand):
                 )
 
                 optimized_source_code: str = SolutionGenerator.get_code_from_solution(
-                    response.message.content
+                    str(response.message.content)
                 )
 
                 printvv(f"\nGeneration ({fn_name}):")

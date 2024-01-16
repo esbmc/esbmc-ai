@@ -1,6 +1,6 @@
 # Author: Yiannis Charalambous
 
-from abc import ABC, abstractmethod
+from abc import ABC
 
 
 class ChatCommand(ABC):
@@ -15,7 +15,3 @@ class ChatCommand(ABC):
         super().__init__()
         self.command_name = command_name
         self.help_message = help_message
-
-    @abstractmethod
-    def execute(self) -> None:
-        pass

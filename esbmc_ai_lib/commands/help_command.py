@@ -16,7 +16,6 @@ class HelpCommand(ChatCommand):
     def set_commands(self, commands: list[ChatCommand]) -> None:
         self.commands = commands
 
-    @override
     def execute(self) -> None:
         print()
         print("Commands:")

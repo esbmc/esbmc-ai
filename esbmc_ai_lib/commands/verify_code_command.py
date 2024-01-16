@@ -14,6 +14,5 @@ class VerifyCodeCommand(ChatCommand):
     def set_solution(self, source_code: str) -> None:
         print("VerifyCodeCommand (TODO): set_solution")
 
-    @override
     def execute(self) -> None:
         print("TODO")

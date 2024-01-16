@@ -13,7 +13,6 @@ class ExitCommand(ChatCommand):
             help_message="Exit the program.",
         )
 
-    @override
     def execute(self) -> None:
         print("exiting...")
         sys.exit(0)
