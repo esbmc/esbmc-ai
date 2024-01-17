@@ -56,12 +56,12 @@ class AIModelOpenAI(AIModel):
     def create_llm(
         self,
         api_keys: APIKeyCollection,
-        temperature: float,
+        temperature: float = 1.0,
     ) -> BaseLanguageModel:
         return ChatOpenAI(
             client=OpenAIChatCompletion,
             model=self.name,
-            openai_api_key=api_keys.openai,
+            api_key=api_keys.openai,
             max_tokens=None,
             temperature=temperature,
             model_kwargs={},
@@ -119,7 +119,7 @@ class AIModelTextGen(AIModel):
     def create_llm(
         self,
         api_keys: APIKeyCollection,
-        temperature: float,
+        temperature: float = 1.0,
     ) -> BaseLanguageModel:
         return HuggingFaceTextGenInference(
             client=None,
