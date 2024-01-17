@@ -3,10 +3,10 @@
 import os
 import sys
 from os import get_terminal_size
-from typing import Iterable, Optional, Tuple
-from typing_extensions import override
+from typing import Any, Iterable, Optional, Tuple
 from string import Template
 from random import randint
+from typing_extensions import override
 
 from esbmc_ai_lib.chat_response import json_to_base_messages
 from esbmc_ai_lib.frontend.ast_decl import Declaration, TypeDeclaration
@@ -280,12 +280,8 @@ class OptimizeCodeCommand(ChatCommand):
 
         return esbmc_exit_code == 0
 
-    def execute(
-        self,
-        file_path: str,
-        source_code: str,
-        function_names: list[str],
-    ) -> Tuple[bool, str]:
+    @override
+    def execute(self, **kwargs: Any) -> Tuple[bool, str]:
         """Executes the Optimize Code command. The command takes the following inputs:
         * file_path: The path of the source code file.
         * source_code: The source code file contents.
@@ -294,6 +290,11 @@ class OptimizeCodeCommand(ChatCommand):
         Returns a `Tuple[bool, str]` which is the flag if there was an error, and the
         source code from the LLM.
         """
+
+        file_path: str = kwargs["file_path"]
+        source_code: str = kwargs["source_code"]
+        function_names: list[str] = kwargs["function_names"]
+
         clang_ast: ast.ClangAST = ast.ClangAST(
             file_path=file_path,
             source_code=source_code,
