@@ -165,29 +165,30 @@ def _run_command_mode(
     esbmc_output: str,
     source_code: str,
 ) -> None:
-    if command == fix_code_command:
-        error, solution = fix_code_command.execute(
-            file_name=get_main_source_file_path(),
-            source_code=source_code,
-            esbmc_output=esbmc_output,
-        )
+    match command.command_name:
+        case fix_code_command.command_name:
+            error, solution = fix_code_command.execute(
+                file_name=get_main_source_file_path(),
+                source_code=source_code,
+                esbmc_output=esbmc_output,
+            )
 
-        if error:
-            print("Failed all attempts...")
-            sys.exit(1)
-        else:
+            if error:
+                print("Failed all attempts...")
+                sys.exit(1)
+            else:
+                print(solution)
+        case optimize_code_command.command_name:
+            error, solution = optimize_code_command.execute(
+                file_path=get_main_source_file_path(),
+                source_code=source_code,
+                function_names=args,
+            )
+
             print(solution)
-    elif command == optimize_code_command:
-        error, solution = optimize_code_command.execute(
-            file_path=get_main_source_file_path(),
-            source_code=source_code,
-            function_names=args,
-        )
-
-        print(solution)
-        sys.exit(1 if error else 0)
-    else:
-        command.execute()
+            sys.exit(1 if error else 0)
+        case _:
+            command.execute()
     sys.exit(0)
 
 
