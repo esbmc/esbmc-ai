@@ -1,15 +1,21 @@
 # Author: Yiannis Charalambous
 
 from abc import abstractmethod
-from typing import Union
+from typing import Any, Union
 from enum import Enum
 from typing_extensions import override
 
-from langchain import HuggingFaceTextGenInference, PromptTemplate
+from langchain import HuggingFaceTextGenInference
+from langchain.prompts import PromptTemplate
 from langchain.base_language import BaseLanguageModel
-from langchain.chat_models import ChatOpenAI
+from langchain.chat_models.openai import ChatOpenAI
 
-from langchain.prompts.chat import ChatPromptValue
+from langchain.prompts.chat import (
+    AIMessagePromptTemplate,
+    ChatPromptTemplate,
+    HumanMessagePromptTemplate,
+    SystemMessagePromptTemplate,
+)
 from langchain.schema import (
     BaseMessage,
     PromptValue,
@@ -38,14 +44,28 @@ class AIModel(object):
         api_keys: APIKeyCollection,
         temperature: float = 1.0,
     ) -> BaseLanguageModel:
+        """Initializes a large language model model with the provided parameters."""
         raise NotImplementedError()
+
+    @classmethod
+    def convert_messages_to_tuples(
+        cls, messages: list[BaseMessage]
+    ) -> list[tuple[str, str]]:
+        """Converts messages into a format understood by the ChatPromptTemplate - since it won't format
+        BaseMessage derived classes for some reason, but will for tuples, because they get converted into
+        Templates in function `_convert_to_message`."""
+        return [(message.type, str(message.content)) for message in messages]
 
     def apply_chat_template(
         self,
         messages: list[BaseMessage],
+        **format_values: Any,
     ) -> PromptValue:
         # Default one, identity function essentially.
-        return ChatPromptValue(messages=messages)
+        message_tuples = AIModel.convert_messages_to_tuples(messages)
+        return ChatPromptTemplate.from_messages(messages=message_tuples).format_prompt(
+            **format_values,
+        )
 
 
 class AIModelOpenAI(AIModel):
@@ -69,18 +89,8 @@ class AIModelOpenAI(AIModel):
 
 
 class AIModelTextGen(AIModel):
-    # Below are only used for models that need them, such as models that
-    # are using the provider "text_inference_server".
-    url: str
-    config_message: str
-    """The config message to place all messages in."""
-    system_template: PromptTemplate
-    """Template for each system message."""
-    human_template: PromptTemplate
-    """Template for each human message."""
-    ai_template: PromptTemplate
-    """Template for each AI message."""
-    stop_sequences: list[str]
+    """Below are only used for models that need them, such as models that
+    are using the provider "text_inference_server"."""
 
     def __init__(
         self,
@@ -95,25 +105,34 @@ class AIModelTextGen(AIModel):
     ) -> None:
         super().__init__(name, tokens)
 
-        self.url = url
-        self.config_message = config_message
-
-        self.system_template = PromptTemplate(
-            input_variables=["content"],
-            template=system_template,
+        self.url: str = url
+        self.chat_template: PromptTemplate = PromptTemplate.from_template(
+            template=config_message,
         )
+        """The chat template to place all messages in."""
 
-        self.human_template = PromptTemplate(
-            input_variables=["content"],
-            template=human_template,
+        self.system_template: SystemMessagePromptTemplate = (
+            SystemMessagePromptTemplate.from_template(
+                template=system_template,
+            )
         )
+        """Template for each system message."""
 
-        self.ai_template = PromptTemplate(
-            input_variables=["content"],
-            template=ai_template,
+        self.human_template: HumanMessagePromptTemplate = (
+            HumanMessagePromptTemplate.from_template(
+                template=human_template,
+            )
         )
+        """Template for each human message."""
 
-        self.stop_sequences = stop_sequences
+        self.ai_template: AIMessagePromptTemplate = (
+            AIMessagePromptTemplate.from_template(
+                template=ai_template,
+            )
+        )
+        """Template for each AI message."""
+
+        self.stop_sequences: list[str] = stop_sequences
 
     @override
     def create_llm(
@@ -136,14 +155,18 @@ class AIModelTextGen(AIModel):
         )
 
     @override
-    def apply_chat_template(self, messages: list[BaseMessage]) -> PromptValue:
+    def apply_chat_template(
+        self,
+        messages: list[BaseMessage],
+        **format_values: Any,
+    ) -> PromptValue:
         """Text generation LLMs take single string of text as input. So the conversation
         is converted into a string and returned back in a single prompt value. The config
         message is also applied to the conversation."""
 
-        formatted_messages: list[str] = []
+        formatted_messages: list[BaseMessage] = []
         for msg in messages:
-            formatted_msg: str
+            formatted_msg: BaseMessage
             if msg.type == "ai":
                 formatted_msg = self.ai_template.format(content=msg.content)
             elif msg.type == "system":
@@ -156,21 +179,11 @@ class AIModelTextGen(AIModel):
                 )
             formatted_messages.append(formatted_msg)
 
-        config_message_template: PromptTemplate = PromptTemplate(
-            template=self.config_message,
-            input_variables=["history", "user_prompt"],
+        return self.chat_template.format_prompt(
+            history="\n\n".join([str(msg.content) for msg in formatted_messages[:-1]]),
+            user_prompt=formatted_messages[-1].content,
+            **format_values,
         )
-
-        # Get formatted string of each history message and separate it using new
-        # lines, each message is then joined into a single string.
-        formatted_history: str = "\n\n".join(formatted_messages[:-1])
-
-        chat_prompt: PromptValue = config_message_template.format_prompt(
-            history=formatted_history,
-            user_prompt=formatted_messages[-1],
-        )
-
-        return chat_prompt
 
 
 class AIModels(Enum):
