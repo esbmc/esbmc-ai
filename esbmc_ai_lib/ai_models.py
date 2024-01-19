@@ -5,10 +5,11 @@ from typing import Any, Iterable, Union
 from enum import Enum
 from typing_extensions import override
 
-from langchain import HuggingFaceTextGenInference
 from langchain.prompts import PromptTemplate
 from langchain.base_language import BaseLanguageModel
+
 from langchain.chat_models.openai import ChatOpenAI
+from langchain_community.llms import HuggingFaceTextGenInference
 
 from langchain.prompts.chat import (
     AIMessagePromptTemplate,

@@ -3,7 +3,7 @@
 from abc import abstractmethod
 
 from langchain.base_language import BaseLanguageModel
-from langchain.callbacks import get_openai_callback
+from langchain_community.callbacks import get_openai_callback
 from langchain.schema import (
     AIMessage,
     BaseMessage,
@@ -12,7 +12,7 @@ from langchain.schema import (
     PromptValue,
 )
 
-from openai import InvalidRequestError
+from openai import InternalServerError
 from text_generation.errors import UnknownError, ValidationError
 
 from .config import ChatPromptSettings
@@ -95,7 +95,7 @@ class BaseChatInterface(object):
                     # (no token counting currently...)
                     total_tokens=self.ai_model.tokens,
                 )
-            except InvalidRequestError as e:
+            except InternalServerError as e:
                 # OpenAI model error handling.
                 if e.code == AIModelOpenAI.context_length_exceeded_error:
                     response = ChatResponse(
