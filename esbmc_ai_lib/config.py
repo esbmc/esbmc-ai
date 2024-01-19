@@ -200,6 +200,55 @@ def load_envs() -> None:
         )
 
 
+def _load_ai_data(config: dict) -> None:
+    # User chat mode will store extra AIAgentConversations into scenarios.
+    global chat_prompt_user_mode
+    chat_prompt_user_mode = DynamicAIModelAgent(
+        system_messages=AIAgentConversation.load_from_config(
+            config["chat_modes"]["user_chat"]["system"]
+        ),
+        initial_prompt=config["chat_modes"]["user_chat"]["initial"],
+        temperature=config["chat_modes"]["user_chat"]["temperature"],
+        scenarios={
+            "set_solution": AIAgentConversation.load_from_config(
+                messages_list=config["chat_modes"]["user_chat"]["set_solution"],
+            ),
+        },
+    )
+
+    # Generator mode loads scenarios normally.
+    json_fcm_scenarios: dict = config["chat_modes"]["generate_solution"]["scenarios"]
+    fcm_scenarios: dict = {
+        scenario: AIAgentConversation.load_from_config(messages["system"])
+        for scenario, messages in json_fcm_scenarios.items()
+    }
+    global chat_prompt_generator_mode
+    chat_prompt_generator_mode = DynamicAIModelAgent(
+        system_messages=AIAgentConversation.load_from_config(
+            config["chat_modes"]["generate_solution"]["system"]
+        ),
+        initial_prompt=config["chat_modes"]["generate_solution"]["initial"],
+        temperature=config["chat_modes"]["generate_solution"]["temperature"],
+        scenarios=fcm_scenarios,
+    )
+
+    global chat_prompt_optimize_code
+    chat_prompt_optimize_code = ChatPromptSettings(
+        system_messages=AIAgentConversation.load_from_config(
+            config["chat_modes"]["optimize_code"]["system"]
+        ),
+        initial_prompt=config["chat_modes"]["optimize_code"]["initial"],
+        temperature=config["chat_modes"]["optimize_code"]["temperature"],
+    )
+
+    global esbmc_params_optimize_code
+    esbmc_params_optimize_code, _ = _load_config_value(
+        config["chat_modes"]["optimize_code"],
+        "esbmc_params",
+        esbmc_params_optimize_code,
+    )
+
+
 def _load_config_value(
     config_file: dict, name: str, default: object = None
 ) -> tuple[Any, bool]:
@@ -316,52 +365,7 @@ def load_config(file_path: str) -> None:
 
     # Load the AI data from the file that will command the AI for all modes.
     printv("Initializing AI data")
-    global chat_prompt_user_mode
-    chat_prompt_user_mode = DynamicAIModelAgent(
-        system_messages=AIAgentConversation.load_from_config(
-            config_file["chat_modes"]["user_chat"]["system"]
-        ),
-        initial_prompt=config_file["chat_modes"]["user_chat"]["initial"],
-        temperature=config_file["chat_modes"]["user_chat"]["temperature"],
-        scenarios={
-            "set_solution": AIAgentConversation.load_from_config(
-                messages_list=config_file["chat_modes"]["user_chat"]["set_solution"],
-            ),
-        },
-    )
-
-    global chat_prompt_generator_mode
-    chat_prompt_generator_mode = DynamicAIModelAgent(
-        system_messages=AIAgentConversation.load_from_config(
-            config_file["chat_modes"]["generate_solution"]["system"]
-        ),
-        initial_prompt=config_file["chat_modes"]["generate_solution"]["initial"],
-        temperature=config_file["chat_modes"]["generate_solution"]["temperature"],
-        scenarios={
-            scenario: AIAgentConversation.load_from_config(
-                messages_list=messages["system"]
-            )
-            for scenario, messages in config_file["chat_modes"]["generate_solution"][
-                "scenarios"
-            ].items()
-        },
-    )
-
-    global chat_prompt_optimize_code
-    chat_prompt_optimize_code = ChatPromptSettings(
-        system_messages=AIAgentConversation.load_from_config(
-            config_file["chat_modes"]["optimize_code"]["system"]
-        ),
-        initial_prompt=config_file["chat_modes"]["optimize_code"]["initial"],
-        temperature=config_file["chat_modes"]["optimize_code"]["temperature"],
-    )
-
-    global esbmc_params_optimize_code
-    esbmc_params_optimize_code, _ = _load_config_value(
-        config_file["chat_modes"]["optimize_code"],
-        "esbmc_params",
-        esbmc_params_optimize_code,
-    )
+    _load_ai_data(config=config_file)
 
 
 def load_args(args) -> None:
