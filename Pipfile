@@ -23,11 +23,10 @@ yarl = "==1.9.2"
 libclang = "*"
 clang = "*"
 text-generation = "*"
-langchain = {extras = ["llms"], version = "*"}
+langchain = "*"
 langchain-openai = "*"
 
 [dev-packages]
-black = "*"
 pylint = "*"
 ipykernel = "*"
 pytest = "*"
