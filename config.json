@@ -1,5 +1,5 @@
 {
-  "ai_model": "gpt-3.5-turbo-16k",
+  "ai_model": "gpt-3.5-turbo",
   "ai_custom": {},
   "esbmc_path": "./esbmc",
   "allow_successful": true,
@@ -30,18 +30,80 @@
           "role": "System",
           "content": "You are a security focused assistant that parses output from a program called ESBMC and explains the output to the user. ESBMC (the Efficient SMT-based Context-Bounded Model Checker) is a context-bounded model checker for verifying single and multithreaded C/C++, Kotlin, and Solidity programs. It can automatically verify both predefined safety properties (e.g., bounds check, pointer safety, overflow) and user-defined program assertions. You don't need to explain how ESBMC works, you only need to parse and explain the vulnerabilities that the output shows. For each line of code explained, say what the line number is as well. Do not answer any questions outside of these explicit parameters. If you understand, reply OK."
         },
-        { "role": "AI", "content": "OK" }
+        {
+          "role": "AI",
+          "content": "OK"
+        },
+        {
+          "role": "System",
+          "content": "Reply OK if you understand that the following text is the program source code:\n\n```c{source_code}```"
+        },
+        {
+          "role": "AI",
+          "content": "OK"
+        },
+        {
+          "role": "System",
+          "content": "Reply OK if you understand that the following text is the output from ESBMC:\n\n```\n{esbmc_output}\n```"
+        },
+        {
+          "role": "AI",
+          "content": "OK"
+        }
       ],
-      "initial": "Walk me through the source code, while also explaining the output of ESBMC at the relevant parts. You shall not start the reply with an acknowledgement message such as 'Certainly'."
+      "initial": "Walk me through the source code, while also explaining the output of ESBMC at the relevant parts. You shall not start the reply with an acknowledgement message such as 'Certainly'.",
+      "set_solution": [
+        {
+          "role": "System",
+          "content": "Here is the corrected code:\n\n```c\n{source_code}```"
+        },
+        {
+          "role": "AI",
+          "content": "OK"
+        }
+      ]
     },
     "generate_solution": {
       "temperature": 1.3,
+      "scenarios": {
+        "division by zero": {
+          "system": [
+            {
+              "role": "System",
+              "content": "Here's a C program with a vulnerability:\n```c\n{source_code}\n```\nA Formal Verification tool identified a division by zero issue:\n{esbmc_output}\nTask: Modify the C code to safely handle scenarios where division by zero might occur. The solution should prevent undefined behavior or crashes due to division by zero. \nGuidelines: Focus on making essential changes only. Avoid adding or modifying comments, and ensure the changes are precise and minimal.\nGuidelines: Ensure the revised code avoids undefined behavior and handles division by zero cases effectively.\nGuidelines: Implement safeguards (like comparison) to prevent division by zero instead of using literal divisions like 1.0/0.0.Output: Provide the corrected, complete C code. The solution should compile and run error-free, addressing the division by zero vulnerability.\nStart the code snippet with ```c and end with ```. Reply OK if you understand."
+            },
+            {
+              "role": "AI",
+              "content": "OK."
+            }
+          ]
+        }
+      },
       "system": [
         {
           "role": "System",
           "content": "You are an secure code generator that parses vulnerable source code, and output from a program called ESBMC, which contains vulnerability information about the source code. You should use the output from ESBMC to find the problem, and correct the source code. ESBMC is always correct. You shall add a NULL check for every heap allocation you make. From this point on, you can only reply in source code. You shall only output source code as whole. Reply OK if you understand."
         },
-        { "role": "AI", "content": "OK" }
+        {
+          "role": "AI",
+          "content": "OK"
+        },
+        {
+          "role": "Human",
+          "content": "The following text is the source code of the program, reply OK if you understand:\n\n```c\n{source_code}\n```"
+        },
+        {
+          "role": "AI",
+          "content": "OK"
+        },
+        {
+          "role": "Human",
+          "content": "The following text is the output of ESBMC, reply OK if you understand:\n\n```\n{esbmc_output}```"
+        },
+        {
+          "role": "AI",
+          "content": "OK"
+        }
       ],
       "initial": "Generate a correction for the source code provided. Show the code only. Do not reply with acknowledgements."
     },
@@ -52,7 +114,10 @@
           "role": "System",
           "content": "You are a code optimizer. You are given code, along with a function to optimize and you return optimized version of the function with the rest of the code unchanged. The optimized function should be smaller than the original function if possible and also execute faster than the original. The optimized function that you generate needs to have the same functionality as the original. From this point on, you can only reply in source code. You shall only output source code as whole, replace the function that is requested to be optimized. Reply OK if you understand."
         },
-        { "role": "AI", "content": "OK" }
+        {
+          "role": "AI",
+          "content": "OK"
+        }
       ],
       "initial": "Optimize the function \"%s\". Reoply with the entire source file back.",
       "esbmc_params": [
