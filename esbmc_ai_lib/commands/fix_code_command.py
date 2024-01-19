@@ -6,11 +6,8 @@ from typing import Any, Tuple
 from typing_extensions import override
 from langchain.schema import AIMessage, HumanMessage
 
-from esbmc_ai_lib.chat_response import (
-    FinishReason,
-    json_to_base_messages,
-)
-
+from esbmc_ai_lib.chat_response import FinishReason
+from esbmc_ai_lib.config import AIAgentConversation
 
 from .chat_command import ChatCommand
 from .. import config
@@ -18,7 +15,7 @@ from ..msg_bus import Signal
 from ..loading_widget import create_loading_widget
 from ..esbmc_util import esbmc_load_source_code
 from ..solution_generator import SolutionGenerator
-from ..logging import printvv
+from ..logging import printv, printvv
 
 
 class FixCodeCommand(ChatCommand):
@@ -31,10 +28,22 @@ class FixCodeCommand(ChatCommand):
         )
         self.anim = create_loading_widget()
 
+    def _resolve_scenario(self, esbmc_output: str) -> str:
+        # Start search from the marker.
+        marker: str = "Violated property:\n"
+        violated_property_index: int = esbmc_output.rfind(marker) + len(marker)
+        from_loc_error_msg: str = esbmc_output[violated_property_index:]
+        # Find second new line which contains the location of the violated
+        # property and that should point to the line with the type of error.
+        # In this case, the type of error is the "scenario".
+        scenario_index: int = from_loc_error_msg.find("\n")
+        scenario: str = from_loc_error_msg[scenario_index + 1 :]
+        scenario_end_l_index: int = scenario.find("\n")
+        scenario = scenario[:scenario_end_l_index].strip()
+        return scenario
+
     @override
-    def execute(
-        self, **kwargs: Any,
-    ) -> Tuple[bool, str]:
+    def execute(self, **kwargs: Any) -> Tuple[bool, str]:
         file_name: str = kwargs["file_name"]
         source_code: str = kwargs["source_code"]
         esbmc_output: str = kwargs["esbmc_output"]
@@ -48,20 +57,28 @@ class FixCodeCommand(ChatCommand):
             animation=[str(num) for num in range(wait_time, 0, -1)],
         )
 
+        # Parse the esbmc output here and determine what "Scenario" to use.
+        scenario: str = self._resolve_scenario(esbmc_output)
+
+        printv(f"Scenario: {scenario}")
+        printv(
+            f"Using dynamic prompt..."
+            if scenario in config.chat_prompt_generator_mode.scenarios
+            else "Using generic prompt..."
+        )
+
         llm = config.ai_model.create_llm(
             api_keys=config.api_keys,
             temperature=config.chat_prompt_generator_mode.temperature,
         )
 
         solution_generator = SolutionGenerator(
-            system_messages=json_to_base_messages(
-                config.chat_prompt_generator_mode.system_messages
-            ),
-            initial_prompt=config.chat_prompt_generator_mode.initial_prompt,
+            ai_model_agent=config.chat_prompt_generator_mode,
             source_code=source_code,
             esbmc_output=esbmc_output,
             ai_model=config.ai_model,
             llm=llm,
+            scenario=scenario,
         )
 
         print()

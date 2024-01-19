@@ -3,12 +3,15 @@
 import os
 import json
 import sys
+from dataclasses import dataclass
 from typing import Any, NamedTuple, Union
 from dotenv import load_dotenv
+from langchain.schema import AIMessage, BaseMessage, HumanMessage, SystemMessage
 
 from .logging import *
 from .ai_models import *
 from .api_key_collection import APIKeyCollection
+from .chat_response import json_to_base_messages
 
 
 api_keys: APIKeyCollection
@@ -41,14 +44,72 @@ allow_successful: bool = False
 cfg_path: str = "./config.json"
 
 
-class ChatPromptSettings(NamedTuple):
-    system_messages: list
+class AIAgentConversation(NamedTuple):
+    """Immutable class describing the conversation definition for an AI agent. The
+    class represents the system messages of the AI agent defined and contains a load
+    class method for efficiently loading it from config."""
+
+    messages: tuple[BaseMessage, ...]
+
+    @classmethod
+    def load_from_config(
+        cls, messages_list: list[dict[str, str]]
+    ) -> "AIAgentConversation":
+        return AIAgentConversation(messages=tuple(json_to_base_messages(messages_list)))
+
+
+@dataclass
+class ChatPromptSettings:
+    """Settings for the AI Model. These settings act as an actor/agent, allowing the
+    AI model to be applied into a specific scenario."""
+
+    system_messages: AIAgentConversation
+    """The generic prompt system messages of the AI. Generic meaning it is used in
+    every scenario, as opposed to dynamic system message. The value is a list of
+    converstaions."""
     initial_prompt: str
+    """The generic initial prompt to use for the agent."""
     temperature: float
 
 
-chat_prompt_user_mode: ChatPromptSettings
-chat_prompt_generator_mode: ChatPromptSettings
+@dataclass
+class DynamicAIModelAgent(ChatPromptSettings):
+    """Extension of the ChatPromptSettings to include dynamic"""
+
+    scenarios: dict[str, AIAgentConversation]
+    """Scenarios dictionary that contains system messages for different errors that
+    ESBMC can give. More information can be found in the
+    [wiki](https://github.com/Yiannis128/esbmc-ai/wiki/Configuration#dynamic-prompts). 
+    Reads from the config file the following hierarchy:
+    * Dictionary mapping of error type to dictionary. Accepts the following entries:
+      * `system` mapping to an array. The array contains the conversation for the
+      system message for this particular error."""
+
+    @classmethod
+    def to_chat_prompt_settings(
+        cls, ai_model_agent: "DynamicAIModelAgent", scenario: str
+    ) -> ChatPromptSettings:
+        """DynamicAIModelAgent extensions are not used by BaseChatInterface derived classes
+        directly, since they only use the SystemMessages of ChatPromptSettings. This applies
+        the correct scenario as a System Message and returns a pure ChatPromptSettings object
+        for use. **Will return a shallow copy even if the system message is to be used**.
+        """
+        if scenario in ai_model_agent.scenarios:
+            return ChatPromptSettings(
+                initial_prompt=ai_model_agent.initial_prompt,
+                system_messages=ai_model_agent.scenarios[scenario],
+                temperature=ai_model_agent.temperature,
+            )
+        else:
+            return ChatPromptSettings(
+                initial_prompt=ai_model_agent.initial_prompt,
+                system_messages=ai_model_agent.system_messages,
+                temperature=ai_model_agent.temperature,
+            )
+
+
+chat_prompt_user_mode: DynamicAIModelAgent
+chat_prompt_generator_mode: DynamicAIModelAgent
 chat_prompt_optimize_code: ChatPromptSettings
 
 esbmc_params_optimize_code: list[str] = [
@@ -256,22 +317,41 @@ def load_config(file_path: str) -> None:
     # Load the AI data from the file that will command the AI for all modes.
     printv("Initializing AI data")
     global chat_prompt_user_mode
-    chat_prompt_user_mode = ChatPromptSettings(
-        system_messages=config_file["chat_modes"]["user_chat"]["system"],
+    chat_prompt_user_mode = DynamicAIModelAgent(
+        system_messages=AIAgentConversation.load_from_config(
+            config_file["chat_modes"]["user_chat"]["system"]
+        ),
         initial_prompt=config_file["chat_modes"]["user_chat"]["initial"],
         temperature=config_file["chat_modes"]["user_chat"]["temperature"],
+        scenarios={
+            "set_solution": AIAgentConversation.load_from_config(
+                messages_list=config_file["chat_modes"]["user_chat"]["set_solution"],
+            ),
+        },
     )
 
     global chat_prompt_generator_mode
-    chat_prompt_generator_mode = ChatPromptSettings(
-        system_messages=config_file["chat_modes"]["generate_solution"]["system"],
+    chat_prompt_generator_mode = DynamicAIModelAgent(
+        system_messages=AIAgentConversation.load_from_config(
+            config_file["chat_modes"]["generate_solution"]["system"]
+        ),
         initial_prompt=config_file["chat_modes"]["generate_solution"]["initial"],
         temperature=config_file["chat_modes"]["generate_solution"]["temperature"],
+        scenarios={
+            scenario: AIAgentConversation.load_from_config(
+                messages_list=messages["system"]
+            )
+            for scenario, messages in config_file["chat_modes"]["generate_solution"][
+                "scenarios"
+            ].items()
+        },
     )
 
     global chat_prompt_optimize_code
     chat_prompt_optimize_code = ChatPromptSettings(
-        system_messages=config_file["chat_modes"]["optimize_code"]["system"],
+        system_messages=AIAgentConversation.load_from_config(
+            config_file["chat_modes"]["optimize_code"]["system"]
+        ),
         initial_prompt=config_file["chat_modes"]["optimize_code"]["initial"],
         temperature=config_file["chat_modes"]["optimize_code"]["temperature"],
     )

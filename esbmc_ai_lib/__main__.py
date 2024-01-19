@@ -341,13 +341,12 @@ def main() -> None:
     printv("Creating user chat")
     global chat
     chat = UserChat(
-        system_messages=json_to_base_messages(
-            config.chat_prompt_user_mode.system_messages
-        ),
+        ai_model_agent=config.chat_prompt_user_mode,
         ai_model=config.ai_model,
         llm=chat_llm,
         source_code=get_main_source_file().content,
         esbmc_output=esbmc_output,
+        set_solution_messages=config.chat_prompt_user_mode.scenarios["set_solution"],
     )
 
     printv("Initializing commands...")
@@ -358,9 +357,9 @@ def main() -> None:
     if len(config.chat_prompt_user_mode.initial_prompt) > 0:
         printv("Using initial prompt from file...\n")
         anim.start("Model is parsing ESBMC output... Please Wait")
+        # TODO Make protected
         response = chat.send_message(
             message=config.chat_prompt_user_mode.initial_prompt,
-            protected=True,
         )
         anim.stop()
 
