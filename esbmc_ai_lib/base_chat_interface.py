@@ -13,7 +13,6 @@ from langchain.schema import (
 )
 
 from openai import InternalServerError
-from text_generation.errors import UnknownError, ValidationError
 
 from .config import ChatPromptSettings
 from .chat_response import ChatResponse, FinishReason
@@ -87,14 +86,15 @@ class BaseChatInterface(object):
                     message=response_message,
                     total_tokens=cb.total_tokens,
                 )
-            except ValidationError as e:
-                # HFTextGen
-                response = ChatResponse(
-                    finish_reason=FinishReason.length,
-                    # NOTE Show the total tokens of the model instead of 0
-                    # (no token counting currently...)
-                    total_tokens=self.ai_model.tokens,
-                )
+            # FIXME
+            # except TokenLimitExceededException as e:
+            #     # HFTextGen
+            #     response = ChatResponse(
+            #         finish_reason=FinishReason.length,
+            #         # NOTE Show the total tokens of the model instead of 0
+            #         # (no token counting currently...)
+            #         total_tokens=self.ai_model.tokens,
+            #     )
             except InternalServerError as e:
                 # OpenAI model error handling.
                 if e.code == AIModelOpenAI.context_length_exceeded_error:
@@ -104,11 +104,8 @@ class BaseChatInterface(object):
                     )
                 else:
                     raise
-            except UnknownError as e:
-                # HFTextGen
+            except Exception as e:
                 print(f"There was an unkown error when generating a response: {e}")
                 exit(1)
-            except Exception:
-                raise
 
         return response
