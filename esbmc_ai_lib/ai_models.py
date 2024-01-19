@@ -8,7 +8,7 @@ from typing_extensions import override
 from langchain.prompts import PromptTemplate
 from langchain.base_language import BaseLanguageModel
 
-from langchain.chat_models.openai import ChatOpenAI
+from langchain_openai import ChatOpenAI
 from langchain_community.llms import HuggingFaceTextGenInference
 
 from langchain.prompts.chat import (
@@ -22,7 +22,6 @@ from langchain.schema import (
     PromptValue,
 )
 
-from openai import ChatCompletion as OpenAIChatCompletion
 
 from esbmc_ai_lib.api_key_collection import APIKeyCollection
 
@@ -80,7 +79,6 @@ class AIModelOpenAI(AIModel):
         temperature: float = 1.0,
     ) -> BaseLanguageModel:
         return ChatOpenAI(
-            client=OpenAIChatCompletion,
             model=self.name,
             api_key=api_keys.openai,
             max_tokens=None,
