@@ -16,6 +16,20 @@
       ]
     },
     {
+      "name": "Fix Code on Open File",
+      "type": "python",
+      "request": "launch",
+      "module": "esbmc_ai_lib",
+      "justMyCode": true,
+      "cwd": "${workspaceFolder}",
+      "args": [
+        "-c",
+        "fix-code",
+        "-v",
+        "${file}"
+      ]
+    },
+    {
       "name": "Optimize Code on Open File",
       "type": "python",
       "request": "launch",
