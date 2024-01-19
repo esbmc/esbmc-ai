@@ -1,7 +1,7 @@
 # Author: Yiannis Charalambous
 
 from abc import abstractmethod
-from typing import Any, Union
+from typing import Any, Iterable, Union
 from enum import Enum
 from typing_extensions import override
 
@@ -49,7 +49,7 @@ class AIModel(object):
 
     @classmethod
     def convert_messages_to_tuples(
-        cls, messages: list[BaseMessage]
+        cls, messages: Iterable[BaseMessage]
     ) -> list[tuple[str, str]]:
         """Converts messages into a format understood by the ChatPromptTemplate - since it won't format
         BaseMessage derived classes for some reason, but will for tuples, because they get converted into
@@ -58,7 +58,7 @@ class AIModel(object):
 
     def apply_chat_template(
         self,
-        messages: list[BaseMessage],
+        messages: Iterable[BaseMessage],
         **format_values: Any,
     ) -> PromptValue:
         # Default one, identity function essentially.
@@ -157,7 +157,7 @@ class AIModelTextGen(AIModel):
     @override
     def apply_chat_template(
         self,
-        messages: list[BaseMessage],
+        messages: Iterable[BaseMessage],
         **format_values: Any,
     ) -> PromptValue:
         """Text generation LLMs take single string of text as input. So the conversation
