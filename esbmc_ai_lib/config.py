@@ -4,7 +4,7 @@ import os
 import json
 import sys
 from dataclasses import dataclass
-from typing import Any, NamedTuple, Union
+from typing import Any, NamedTuple, Sequence, Union
 from dotenv import load_dotenv
 from langchain.schema import AIMessage, BaseMessage, HumanMessage, SystemMessage
 
@@ -52,10 +52,14 @@ class AIAgentConversation(NamedTuple):
     messages: tuple[BaseMessage, ...]
 
     @classmethod
+    def from_seq(cls, message_list: Sequence[BaseMessage]) -> "AIAgentConversation":
+        return cls(messages=tuple(message_list))
+
+    @classmethod
     def load_from_config(
         cls, messages_list: list[dict[str, str]]
     ) -> "AIAgentConversation":
-        return AIAgentConversation(messages=tuple(json_to_base_messages(messages_list)))
+        return cls(messages=tuple(json_to_base_messages(messages_list)))
 
 
 @dataclass
