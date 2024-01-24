@@ -1,22 +1,43 @@
 # Author: Yiannis Charalambous
 
+import pytest
+
 from langchain.llms.fake import FakeListLLM
 from langchain.schema import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from esbmc_ai_lib.ai_models import AIModel
 from esbmc_ai_lib.base_chat_interface import BaseChatInterface
 from esbmc_ai_lib.chat_response import ChatResponse
+from esbmc_ai_lib.config import AIAgentConversation, ChatPromptSettings
 
 
-def test_push_message_stack() -> None:
-    llm: FakeListLLM = FakeListLLM(responses=[])
-
+@pytest.fixture(scope="module")
+def setup():
     ai_model: AIModel = AIModel("test", 1024)
 
+    system_messages: list[BaseMessage] = [
+        SystemMessage(content="First system message"),
+        AIMessage(content="OK"),
+    ]
+
+    return ai_model, system_messages
+
+
+def test_push_message_stack(setup) -> None:
+    llm: FakeListLLM = FakeListLLM(responses=[])
+
+    ai_model, system_messages = setup
+
     chat: BaseChatInterface = BaseChatInterface(
+        ai_model_agent=ChatPromptSettings(
+            AIAgentConversation.from_seq(system_messages),
+            initial_prompt="",
+            temperature=1.0,
+        ),
         ai_model=ai_model,
-        system_messages=[],
         llm=llm,
     )
+
+    assert chat.ai_model_agent.system_messages.messages == tuple(system_messages)
 
     messages: list[BaseMessage] = [
         AIMessage(content="Test 1"),
@@ -24,25 +45,28 @@ def test_push_message_stack() -> None:
         SystemMessage(content="Test 3"),
     ]
 
-    chat.push_to_message_stack(message=messages[0], protected=False)
-    chat.push_to_message_stack(message=messages[1], protected=True)
-    chat.push_to_message_stack(message=messages[2], protected=True)
+    chat.push_to_message_stack(message=messages[0])
+    chat.push_to_message_stack(message=messages[1])
+    chat.push_to_message_stack(message=messages[2])
 
     assert chat.messages[0] == messages[0]
-    assert chat.messages[1] == messages[1] and chat.protected_messages[0] == messages[1]
-    assert chat.messages[2] == messages[2] and chat.protected_messages[1] == messages[2]
+    assert chat.messages[1] == messages[1]
+    assert chat.messages[2] == messages[2]
 
 
-def test_send_message() -> None:
+def test_send_message(setup) -> None:
     responses: list[str] = ["OK 1", "OK 2", "OK 3"]
     llm: FakeListLLM = FakeListLLM(responses=responses)
 
-    ai_model: AIModel = AIModel("test", 6)
+    ai_model, system_messages = setup
 
-    sys: list[BaseMessage] = []
     chat: BaseChatInterface = BaseChatInterface(
+        ai_model_agent=ChatPromptSettings(
+            AIAgentConversation.from_seq(system_messages),
+            initial_prompt="",
+            temperature=1.0,
+        ),
         ai_model=ai_model,
-        system_messages=sys,
         llm=llm,
     )
 
