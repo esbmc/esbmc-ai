@@ -2,9 +2,10 @@
 
 from typing_extensions import override
 from langchain.base_language import BaseLanguageModel
+from langchain.schema import BaseMessage
 
 from esbmc_ai_lib.chat_response import ChatResponse, FinishReason
-from esbmc_ai_lib.config import ChatPromptSettings, DynamicAIModelAgent
+from esbmc_ai_lib.config import DynamicAIModelAgent
 
 from .ai_models import AIModel
 from .base_chat_interface import BaseChatInterface
@@ -37,7 +38,7 @@ class SolutionGenerator(BaseChatInterface):
     @override
     def compress_message_stack(self) -> None:
         # Resets the conversation - cannot summarize code
-        self.messages = []
+        self.messages: list[BaseMessage] = []
 
     @classmethod
     def get_code_from_solution(cls, solution: str) -> str:
