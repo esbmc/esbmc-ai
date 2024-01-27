@@ -1,5 +1,5 @@
 {
-  "ai_model": "gpt-3.5-turbo",
+  "ai_model": "gpt-3.5-turbo-16k",
   "ai_custom": {},
   "esbmc_path": "./esbmc",
   "allow_successful": true,
@@ -55,7 +55,7 @@
       "set_solution": [
         {
           "role": "System",
-          "content": "Here is the corrected code:\n\n```c\n{source_code}```"
+          "content": "Here is the corrected code:\n\n```c\n{source_code_solution}```"
         },
         {
           "role": "AI",
