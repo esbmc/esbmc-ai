@@ -52,8 +52,8 @@ class BaseChatInterface(object):
         """Sends a message to the AI model. Returns solution."""
         self.push_to_message_stack(message=HumanMessage(content=message))
 
-        messages = list(self.ai_model_agent.system_messages.messages)
-        messages.extend(self.messages)
+        all_messages = list(self.ai_model_agent.system_messages.messages)
+        all_messages.extend(self.messages)
 
         # Transform message stack to ChatPromptValue: If this is a ChatLLM then the
         # function will simply be an identity function that does nothing and simply
@@ -61,51 +61,59 @@ class BaseChatInterface(object):
         # LLM, then the function should inject the config message around the
         # conversation to make the LLM behave like a ChatLLM.
         message_prompts: PromptValue = self.ai_model.apply_chat_template(
-            messages=messages,
+            messages=all_messages,
             **self.template_values,
         )
 
-        # TODO When token counting comes to other models, implement it.
-        # Need to implement ai_model.tokens...
-
         response: ChatResponse
-        with get_openai_callback() as cb:
-            try:
-                result: LLMResult = self.llm.generate_prompt(
-                    prompts=[message_prompts],
+        try:
+            result: LLMResult = self.llm.generate_prompt(
+                prompts=[message_prompts],
+            )
+
+            response_message: BaseMessage = AIMessage(
+                content=result.generations[0][0].text
+            )
+
+            self.push_to_message_stack(message=response_message)
+
+            # Check if token limit has been exceeded.
+            all_messages.append(response_message)
+            new_tokens: int = self.llm.get_num_tokens_from_messages(
+                messages=all_messages,
+            )
+            if new_tokens > self.ai_model.tokens:
+                response = ChatResponse(
+                    finish_reason=FinishReason.length,
+                    message=response_message,
+                    total_tokens=self.ai_model.tokens,
                 )
-
-                response_message: BaseMessage = AIMessage(
-                    content=result.generations[0][0].text
-                )
-
-                self.push_to_message_stack(message=response_message)
-
+            else:
                 response = ChatResponse(
                     finish_reason=FinishReason.stop,
                     message=response_message,
-                    total_tokens=cb.total_tokens,
+                    total_tokens=self.ai_model.tokens,
                 )
-            # FIXME
-            # except TokenLimitExceededException as e:
-            #     # HFTextGen
-            #     response = ChatResponse(
-            #         finish_reason=FinishReason.length,
-            #         # NOTE Show the total tokens of the model instead of 0
-            #         # (no token counting currently...)
-            #         total_tokens=self.ai_model.tokens,
-            #     )
-            except InternalServerError as e:
-                # OpenAI model error handling.
-                if e.code == AIModelOpenAI.context_length_exceeded_error:
-                    response = ChatResponse(
-                        finish_reason=FinishReason.length,
-                        total_tokens=cb.total_tokens,
-                    )
-                else:
-                    raise
-            except Exception as e:
-                print(f"There was an unkown error when generating a response: {e}")
-                exit(1)
+        # FIXME
+        # except TokenLimitExceededException as e:
+        #     # HFTextGen
+        #     response = ChatResponse(
+        #         finish_reason=FinishReason.length,
+        #         # NOTE Show the total tokens of the model instead of 0
+        #         # (no token counting currently...)
+        #         total_tokens=self.ai_model.tokens,
+        #     )
+        except InternalServerError as e:
+            # OpenAI model error handling.
+            if e.code == AIModelOpenAI.context_length_exceeded_error:
+                response = ChatResponse(
+                    finish_reason=FinishReason.length,
+                    total_tokens=self.ai_model.tokens,
+                )
+            else:
+                raise
+        except Exception as e:
+            print(f"There was an unkown error when generating a response: {e}")
+            exit(1)
 
         return response
