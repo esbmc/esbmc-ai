@@ -4,7 +4,7 @@ from typing_extensions import override
 
 from langchain.base_language import BaseLanguageModel
 from langchain.memory import ConversationSummaryMemory, ChatMessageHistory
-from langchain.schema import PromptValue, SystemMessage
+from langchain.schema import BaseMessage, PromptValue, SystemMessage
 
 from esbmc_ai_lib.config import AIAgentConversation, ChatPromptSettings
 
@@ -70,10 +70,11 @@ class UserChat(BaseChatInterface):
         messages into one summary message which is added into the conversation as a SystemMessage.
         """
 
-        history: ChatMessageHistory = ChatMessageHistory(messages=self.messages)
         memory: ConversationSummaryMemory = ConversationSummaryMemory.from_messages(
             llm=self.llm,
-            chat_memory=history,
+            chat_memory=ChatMessageHistory(messages=self.messages),
         )
+
+        self.messages: list[BaseMessage] = []
 
         self.push_to_message_stack(SystemMessage(content=memory.buffer))
