@@ -34,7 +34,7 @@ from esbmc_ai_lib.loading_widget import LoadingWidget, create_loading_widget
 from esbmc_ai_lib.user_chat import UserChat
 from esbmc_ai_lib.logging import printv, printvv
 from esbmc_ai_lib.esbmc_util import esbmc
-from esbmc_ai_lib.chat_response import FinishReason, json_to_base_messages, ChatResponse
+from esbmc_ai_lib.chat_response import FinishReason, ChatResponse
 from esbmc_ai_lib.ai_models import _ai_model_names
 
 
