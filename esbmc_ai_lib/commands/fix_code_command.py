@@ -16,6 +16,8 @@ from ..esbmc_util import esbmc_load_source_code
 from ..solution_generator import SolutionGenerator
 from ..logging import printv, printvv
 
+# TODO Remove built in messages and move them to config.
+
 
 class FixCodeCommand(ChatCommand):
     on_solution_signal: Signal = Signal()
@@ -125,20 +127,7 @@ class FixCodeCommand(ChatCommand):
 
             if exit_code == 0:
                 self.on_solution_signal.emit(response)
-
                 return False, response
-            elif exit_code != 1:
-                # The program did not compile.
-                solution_generator.push_to_message_stack(
-                    message=HumanMessage(
-                        content="The source code you provided does not compile."
-                    )
-                )
-                solution_generator.push_to_message_stack(
-                    message=AIMessage(
-                        content="OK. Show me the ESBMC output for additional assistance."
-                    )
-                )
 
             # Failure case
             print(f"Failure {idx+1}/{max_retries}: Retrying...")
@@ -149,14 +138,22 @@ class FixCodeCommand(ChatCommand):
                 wait_anim.stop()
 
                 # Inform solution generator chat about the ESBMC response.
-                solution_generator.push_to_message_stack(
-                    message=HumanMessage(
-                        content=f"ESBMC has reported that verification failed, use the ESBMC output to find out what is wrong, and fix it. Here is ESBMC output:\n\n{esbmc_output}"
+                if exit_code != 1:
+                    # The program did not compile.
+                    solution_generator.push_to_message_stack(
+                        message=HumanMessage(
+                            content=f"The source code you provided does not compile. Fix the compilation errors. Use ESBMC output to fix the compilation errors:\n\n```\n{esbmc_output}\n```"
+                        )
                     )
-                )
+                else:
+                    solution_generator.push_to_message_stack(
+                        message=HumanMessage(
+                            content=f"ESBMC has reported that verification failed, use the ESBMC output to find out what is wrong, and fix it. Here is ESBMC output:\n\n```\n{esbmc_output}\n```"
+                        )
+                    )
 
                 solution_generator.push_to_message_stack(
-                    AIMessage(content="Understood")
+                    AIMessage(content="Understood.")
                 )
 
         return True, "Failed all attempts..."
