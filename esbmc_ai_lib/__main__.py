@@ -26,8 +26,6 @@ from esbmc_ai_lib.commands import (
     FixCodeCommand,
     HelpCommand,
     ExitCommand,
-    OptimizeCodeCommand,
-    # VerifyCodeCommand,
 )
 
 from esbmc_ai_lib.loading_widget import LoadingWidget, create_loading_widget
@@ -42,8 +40,6 @@ commands: list[ChatCommand] = []
 command_names: list[str]
 help_command: HelpCommand = HelpCommand()
 fix_code_command: FixCodeCommand = FixCodeCommand()
-optimize_code_command: OptimizeCodeCommand = OptimizeCodeCommand()
-# verify_code_command: VerifyCodeCommand = VerifyCodeCommand()
 exit_command: ExitCommand = ExitCommand()
 
 chat: UserChat
@@ -131,8 +127,6 @@ def init_commands_list() -> None:
             help_command,
             exit_command,
             fix_code_command,
-            optimize_code_command,
-            # verify_code_command,
         ]
     )
     help_command.set_commands(commands)
@@ -155,9 +149,6 @@ def init_commands() -> None:
     fix_code_command.on_solution_signal.add_listener(chat.set_solution)
     fix_code_command.on_solution_signal.add_listener(update_solution)
 
-    optimize_code_command.on_solution_signal.add_listener(chat.set_solution)
-    optimize_code_command.on_solution_signal.add_listener(update_solution)
-
 
 def _run_command_mode(
     command: ChatCommand,
@@ -178,15 +169,6 @@ def _run_command_mode(
                 sys.exit(1)
             else:
                 print(solution)
-        case optimize_code_command.command_name:
-            error, solution = optimize_code_command.execute(
-                file_path=get_main_source_file_path(),
-                source_code=source_code,
-                function_names=args,
-            )
-
-            print(solution)
-            sys.exit(1 if error else 0)
         case _:
             command.execute()
     sys.exit(0)
@@ -395,24 +377,9 @@ def main() -> None:
 
                 if not error:
                     print(
-                        "\n\nassistant: Here is the corrected code, verified with ESBMC:"
+                        "\n\nESBMC-AI: Here is the corrected code, verified with ESBMC:"
                     )
                     print(f"```\n{solution}\n```")
-                continue
-            elif command == optimize_code_command.command_name:
-                # Optimize Code command
-                error, solution = optimize_code_command.execute(
-                    file_path=get_main_source_file_path(),
-                    source_code=get_main_source_file().content,
-                    function_names=command_args,
-                )
-
-                if error:
-                    # Print error
-                    print("\n" + solution + "\n")
-                else:
-                    print(f"\nOptimizations Completed:\n```c\n{solution}```\n")
-
                 continue
             else:
                 # Commands without parameters or returns are handled automatically.
