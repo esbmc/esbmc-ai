@@ -191,6 +191,9 @@ def load_envs() -> None:
     2. .env file in the current directory, moving upwards in the directory tree.
     3. esbmc-ai.env file in the current directory, moving upwards in the directory tree.
     4. esbmc-ai.env file in $HOME/.config/ for Linux/macOS and %userprofile% for Windows.
+
+    Note: ESBMC_AI_CFG_PATH undergoes tilde user expansion and also environment
+    variable expansion.
     """
 
     def get_env_vars() -> None:
@@ -240,12 +243,14 @@ def load_envs() -> None:
     )
 
     global cfg_path
-    value = os.getenv("ESBMC_AI_CFG_PATH")
-    if value != None:
-        if os.path.exists(value):
-            cfg_path = str(value)
+    _cfg_path = os.getenv("ESBMC_AI_CFG_PATH")
+    if _cfg_path != None:
+        _cfg_path = os.path.expanduser(_cfg_path)
+        _cfg_path = os.path.expandvars(_cfg_path)
+        if os.path.exists(_cfg_path):
+            cfg_path = str(_cfg_path)
         else:
-            print(f"Error: Invalid ESBMC_AI_CFG_PATH value: {value}")
+            print(f"Error: Invalid ESBMC_AI_CFG_PATH value: {_cfg_path}")
             sys.exit(4)
     else:
         print(
