@@ -3,10 +3,13 @@
 import os
 import json
 import sys
+from platform import system as system_name
+from pathlib import Path
+from dotenv import load_dotenv, find_dotenv
+
+from typing import Any, NamedTuple, Optional, Union, Sequence
 from dataclasses import dataclass
-from typing import Any, NamedTuple, Sequence, Union
-from dotenv import load_dotenv
-from langchain.schema import AIMessage, BaseMessage, HumanMessage, SystemMessage
+from langchain.schema import BaseMessage
 
 from .logging import *
 from .ai_models import *
@@ -181,7 +184,53 @@ def _load_custom_ai(config: dict) -> None:
 
 
 def load_envs() -> None:
-    load_dotenv(dotenv_path="./.env", override=True, verbose=True)
+    """Environment variables are loaded in the following order:
+
+    1. Environment variables already loaded. Any variable not present will be looked for in
+    .env files in the following locations.
+    2. .env file in the current directory, moving upwards in the directory tree.
+    3. esbmc-ai.env file in the current directory, moving upwards in the directory tree.
+    4. esbmc-ai.env file in $HOME/.config/ for Linux/macOS and %userprofile% for Windows.
+    """
+
+    def get_env_vars() -> None:
+        """Gets all the system environment variables that are currently loaded."""
+        for k in keys:
+            value: Optional[str] = os.getenv(k)
+            if value != None:
+                values[k] = value
+
+    keys: list[str] = ["OPENAI_API_KEY", "HUGGINGFACE_API_KEY", "ESBMC_AI_CFG_PATH"]
+    values: dict[str, str] = {}
+
+    # Load from system env
+    get_env_vars()
+
+    # Find .env in current working directory and load it.
+    dotenv_file_path: str = find_dotenv(usecwd=True)
+    if dotenv_file_path != "":
+        load_dotenv(dotenv_path=dotenv_file_path, override=False, verbose=True)
+    else:
+        # Find esbmc-ai.env in current working directory and load it.
+        dotenv_file_path: str = find_dotenv(filename="esbmc-ai.env", usecwd=True)
+        if dotenv_file_path != "":
+            load_dotenv(dotenv_path=dotenv_file_path, override=False, verbose=True)
+
+    get_env_vars()
+
+    # Look for .env in home folder.
+    home_path: Path = Path.home()
+    match system_name():
+        case "Linux" | "Darwin":
+            home_path /= ".config/esbmc-ai.env"
+        case "Windows":
+            home_path /= "esbmc-ai.env"
+        case _:
+            raise ValueError(f"Unknown OS type: {system_name()}")
+
+    load_dotenv(home_path, override=False, verbose=True)
+
+    get_env_vars()
 
     global api_keys
 
@@ -196,11 +245,11 @@ def load_envs() -> None:
         if os.path.exists(value):
             cfg_path = str(value)
         else:
-            print(f"Error: Invalid .env ESBMC_AI_CFG_PATH value: {value}")
+            print(f"Error: Invalid ESBMC_AI_CFG_PATH value: {value}")
             sys.exit(4)
     else:
         print(
-            f"Warning: ESBMC_AI_CFG_PATH not found in .env file... Defaulting to {cfg_path}"
+            f"Warning: ESBMC_AI_CFG_PATH not found in system environment variables... Defaulting to {cfg_path}"
         )
 
 
