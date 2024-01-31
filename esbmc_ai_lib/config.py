@@ -420,6 +420,8 @@ def load_config(file_path: str) -> None:
         "esbmc_path",
         esbmc_path,
     )
+    # Expand variables and tilde.
+    esbmc_path = os.path.expanduser(os.path.expandvars(esbmc_path))
 
     # Load the AI data from the file that will command the AI for all modes.
     printv("Initializing AI data")
