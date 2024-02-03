@@ -56,7 +56,7 @@ dependencies = [
 #]
 
 [project.scripts]
-esbmc_ai = "esbmc_ai.__main__:main"
+esbmc-ai = "esbmc_ai.__main__:main"
 
 [project.urls]
 Homepage = "https://github.com/Yiannis128/esbmc-ai"
