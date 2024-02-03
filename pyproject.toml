@@ -5,8 +5,8 @@ build-backend = "hatchling.build"
 [project]
 name = "esbmc_ai"
 # https://hatch.pypa.io/latest/version/
-version = "0.4.0dev0"
-# dynamic = ["version"]
+# version = "0.4.0dev0"
+dynamic = ["version"]
 authors = [
   { name="Yiannis Charalambous", email="yiannis128@hotmail.com" },
 ]
@@ -64,7 +64,7 @@ Homepage = "https://github.com/Yiannis128/esbmc-ai"
 Documentation = "https://github.com/Yiannis128/esbmc-ai/wiki"
 Issues = "https://github.com/Yiannis128/esbmc-ai/issues"
 
-# [tool.hatch.version]
-# path = "__about__.py"
+[tool.hatch.version]
+path = "esbmc_ai/__about__.py"
 
 
