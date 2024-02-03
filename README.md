@@ -8,50 +8,19 @@ This is an area of active research.
 
 ## Demonstration
 
-### Basic Usage Demo
+[Basic Usage Demo](https://user-images.githubusercontent.com/9535618/235352993-b54c47ef-a1c6-422c-aa5b-07edc2988521.webm)
 
-[demo.webm](https://user-images.githubusercontent.com/9535618/235352993-b54c47ef-a1c6-422c-aa5b-07edc2988521.webm)
-
-### Fix Code Demo
-
-[demo_fix_code.webm](https://github.com/Yiannis128/esbmc-ai/assets/9535618/e35882ee-7e50-4c10-9879-d19e73d7f45d)
-
-### YouTube Channel
+[Fix Code Demo](https://github.com/Yiannis128/esbmc-ai/assets/9535618/e35882ee-7e50-4c10-9879-d19e73d7f45d)
 
 More videos can be found on the [ESBMC-AI Youtube Channel](https://www.youtube.com/@esbmc-ai)
 
-## ESBMC
+## Wiki (Initial Setup/Configuration/Usage)
 
-From the [ESBMC website](http://esbmc.org):
+For full documentation, see the [ESBMC-AI Wiki](https://github.com/Yiannis128/esbmc-ai/wiki). The README file contains quick setup instructions, however it is recommended to read the following two pages, to fully guide you on how to download, set-up and run ESBMC-AI.
 
-> ESBMC is an open source, permissively licensed, context-bounded model checker
-> based on satisfiability modulo theories for the verification of single and
-> multi-threaded C/C++ programs. It does not require the user to annotate the
-> programs with pre- or postconditions, but allows the user to state additional
-> properties using assert-statements, that are then checked as well. Furthermore,
-> ESBMC provides two approaches (lazy and schedule recording) to model check
-> multi-threaded programs. It converts the verification conditions using different
-> background theories and passes them directly to an SMT solver.
-
-From the [ESBMC GitHub repo](https://github.com/esbmc/esbmc)
-
-> The efficient SMT-based context-bounded model checker (ESBMC)
-
-## Wiki
-
-For full documentation, see the [ESBMC-AI Wiki](https://github.com/Yiannis128/esbmc-ai/wiki). The README file contains quick setup instructions. For more detailed setup instructions, see the [Initial Setup](https://github.com/Yiannis128/esbmc-ai/wiki/Initial-Setup) page.
-
-## Initial Setup
-
-See [Initial Setup Wiki Page](https://github.com/Yiannis128/esbmc-ai/wiki/Initial-Setup).
-
-## Configuration/Settings
-
-See [Configuration Wiki page](https://github.com/Yiannis128/esbmc-ai/wiki/Configuration).
-
-## Usage
-
-Read about how to run and use ESBMC-AI in [this wiki page](https://github.com/Yiannis128/esbmc-ai/wiki/Initial-Setup#usage).
+* [Initial Setup Wiki Page](https://github.com/Yiannis128/esbmc-ai/wiki/Initial-Setup).
+* [Configuration Wiki Page](https://github.com/Yiannis128/esbmc-ai/wiki/Configuration).
+* [Usage Wiki Page](https://github.com/Yiannis128/esbmc-ai/wiki/Initial-Setup#usage).
 
 ## Contributing
 
@@ -71,7 +40,7 @@ ESBMC-AI is made possible by the following listed entities:
 - [OpenAI Chat API](https://platform.openai.com/docs/guides/chat)
 - [Technology Innovation Institute](https://www.tii.ae/)
 - [Hugging Face](https://huggingface.co/)
- - [Langchain](https://github.com/langchain-ai/langchain)
+- [Langchain](https://github.com/langchain-ai/langchain)
 
 ## License
 
