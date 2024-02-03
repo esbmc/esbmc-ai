@@ -44,7 +44,7 @@ ai_model: AIModel = AIModels.GPT_3.value
 loading_hints: bool = False
 allow_successful: bool = False
 
-cfg_path: str = "./config.json"
+cfg_path: str
 
 
 class AIAgentConversation(NamedTuple):
@@ -238,30 +238,17 @@ def load_envs() -> None:
     # Check if all the values are set, else error.
     for key in keys:
         if key not in values:
-            print(f"Error: ${key} not in environment.")
+            print(f"Error: No ${key} in environment.")
             sys.exit(1)
 
     global api_keys
-
     api_keys = APIKeyCollection(
         openai=str(os.getenv("OPENAI_API_KEY")),
         huggingface=str(os.getenv("HUGGINGFACE_API_KEY")),
     )
 
     global cfg_path
-    _cfg_path = os.getenv("ESBMC_AI_CFG_PATH")
-    if _cfg_path != None:
-        _cfg_path = os.path.expanduser(_cfg_path)
-        _cfg_path = os.path.expandvars(_cfg_path)
-        if os.path.exists(_cfg_path):
-            cfg_path = str(_cfg_path)
-        else:
-            print(f"Error: Invalid ESBMC_AI_CFG_PATH value: {_cfg_path}")
-            sys.exit(4)
-    else:
-        print(
-            f"Warning: ESBMC_AI_CFG_PATH not found in system environment variables... Defaulting to {cfg_path}"
-        )
+    cfg_path = str(os.getenv("ESBMC_AI_CFG_PATH"))
 
 
 def _load_ai_data(config: dict) -> None:
