@@ -235,6 +235,12 @@ def load_envs() -> None:
 
     get_env_vars()
 
+    # Check if all the values are set, else error.
+    for key in keys:
+        if key not in values:
+            print(f"Error: ${key} not in environment.")
+            sys.exit(1)
+
     global api_keys
 
     api_keys = APIKeyCollection(
