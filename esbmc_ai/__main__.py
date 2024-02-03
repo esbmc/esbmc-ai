@@ -81,20 +81,6 @@ For all the options, run ESBMC with -h as a parameter:
 """
 
 
-def init_check_health(verbose: bool) -> None:
-    def printv(m) -> None:
-        if verbose:
-            print(m)
-
-    printv("Performing init health check...")
-    # Check that the .env file exists.
-    if os.path.exists(".env"):
-        printv("Environment file has been located")
-    else:
-        print("Error: .env file is not found in project directory")
-        sys.exit(3)
-
-
 def check_health() -> None:
     printv("Performing health check...")
     # Check that ESBMC exists.
@@ -261,8 +247,6 @@ def main() -> None:
     print("ESBMC-AI")
     print(f"Made by {__author__}")
     print()
-
-    init_check_health(args.verbose)
 
     config.load_envs()
     config.load_config(config.cfg_path)
