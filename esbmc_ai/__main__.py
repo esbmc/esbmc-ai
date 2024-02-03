@@ -244,7 +244,7 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    print("ESBMC-AI")
+    print(f"ESBMC-AI {__version__}")
     print(f"Made by {__author__}")
     print()
 
