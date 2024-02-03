@@ -32,6 +32,9 @@ pytest = "*"
 pytest-cov = "*"
 pytest-regtest = "*"
 py = "*" # Dependency of pytest-regtest
+build = "*"
+twine = "*"
+hatch = "*"
 
 [requires]
 python_version = "3.11"
