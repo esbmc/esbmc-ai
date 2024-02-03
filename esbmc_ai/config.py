@@ -19,7 +19,7 @@ from .chat_response import json_to_base_messages
 
 api_keys: APIKeyCollection
 
-esbmc_path: str = "./esbmc"
+esbmc_path: str = "~/.local/bin/esbmc"
 esbmc_params: list[str] = [
     "--interval-analysis",
     "--goto-unwind",

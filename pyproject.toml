@@ -60,7 +60,7 @@ esbmc_ai = "esbmc_ai.__main__:main"
 
 [project.urls]
 Homepage = "https://github.com/Yiannis128/esbmc-ai"
-"Source code" = "https://github.com/Yiannis128/esbmc-ai"
+"Source Code" = "https://github.com/Yiannis128/esbmc-ai"
 Documentation = "https://github.com/Yiannis128/esbmc-ai/wiki"
 Issues = "https://github.com/Yiannis128/esbmc-ai/issues"
 
