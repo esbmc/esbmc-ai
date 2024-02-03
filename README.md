@@ -8,9 +8,7 @@ This is an area of active research.
 
 ## Demonstration
 
-[Basic Usage Demo](https://user-images.githubusercontent.com/9535618/235352993-b54c47ef-a1c6-422c-aa5b-07edc2988521.webm)
-
-[Fix Code Demo](https://github.com/Yiannis128/esbmc-ai/assets/9535618/e35882ee-7e50-4c10-9879-d19e73d7f45d)
+[![Fix Code Demo](https://img.youtube.com/vi/anpRa6GpVdU/0.jpg)](https://www.youtube.com/watch?v=anpRa6GpVdU)
 
 More videos can be found on the [ESBMC-AI Youtube Channel](https://www.youtube.com/@esbmc-ai)
 
