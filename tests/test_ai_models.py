@@ -9,7 +9,7 @@ from langchain.schema import (
 )
 from pytest import raises
 
-from esbmc_ai_lib.ai_models import (
+from esbmc_ai.ai_models import (
     add_custom_ai_model,
     is_valid_ai_model,
     AIModel,

@@ -13,27 +13,29 @@ import readline
 import argparse
 from langchain.base_language import BaseLanguageModel
 
-import esbmc_ai_lib.config as config
-from esbmc_ai_lib.frontend.solution import (
+
+import esbmc_ai.config as config
+from esbmc_ai import __author__, __version__
+from esbmc_ai.frontend.solution import (
     SourceFile,
     get_main_source_file,
     set_main_source_file,
     get_main_source_file_path,
 )
 
-from esbmc_ai_lib.commands import (
+from esbmc_ai.commands import (
     ChatCommand,
     FixCodeCommand,
     HelpCommand,
     ExitCommand,
 )
 
-from esbmc_ai_lib.loading_widget import LoadingWidget, create_loading_widget
-from esbmc_ai_lib.user_chat import UserChat
-from esbmc_ai_lib.logging import printv, printvv
-from esbmc_ai_lib.esbmc_util import esbmc
-from esbmc_ai_lib.chat_response import FinishReason, ChatResponse
-from esbmc_ai_lib.ai_models import _ai_model_names
+from esbmc_ai.loading_widget import LoadingWidget, create_loading_widget
+from esbmc_ai.user_chat import UserChat
+from esbmc_ai.logging import printv, printvv
+from esbmc_ai.esbmc_util import esbmc
+from esbmc_ai.chat_response import FinishReason, ChatResponse
+from esbmc_ai.ai_models import _ai_model_names
 
 
 commands: list[ChatCommand] = []
@@ -197,7 +199,7 @@ def main() -> None:
         # argparse.RawDescriptionHelpFormatter allows the ESBMC_HELP to display
         # properly.
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=f"Made by Yiannis Charalambous\n\n{ESBMC_HELP}",
+        epilog=f"Made by {__author__}\n\n{ESBMC_HELP}",
     )
 
     parser.add_argument(
@@ -209,6 +211,14 @@ def main() -> None:
         "remaining",
         nargs=argparse.REMAINDER,
         help="Any arguments after the filename will be passed to ESBMC as parameters.",
+    )
+
+    parser.add_argument(
+        "-V",
+        "--version",
+        action="version",
+        version="%(prog)s {version}".format(version=__version__),
+        help="Show version information.",
     )
 
     parser.add_argument(
@@ -249,7 +259,7 @@ def main() -> None:
     args = parser.parse_args()
 
     print("ESBMC-AI")
-    print("Made by Yiannis Charalambous")
+    print(f"Made by {__author__}")
     print()
 
     init_check_health(args.verbose)

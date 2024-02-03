@@ -2,9 +2,9 @@
 
 from pytest import raises
 
-import esbmc_ai_lib.config as config
+import esbmc_ai.config as config
 
-from esbmc_ai_lib.ai_models import is_valid_ai_model
+from esbmc_ai.ai_models import is_valid_ai_model
 
 
 def test_load_config_value() -> None:

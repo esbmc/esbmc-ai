@@ -4,10 +4,10 @@ import pytest
 
 from langchain.llms.fake import FakeListLLM
 from langchain.schema import AIMessage, BaseMessage, HumanMessage, SystemMessage
-from esbmc_ai_lib.ai_models import AIModel
-from esbmc_ai_lib.base_chat_interface import BaseChatInterface
-from esbmc_ai_lib.chat_response import ChatResponse
-from esbmc_ai_lib.config import AIAgentConversation, ChatPromptSettings
+from esbmc_ai.ai_models import AIModel
+from esbmc_ai.base_chat_interface import BaseChatInterface
+from esbmc_ai.chat_response import ChatResponse
+from esbmc_ai.config import AIAgentConversation, ChatPromptSettings
 
 
 @pytest.fixture(scope="module")

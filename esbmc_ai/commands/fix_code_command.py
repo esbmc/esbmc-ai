@@ -6,7 +6,7 @@ from typing import Any, Tuple
 from typing_extensions import override
 from langchain.schema import AIMessage, HumanMessage
 
-from esbmc_ai_lib.chat_response import FinishReason
+from esbmc_ai.chat_response import FinishReason
 
 from .chat_command import ChatCommand
 from .. import config

@@ -23,7 +23,7 @@ from langchain.schema import (
 )
 
 
-from esbmc_ai_lib.api_key_collection import APIKeyCollection
+from esbmc_ai.api_key_collection import APIKeyCollection
 
 
 class AIModel(object):

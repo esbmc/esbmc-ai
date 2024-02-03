@@ -3,7 +3,7 @@
 from langchain.base_language import BaseLanguageModel
 from langchain.schema import AIMessage, BaseMessage, HumanMessage
 
-from esbmc_ai_lib.config import ChatPromptSettings
+from esbmc_ai.config import ChatPromptSettings
 from .base_chat_interface import BaseChatInterface, ChatResponse
 from .ai_models import AIModel
 

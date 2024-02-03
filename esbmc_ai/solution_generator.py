@@ -4,8 +4,8 @@ from typing_extensions import override
 from langchain.base_language import BaseLanguageModel
 from langchain.schema import BaseMessage
 
-from esbmc_ai_lib.chat_response import ChatResponse, FinishReason
-from esbmc_ai_lib.config import DynamicAIModelAgent
+from esbmc_ai.chat_response import ChatResponse, FinishReason
+from esbmc_ai.config import DynamicAIModelAgent
 
 from .ai_models import AIModel
 from .base_chat_interface import BaseChatInterface

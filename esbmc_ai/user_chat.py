@@ -6,7 +6,7 @@ from langchain.base_language import BaseLanguageModel
 from langchain.memory import ConversationSummaryMemory, ChatMessageHistory
 from langchain.schema import BaseMessage, PromptValue, SystemMessage
 
-from esbmc_ai_lib.config import AIAgentConversation, ChatPromptSettings
+from esbmc_ai.config import AIAgentConversation, ChatPromptSettings
 
 from .ai_models import AIModel
 from .base_chat_interface import BaseChatInterface
