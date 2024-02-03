@@ -248,7 +248,9 @@ def load_envs() -> None:
     )
 
     global cfg_path
-    cfg_path = str(os.getenv("ESBMC_AI_CFG_PATH"))
+    cfg_path = os.path.expanduser(
+        os.path.expandvars(str(os.getenv("ESBMC_AI_CFG_PATH")))
+    )
 
 
 def _load_ai_data(config: dict) -> None:
@@ -340,9 +342,9 @@ def _load_config_real_number(
 
 
 def load_config(file_path: str) -> None:
-    if not os.path.exists(file_path):
+    if not os.path.exists(file_path) and os.path.isfile(file_path):
         print(f"Error: Config not found: {file_path}")
-        sys.exit(4)
+        sys.exit(1)
 
     config_file = None
     with open(file_path, mode="r") as file:
