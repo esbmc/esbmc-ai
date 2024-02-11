@@ -35,6 +35,8 @@ py = "*" # Dependency of pytest-regtest
 build = "*"
 twine = "*"
 hatch = "*"
+transformers = "*"
+torch = "*"
 
 [requires]
 python_version = "3.11"
