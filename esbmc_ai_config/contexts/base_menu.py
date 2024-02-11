@@ -1,5 +1,6 @@
 # Author: Yiannis Charalambous
 
+from typing_extensions import override
 import urwid
 from urwid import Button, Text, connect_signal, AttrMap
 
@@ -16,20 +17,28 @@ class BaseMenu(Context):
     ) -> None:
         """Creates a Menu context and displays it on the screen."""
 
-        _choices: list[str | urwid.Widget] = choices.copy()
-        if back_choice:
-            _choices.append(urwid.Divider())
-            _choices.append("Back")
+        self.choices: list[str | urwid.Widget] = choices.copy()
+        self.back_choice: bool = back_choice
+        self.title: str = title
 
-        menu: urwid.ListBox = self.create_menu(title=title, choices=_choices)
+        super().__init__()
 
-        menu_box: urwid.WidgetDecoration = urwid.Padding(
+    def create_padding(self, menu: urwid.Widget) -> urwid.Padding:
+        return urwid.Padding(
             menu,
             left=2,
             right=2,
         )
 
-        super().__init__(menu_box)
+    @override
+    def build_ui(self) -> urwid.Widget:
+        choices: list[str | urwid.Widget] = self.choices.copy()
+        if self.back_choice:
+            choices.append(urwid.Divider())
+            choices.append("Back")
+
+        menu: urwid.ListBox = self.create_menu(title=self.title, choices=choices)
+        return self.create_padding(menu)
 
     def item_chosen(self, button, choice) -> None:
         if choice == "Back":

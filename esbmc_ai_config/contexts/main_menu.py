@@ -8,6 +8,8 @@ from urwid import Text, Widget
 from esbmc_ai_config.contexts.base_menu import BaseMenu
 from esbmc_ai_config.context_manager import ContextManager
 from esbmc_ai_config.contexts.env_menu import EnvMenu
+from esbmc_ai_config.contexts.esbmc_menu import ESBMCMenu
+from esbmc_ai_config.contexts.save_menu import SaveMenu
 
 
 class MainMenu(BaseMenu):
@@ -18,6 +20,8 @@ class MainMenu(BaseMenu):
                 "Setup Environment",
                 "ESBMC Settings",
                 "AI Configuration",
+                "Custom LLM",
+                urwid.Divider(),
                 "Save",
                 "Save As",
                 urwid.Divider(),
@@ -26,6 +30,9 @@ class MainMenu(BaseMenu):
             back_choice=False,
         )
 
+    @override
+    def build_ui(self) -> urwid.Widget:
+        list_menu: urwid.Widget = super().build_ui()
         # Add additional content to widget.
         text = urwid.ListBox(
             [
@@ -45,17 +52,17 @@ class MainMenu(BaseMenu):
         )
 
         top: Widget = urwid.Overlay(
-            urwid.LineBox(self.widget),
+            urwid.LineBox(list_menu),
             text,
             align="center",
             valign="middle",
             width=("relative", 60),
             height=("relative", 15),
             min_width=20,
-            min_height=12,
+            min_height=14,
         )
 
-        self.widget = top
+        return top
 
     @override
     def item_chosen(self, button, choice) -> None:
@@ -66,6 +73,12 @@ class MainMenu(BaseMenu):
                 self.exit_program(button)
             case "Setup Environment":
                 ContextManager.push_context(EnvMenu())
+                return
+            case "ESBMC Settings":
+                ContextManager.push_context(ESBMCMenu())
+                return
+            case "Save":
+                ContextManager.push_context(SaveMenu())
                 return
 
     def exit_program(self, _):
