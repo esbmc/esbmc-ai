@@ -11,6 +11,9 @@ from langchain.schema import (
 )
 
 
+"""Contains classes and functions that relate to sending/receiving messages from LLMs."""
+
+
 class FinishReason(Enum):
     # API response still in progress or incomplete
     null = 0

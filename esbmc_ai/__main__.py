@@ -13,37 +13,35 @@ import readline
 import argparse
 from langchain.base_language import BaseLanguageModel
 
-import esbmc_ai_lib.config as config
-from esbmc_ai_lib.frontend.solution import (
+
+import esbmc_ai.config as config
+from esbmc_ai import __author__, __version__
+from esbmc_ai.frontend.solution import (
     SourceFile,
     get_main_source_file,
     set_main_source_file,
     get_main_source_file_path,
 )
 
-from esbmc_ai_lib.commands import (
+from esbmc_ai.commands import (
     ChatCommand,
     FixCodeCommand,
     HelpCommand,
     ExitCommand,
-    OptimizeCodeCommand,
-    # VerifyCodeCommand,
 )
 
-from esbmc_ai_lib.loading_widget import LoadingWidget, create_loading_widget
-from esbmc_ai_lib.user_chat import UserChat
-from esbmc_ai_lib.logging import printv, printvv
-from esbmc_ai_lib.esbmc_util import esbmc
-from esbmc_ai_lib.chat_response import FinishReason, json_to_base_messages, ChatResponse
-from esbmc_ai_lib.ai_models import _ai_model_names
+from esbmc_ai.loading_widget import LoadingWidget, create_loading_widget
+from esbmc_ai.user_chat import UserChat
+from esbmc_ai.logging import printv, printvv
+from esbmc_ai.esbmc_util import esbmc
+from esbmc_ai.chat_response import FinishReason, ChatResponse
+from esbmc_ai.ai_models import _ai_model_names
 
 
 commands: list[ChatCommand] = []
 command_names: list[str]
 help_command: HelpCommand = HelpCommand()
 fix_code_command: FixCodeCommand = FixCodeCommand()
-optimize_code_command: OptimizeCodeCommand = OptimizeCodeCommand()
-# verify_code_command: VerifyCodeCommand = VerifyCodeCommand()
 exit_command: ExitCommand = ExitCommand()
 
 chat: UserChat
@@ -83,20 +81,6 @@ For all the options, run ESBMC with -h as a parameter:
 """
 
 
-def init_check_health(verbose: bool) -> None:
-    def printv(m) -> None:
-        if verbose:
-            print(m)
-
-    printv("Performing init health check...")
-    # Check that the .env file exists.
-    if os.path.exists(".env"):
-        printv("Environment file has been located")
-    else:
-        print("Error: .env file is not found in project directory")
-        sys.exit(3)
-
-
 def check_health() -> None:
     printv("Performing health check...")
     # Check that ESBMC exists.
@@ -131,8 +115,6 @@ def init_commands_list() -> None:
             help_command,
             exit_command,
             fix_code_command,
-            optimize_code_command,
-            # verify_code_command,
         ]
     )
     help_command.set_commands(commands)
@@ -155,9 +137,6 @@ def init_commands() -> None:
     fix_code_command.on_solution_signal.add_listener(chat.set_solution)
     fix_code_command.on_solution_signal.add_listener(update_solution)
 
-    optimize_code_command.on_solution_signal.add_listener(chat.set_solution)
-    optimize_code_command.on_solution_signal.add_listener(update_solution)
-
 
 def _run_command_mode(
     command: ChatCommand,
@@ -165,29 +144,21 @@ def _run_command_mode(
     esbmc_output: str,
     source_code: str,
 ) -> None:
-    if command == fix_code_command:
-        error, solution = fix_code_command.execute(
-            file_name=get_main_source_file_path(),
-            source_code=source_code,
-            esbmc_output=esbmc_output,
-        )
+    match command.command_name:
+        case fix_code_command.command_name:
+            error, solution = fix_code_command.execute(
+                file_name=get_main_source_file_path(),
+                source_code=source_code,
+                esbmc_output=esbmc_output,
+            )
 
-        if error:
-            print("Failed all attempts...")
-            sys.exit(1)
-        else:
-            print(solution)
-    elif command == optimize_code_command:
-        error, solution = optimize_code_command.execute(
-            file_path=get_main_source_file_path(),
-            source_code=source_code,
-            function_names=args,
-        )
-
-        print(solution)
-        sys.exit(1 if error else 0)
-    else:
-        command.execute()
+            if error:
+                print("Failed all attempts...")
+                sys.exit(1)
+            else:
+                print(solution)
+        case _:
+            command.execute()
     sys.exit(0)
 
 
@@ -214,7 +185,7 @@ def main() -> None:
         # argparse.RawDescriptionHelpFormatter allows the ESBMC_HELP to display
         # properly.
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=f"Made by Yiannis Charalambous\n\n{ESBMC_HELP}",
+        epilog=f"Made by {__author__}\n\n{ESBMC_HELP}",
     )
 
     parser.add_argument(
@@ -226,6 +197,14 @@ def main() -> None:
         "remaining",
         nargs=argparse.REMAINDER,
         help="Any arguments after the filename will be passed to ESBMC as parameters.",
+    )
+
+    parser.add_argument(
+        "-V",
+        "--version",
+        action="version",
+        version="%(prog)s {version}".format(version=__version__),
+        help="Show version information.",
     )
 
     parser.add_argument(
@@ -265,11 +244,9 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    print("ESBMC-AI")
-    print("Made by Yiannis Charalambous")
+    print(f"ESBMC-AI {__version__}")
+    print(f"Made by {__author__}")
     print()
-
-    init_check_health(args.verbose)
 
     config.load_envs()
     config.load_config(config.cfg_path)
@@ -340,13 +317,12 @@ def main() -> None:
     printv("Creating user chat")
     global chat
     chat = UserChat(
-        system_messages=json_to_base_messages(
-            config.chat_prompt_user_mode.system_messages
-        ),
+        ai_model_agent=config.chat_prompt_user_mode,
         ai_model=config.ai_model,
         llm=chat_llm,
         source_code=get_main_source_file().content,
         esbmc_output=esbmc_output,
+        set_solution_messages=config.chat_prompt_user_mode.scenarios["set_solution"],
     )
 
     printv("Initializing commands...")
@@ -357,9 +333,9 @@ def main() -> None:
     if len(config.chat_prompt_user_mode.initial_prompt) > 0:
         printv("Using initial prompt from file...\n")
         anim.start("Model is parsing ESBMC output... Please Wait")
+        # TODO Make protected
         response = chat.send_message(
             message=config.chat_prompt_user_mode.initial_prompt,
-            protected=True,
         )
         anim.stop()
 
@@ -395,24 +371,9 @@ def main() -> None:
 
                 if not error:
                     print(
-                        "\n\nassistant: Here is the corrected code, verified with ESBMC:"
+                        "\n\nESBMC-AI: Here is the corrected code, verified with ESBMC:"
                     )
                     print(f"```\n{solution}\n```")
-                continue
-            elif command == optimize_code_command.command_name:
-                # Optimize Code command
-                error, solution = optimize_code_command.execute(
-                    file_path=get_main_source_file_path(),
-                    source_code=get_main_source_file().content,
-                    function_names=command_args,
-                )
-
-                if error:
-                    # Print error
-                    print("\n" + solution + "\n")
-                else:
-                    print(f"\nOptimizations Completed:\n```c\n{solution}```\n")
-
                 continue
             else:
                 # Commands without parameters or returns are handled automatically.

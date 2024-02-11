@@ -1,4 +1,4 @@
-from esbmc_ai_lib.__main__ import parse_command
+from esbmc_ai.__main__ import parse_command
 
 
 def test_parse() -> None:

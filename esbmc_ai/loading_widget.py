@@ -12,7 +12,7 @@ from itertools import cycle
 from threading import Thread
 from typing import Optional
 
-from esbmc_ai_lib import config
+from esbmc_ai import config
 
 
 class LoadingWidget(object):

@@ -2,15 +2,11 @@
 
 from os import get_terminal_size
 from time import sleep
-from typing import Tuple
+from typing import Any, Tuple
 from typing_extensions import override
 from langchain.schema import AIMessage, HumanMessage
 
-from esbmc_ai_lib.chat_response import (
-    FinishReason,
-    json_to_base_messages,
-)
-
+from esbmc_ai.chat_response import FinishReason
 
 from .chat_command import ChatCommand
 from .. import config
@@ -18,7 +14,9 @@ from ..msg_bus import Signal
 from ..loading_widget import create_loading_widget
 from ..esbmc_util import esbmc_load_source_code
 from ..solution_generator import SolutionGenerator
-from ..logging import printvv
+from ..logging import printv, printvv
+
+# TODO Remove built in messages and move them to config.
 
 
 class FixCodeCommand(ChatCommand):
@@ -31,10 +29,26 @@ class FixCodeCommand(ChatCommand):
         )
         self.anim = create_loading_widget()
 
+    def _resolve_scenario(self, esbmc_output: str) -> str:
+        # Start search from the marker.
+        marker: str = "Violated property:\n"
+        violated_property_index: int = esbmc_output.rfind(marker) + len(marker)
+        from_loc_error_msg: str = esbmc_output[violated_property_index:]
+        # Find second new line which contains the location of the violated
+        # property and that should point to the line with the type of error.
+        # In this case, the type of error is the "scenario".
+        scenario_index: int = from_loc_error_msg.find("\n")
+        scenario: str = from_loc_error_msg[scenario_index + 1 :]
+        scenario_end_l_index: int = scenario.find("\n")
+        scenario = scenario[:scenario_end_l_index].strip()
+        return scenario
+
     @override
-    def execute(
-        self, file_name: str, source_code: str, esbmc_output: str
-    ) -> Tuple[bool, str]:
+    def execute(self, **kwargs: Any) -> Tuple[bool, str]:
+        file_name: str = kwargs["file_name"]
+        source_code: str = kwargs["source_code"]
+        esbmc_output: str = kwargs["esbmc_output"]
+
         wait_time: int = int(config.consecutive_prompt_delay)
         # Create time left animation to show how much time left between API calls
         # This is done by creating a list of all the numbers to be displayed and
@@ -44,20 +58,28 @@ class FixCodeCommand(ChatCommand):
             animation=[str(num) for num in range(wait_time, 0, -1)],
         )
 
+        # Parse the esbmc output here and determine what "Scenario" to use.
+        scenario: str = self._resolve_scenario(esbmc_output)
+
+        printv(f"Scenario: {scenario}")
+        printv(
+            f"Using dynamic prompt..."
+            if scenario in config.chat_prompt_generator_mode.scenarios
+            else "Using generic prompt..."
+        )
+
         llm = config.ai_model.create_llm(
             api_keys=config.api_keys,
             temperature=config.chat_prompt_generator_mode.temperature,
         )
 
         solution_generator = SolutionGenerator(
-            system_messages=json_to_base_messages(
-                config.chat_prompt_generator_mode.system_messages
-            ),
-            initial_prompt=config.chat_prompt_generator_mode.initial_prompt,
+            ai_model_agent=config.chat_prompt_generator_mode,
             source_code=source_code,
             esbmc_output=esbmc_output,
             ai_model=config.ai_model,
             llm=llm,
+            scenario=scenario,
         )
 
         print()
@@ -105,20 +127,7 @@ class FixCodeCommand(ChatCommand):
 
             if exit_code == 0:
                 self.on_solution_signal.emit(response)
-
                 return False, response
-            elif exit_code != 1:
-                # The program did not compile.
-                solution_generator.push_to_message_stack(
-                    message=HumanMessage(
-                        content="The source code you provided does not compile."
-                    )
-                )
-                solution_generator.push_to_message_stack(
-                    message=AIMessage(
-                        content="OK. Show me the ESBMC output for additional assistance."
-                    )
-                )
 
             # Failure case
             print(f"Failure {idx+1}/{max_retries}: Retrying...")
@@ -129,14 +138,22 @@ class FixCodeCommand(ChatCommand):
                 wait_anim.stop()
 
                 # Inform solution generator chat about the ESBMC response.
-                solution_generator.push_to_message_stack(
-                    message=HumanMessage(
-                        content=f"ESBMC has reported that verification failed, use the ESBMC output to find out what is wrong, and fix it. Here is ESBMC output:\n\n{esbmc_output}"
+                if exit_code != 1:
+                    # The program did not compile.
+                    solution_generator.push_to_message_stack(
+                        message=HumanMessage(
+                            content=f"The source code you provided does not compile. Fix the compilation errors. Use ESBMC output to fix the compilation errors:\n\n```\n{esbmc_output}\n```"
+                        )
                     )
-                )
+                else:
+                    solution_generator.push_to_message_stack(
+                        message=HumanMessage(
+                            content=f"ESBMC has reported that verification failed, use the ESBMC output to find out what is wrong, and fix it. Here is ESBMC output:\n\n```\n{esbmc_output}\n```"
+                        )
+                    )
 
                 solution_generator.push_to_message_stack(
-                    AIMessage(content="Understood")
+                    AIMessage(content="Understood.")
                 )
 
         return True, "Failed all attempts..."

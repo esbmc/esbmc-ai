@@ -8,7 +8,7 @@
       "name": "Launch ESBMC-AI on Open File",
       "type": "python",
       "request": "launch",
-      "module": "esbmc_ai_lib",
+      "module": "esbmc_ai",
       "justMyCode": true,
       "cwd": "${workspaceFolder}",
       "args": [
@@ -16,10 +16,24 @@
       ]
     },
     {
+      "name": "Fix Code on Open File",
+      "type": "python",
+      "request": "launch",
+      "module": "esbmc_ai",
+      "justMyCode": true,
+      "cwd": "${workspaceFolder}",
+      "args": [
+        "-c",
+        "fix-code",
+        "-v",
+        "${file}"
+      ]
+    },
+    {
       "name": "Optimize Code on Open File",
       "type": "python",
       "request": "launch",
-      "module": "esbmc_ai_lib",
+      "module": "esbmc_ai",
       "justMyCode": true,
       "cwd": "${workspaceFolder}",
       "args": [

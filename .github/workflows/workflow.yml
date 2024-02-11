@@ -25,9 +25,9 @@ jobs:
         run: |
           pipenv install --deploy --dev
 
-      - name: Pylint on esbmc_ai_lib
+      - name: Pylint on esbmc_ai
         run: |
-          pipenv run pylint esbmc_ai_lib
+          pipenv run pylint esbmc_ai
 
   test:
     name: PyTest

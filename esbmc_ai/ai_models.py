@@ -1,23 +1,29 @@
 # Author: Yiannis Charalambous
 
 from abc import abstractmethod
-from typing import Union
+from typing import Any, Iterable, Union
 from enum import Enum
 from typing_extensions import override
 
-from langchain import HuggingFaceTextGenInference, PromptTemplate
+from langchain.prompts import PromptTemplate
 from langchain.base_language import BaseLanguageModel
-from langchain.chat_models import ChatOpenAI
 
-from langchain.prompts.chat import ChatPromptValue
+from langchain_openai import ChatOpenAI
+from langchain_community.llms import HuggingFaceTextGenInference
+
+from langchain.prompts.chat import (
+    AIMessagePromptTemplate,
+    ChatPromptTemplate,
+    HumanMessagePromptTemplate,
+    SystemMessagePromptTemplate,
+)
 from langchain.schema import (
     BaseMessage,
     PromptValue,
 )
 
-from openai import ChatCompletion as OpenAIChatCompletion
 
-from esbmc_ai_lib.api_key_collection import APIKeyCollection
+from esbmc_ai.api_key_collection import APIKeyCollection
 
 
 class AIModel(object):
@@ -38,14 +44,95 @@ class AIModel(object):
         api_keys: APIKeyCollection,
         temperature: float = 1.0,
     ) -> BaseLanguageModel:
+        """Initializes a large language model model with the provided parameters."""
         raise NotImplementedError()
+
+    @classmethod
+    def convert_messages_to_tuples(
+        cls, messages: Iterable[BaseMessage]
+    ) -> list[tuple[str, str]]:
+        """Converts messages into a format understood by the ChatPromptTemplate - since it won't format
+        BaseMessage derived classes for some reason, but will for tuples, because they get converted into
+        Templates in function `_convert_to_message`."""
+        return [(message.type, str(message.content)) for message in messages]
+
+    @classmethod
+    def escape_messages(
+        cls,
+        messages: Iterable[BaseMessage],
+        allowed_keys: list[str],
+    ) -> Iterable[BaseMessage]:
+        """Adds escape curly braces to the messages, will make sure that the sequential
+        curly braces in the messages is even (and hence escaped). Will ignore curly braces
+        with `allowed_keys`."""
+
+        def add_safeguards(content: str, char: str, allowed_keys: list[str]) -> str:
+            start_idx: int = 0
+            while True:
+                char_idx: int = content.find(char, start_idx)
+                if char_idx == -1:
+                    break
+                # Count how many sequences of the char are occuring
+                count: int = 1
+                # FIXME Add bounds check here
+                while (
+                    len(content) > char_idx + count
+                    and content[char_idx + count] == char
+                ):
+                    count += 1
+
+                # Check if the next sequence is in the allowed keys, if it is, then
+                # skip to the next one.
+                is_allowed: bool = False
+                for key in allowed_keys:
+                    if key == content[char_idx + count : char_idx + count + len(key)]:
+                        is_allowed = True
+                        break
+
+                # Now change start_idx to reflect new location. The start index is at the end of
+                # all the chars (including the inserted one).
+                start_idx = char_idx + count + 1
+
+                # If inside allowed keys, then continue to next iteration.
+                if is_allowed:
+                    continue
+
+                # Check if odd number (will need to add extra char)
+                if count % 2 != 0:
+                    content = (
+                        content[: char_idx + count] + char + content[char_idx + count :]
+                    )
+            return content
+
+        reversed_keys: list[str] = [key[::-1] for key in allowed_keys]
+
+        result: list[BaseMessage] = []
+        for msg in messages:
+            content: str = str(msg.content)
+            look_pointer: int = 0
+            # Open curly check
+            if content.find("{", look_pointer) != -1:
+                content = add_safeguards(content, "{", allowed_keys)
+            # Close curly check
+            if content.find("}", look_pointer) != -1:
+                # Do it in reverse with reverse keys.
+                content = add_safeguards(content[::-1], "}", reversed_keys)[::-1]
+            new_msg = msg.copy()
+            new_msg.content = content
+            result.append(new_msg)
+        return result
 
     def apply_chat_template(
         self,
-        messages: list[BaseMessage],
+        messages: Iterable[BaseMessage],
+        **format_values: Any,
     ) -> PromptValue:
         # Default one, identity function essentially.
-        return ChatPromptValue(messages=messages)
+        escaped_messages = AIModel.escape_messages(messages, list(format_values.keys()))
+        message_tuples = AIModel.convert_messages_to_tuples(escaped_messages)
+        return ChatPromptTemplate.from_messages(messages=message_tuples).format_prompt(
+            **format_values,
+        )
 
 
 class AIModelOpenAI(AIModel):
@@ -56,12 +143,11 @@ class AIModelOpenAI(AIModel):
     def create_llm(
         self,
         api_keys: APIKeyCollection,
-        temperature: float,
+        temperature: float = 1.0,
     ) -> BaseLanguageModel:
         return ChatOpenAI(
-            client=OpenAIChatCompletion,
             model=self.name,
-            openai_api_key=api_keys.openai,
+            api_key=api_keys.openai,
             max_tokens=None,
             temperature=temperature,
             model_kwargs={},
@@ -69,18 +155,8 @@ class AIModelOpenAI(AIModel):
 
 
 class AIModelTextGen(AIModel):
-    # Below are only used for models that need them, such as models that
-    # are using the provider "text_inference_server".
-    url: str
-    config_message: str
-    """The config message to place all messages in."""
-    system_template: PromptTemplate
-    """Template for each system message."""
-    human_template: PromptTemplate
-    """Template for each human message."""
-    ai_template: PromptTemplate
-    """Template for each AI message."""
-    stop_sequences: list[str]
+    """Below are only used for models that need them, such as models that
+    are using the provider "text_inference_server"."""
 
     def __init__(
         self,
@@ -95,31 +171,40 @@ class AIModelTextGen(AIModel):
     ) -> None:
         super().__init__(name, tokens)
 
-        self.url = url
-        self.config_message = config_message
-
-        self.system_template = PromptTemplate(
-            input_variables=["content"],
-            template=system_template,
+        self.url: str = url
+        self.chat_template: PromptTemplate = PromptTemplate.from_template(
+            template=config_message,
         )
+        """The chat template to place all messages in."""
 
-        self.human_template = PromptTemplate(
-            input_variables=["content"],
-            template=human_template,
+        self.system_template: SystemMessagePromptTemplate = (
+            SystemMessagePromptTemplate.from_template(
+                template=system_template,
+            )
         )
+        """Template for each system message."""
 
-        self.ai_template = PromptTemplate(
-            input_variables=["content"],
-            template=ai_template,
+        self.human_template: HumanMessagePromptTemplate = (
+            HumanMessagePromptTemplate.from_template(
+                template=human_template,
+            )
         )
+        """Template for each human message."""
 
-        self.stop_sequences = stop_sequences
+        self.ai_template: AIMessagePromptTemplate = (
+            AIMessagePromptTemplate.from_template(
+                template=ai_template,
+            )
+        )
+        """Template for each AI message."""
+
+        self.stop_sequences: list[str] = stop_sequences
 
     @override
     def create_llm(
         self,
         api_keys: APIKeyCollection,
-        temperature: float,
+        temperature: float = 1.0,
     ) -> BaseLanguageModel:
         return HuggingFaceTextGenInference(
             client=None,
@@ -136,14 +221,20 @@ class AIModelTextGen(AIModel):
         )
 
     @override
-    def apply_chat_template(self, messages: list[BaseMessage]) -> PromptValue:
+    def apply_chat_template(
+        self,
+        messages: Iterable[BaseMessage],
+        **format_values: Any,
+    ) -> PromptValue:
         """Text generation LLMs take single string of text as input. So the conversation
         is converted into a string and returned back in a single prompt value. The config
         message is also applied to the conversation."""
 
-        formatted_messages: list[str] = []
-        for msg in messages:
-            formatted_msg: str
+        escaped_messages = AIModel.escape_messages(messages, list(format_values.keys()))
+
+        formatted_messages: list[BaseMessage] = []
+        for msg in escaped_messages:
+            formatted_msg: BaseMessage
             if msg.type == "ai":
                 formatted_msg = self.ai_template.format(content=msg.content)
             elif msg.type == "system":
@@ -156,21 +247,11 @@ class AIModelTextGen(AIModel):
                 )
             formatted_messages.append(formatted_msg)
 
-        config_message_template: PromptTemplate = PromptTemplate(
-            template=self.config_message,
-            input_variables=["history", "user_prompt"],
+        return self.chat_template.format_prompt(
+            history="\n\n".join([str(msg.content) for msg in formatted_messages[:-1]]),
+            user_prompt=formatted_messages[-1].content,
+            **format_values,
         )
-
-        # Get formatted string of each history message and separate it using new
-        # lines, each message is then joined into a single string.
-        formatted_history: str = "\n\n".join(formatted_messages[:-1])
-
-        chat_prompt: PromptValue = config_message_template.format_prompt(
-            history=formatted_history,
-            user_prompt=formatted_messages[-1],
-        )
-
-        return chat_prompt
 
 
 class AIModels(Enum):

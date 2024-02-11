@@ -1,5 +1,6 @@
 # Author: Yiannis Charalambous
 
+from typing import Any, Optional
 from typing_extensions import override
 from .chat_command import ChatCommand
 
@@ -17,7 +18,7 @@ class HelpCommand(ChatCommand):
         self.commands = commands
 
     @override
-    def execute(self) -> None:
+    def execute(self, **_: Optional[Any]) -> Optional[Any]:
         print()
         print("Commands:")
 

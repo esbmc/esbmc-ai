@@ -1,6 +1,5 @@
 # Author: Yiannis Charalambous
 
-from langchain.prompts.base import StringPromptValue
 from langchain.prompts.chat import ChatPromptValue
 from langchain.schema import (
     AIMessage,
@@ -10,13 +9,12 @@ from langchain.schema import (
 )
 from pytest import raises
 
-from esbmc_ai_lib.ai_models import (
+from esbmc_ai.ai_models import (
     add_custom_ai_model,
     is_valid_ai_model,
     AIModel,
     AIModels,
     get_ai_model_by_name,
-    AIModelOpenAI,
     AIModelTextGen,
 )
 
@@ -47,12 +45,7 @@ def test_add_custom_ai_model() -> None:
 
     assert is_valid_ai_model(custom_model.name)
 
-
-def test_add_custom_ai_model_again() -> None:
-    custom_model: AIModel = AIModel(
-        name="custom_ai",
-        tokens=999,
-    )
+    # Test add again.
 
     if is_valid_ai_model(custom_model.name):
         with raises(Exception):
@@ -111,3 +104,40 @@ def test_apply_chat_template() -> None:
     prompt_text: str = custom_model_2.apply_chat_template(messages=messages).to_string()
 
     assert prompt_text == "System: M1\n\nHuman: M2\n\nAI: M3"
+
+
+def test_escape_messages() -> None:
+    """Tests that the brackets are escaped properly using `AIModel.escape_message`."""
+
+    messages = [
+        HumanMessage(content="Hello my name is {name} and I like {{apples}}"),
+        SystemMessage(content="Hello my {{name is system} and I like {{{apples}}}"),
+        AIMessage(content="Hello my {{ {{{apples}}"),
+        SystemMessage(content="{descreption}{descreption}{{descreption}}{descreption}"),
+        SystemMessage(content="{descreption}{{{descreption}}}{{{{{descreption}}}}}"),
+        SystemMessage(
+            content="{apples}{{{apples}}}{{{{{apples}}}}}{{{{{{{apples}}}}}}}"
+        ),
+    ]
+
+    allowed = ["name", "descreption"]
+
+    filtered = [
+        HumanMessage(content="Hello my name is {name} and I like {{apples}}"),
+        SystemMessage(content="Hello my {{name is system}} and I like {{{{apples}}}}"),
+        AIMessage(content="Hello my {{ {{{{apples}}"),
+        SystemMessage(content="{descreption}{descreption}{{descreption}}{descreption}"),
+        SystemMessage(content="{descreption}{{{descreption}}}{{{{{descreption}}}}}"),
+        SystemMessage(
+            content="{{apples}}{{{{apples}}}}{{{{{{apples}}}}}}{{{{{{{{apples}}}}}}}}"
+        ),
+    ]
+
+    result = list(AIModel.escape_messages(messages, allowed))
+
+    assert result[0] == filtered[0]
+    assert result[1] == filtered[1]
+    assert result[2] == filtered[2]
+    assert result[3] == filtered[3]
+    assert result[4] == filtered[4]
+    assert result[5] == filtered[5]

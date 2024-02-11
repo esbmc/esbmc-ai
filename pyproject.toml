@@ -1,0 +1,86 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "esbmc_ai"
+# https://hatch.pypa.io/latest/version/
+dynamic = ["version"]
+authors = [
+  { name="Yiannis Charalambous", email="yiannis128@hotmail.com" },
+]
+description = "LLM driven development and automatic repair kit."
+readme = "README.md"
+license-files = { paths = ["LICENSE"] }
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: GNU Affero General Public License v3",
+]
+
+keywords = [
+  "esbmc", "LLM", "AI", "automated code repair",
+]
+
+dependencies = [
+    "openai", 
+    "python-dotenv", 
+    "tiktoken",
+    "aiohttp",
+    "aiosignal",
+    "async-timeout",
+    "attrs",
+    "certifi",
+    "charset-normalizer",
+    "frozenlist",
+    "idna",
+    "multidict",
+    "regex",
+    "requests",
+    "urllib3",
+    "yarl",
+    "libclang", 
+    "clang",
+    "langchain",
+    "langchain-openai", 
+]
+
+#[project.optional-dependencies]
+#option1 = [
+#  "...",
+#]
+#option2 = [
+#  "...",
+#]
+
+[project.scripts]
+esbmc-ai = "esbmc_ai.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/Yiannis128/esbmc-ai"
+"Source Code" = "https://github.com/Yiannis128/esbmc-ai"
+Documentation = "https://github.com/Yiannis128/esbmc-ai/wiki"
+Issues = "https://github.com/Yiannis128/esbmc-ai/issues"
+
+[tool.hatch.version]
+path = "esbmc_ai/__about__.py"
+
+# [tool.hatch.build.targets.esbmc_ai]
+# ignore-vcs = true
+# include = [
+#   "/esbmc_ai/**/*.py",
+#   "/esbmc_ai_config/**/*.py",
+# ]
+# exclude = [
+#  "/.github/*",
+#  "/.vscode",
+#  "/notebooks",
+#  "/samples",
+#  "/scripts",
+#  "/tests",
+#  "/env.example",
+#  "/.gitignore"
+# ]
+
+# [tool.hatch.build.targets.esbmc_ai.force-include]
+# "config.json" = "esbmc_ai_config/data/config.template.json"
