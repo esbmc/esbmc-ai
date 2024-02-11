@@ -92,26 +92,8 @@ class BaseChatInterface(object):
                 response = ChatResponse(
                     finish_reason=FinishReason.stop,
                     message=response_message,
-                    total_tokens=self.ai_model.tokens,
+                    total_tokens=new_tokens,
                 )
-        # FIXME
-        # except TokenLimitExceededException as e:
-        #     # HFTextGen
-        #     response = ChatResponse(
-        #         finish_reason=FinishReason.length,
-        #         # NOTE Show the total tokens of the model instead of 0
-        #         # (no token counting currently...)
-        #         total_tokens=self.ai_model.tokens,
-        #     )
-        except InternalServerError as e:
-            # OpenAI model error handling.
-            if e.code == AIModelOpenAI.context_length_exceeded_error:
-                response = ChatResponse(
-                    finish_reason=FinishReason.length,
-                    total_tokens=self.ai_model.tokens,
-                )
-            else:
-                raise
         except Exception as e:
             print(f"There was an unkown error when generating a response: {e}")
             exit(1)
