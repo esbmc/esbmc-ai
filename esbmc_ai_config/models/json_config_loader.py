@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from typing_extensions import override
+
 from esbmc_ai_config.models.config_loader import ConfigLoader
 
 __ALLOWED_ENV_TYPES = bool | float | int | str

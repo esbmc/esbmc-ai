@@ -6,7 +6,7 @@ import urwid
 from esbmc_ai_config.context import Context
 from esbmc_ai_config.context_manager import ContextManager
 from esbmc_ai_config.contexts.dialog_context import DialogContext
-from esbmc_ai_config.models.config_manager import ConfigManager
+from esbmc_ai_config.models import ConfigManager
 
 
 class SaveMenu(Context):

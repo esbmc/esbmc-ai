@@ -3,7 +3,9 @@
 from typing_extensions import override
 
 import urwid
+from esbmc_ai_config.context_manager import ContextManager
 from esbmc_ai_config.contexts.base_menu import BaseMenu
+from esbmc_ai_config.contexts.esbmc_menu.esbmc_manage import ESBMCManage
 from esbmc_ai_config.widgets.text_input_button import TextInputButton
 
 
@@ -16,6 +18,14 @@ class ESBMCMenu(BaseMenu):
 
     def _get_menu_choices(self) -> list[str | urwid.Widget]:
         return [
+            urwid.AttrMap(
+                urwid.Button(
+                    "Manage ESBMC installations",
+                    on_press=lambda button: ContextManager.push_context(ESBMCManage()),
+                ),
+                None,
+                "reversed",
+            ),
             TextInputButton(
                 "ESBMC Path",
                 "",

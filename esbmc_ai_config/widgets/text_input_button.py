@@ -1,9 +1,10 @@
 # Author: Yiannis Charalambous
 
 from typing import Callable, Optional
-import urwid
-from esbmc_ai_config.context import Context
 
+import urwid
+
+from esbmc_ai_config.context import Context
 from esbmc_ai_config.context_manager import ContextManager
 
 

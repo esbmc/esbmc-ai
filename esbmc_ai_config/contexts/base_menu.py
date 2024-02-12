@@ -5,7 +5,7 @@ import urwid
 from urwid import Button, Text, connect_signal, AttrMap
 
 from esbmc_ai_config.context import Context
-from esbmc_ai_config.context_manager import ContextManager
+from esbmc_ai_config.widgets.back_button import BackButton
 
 
 class BaseMenu(Context):
@@ -35,14 +35,13 @@ class BaseMenu(Context):
         choices: list[str | urwid.Widget] = self.choices.copy()
         if self.back_choice:
             choices.append(urwid.Divider())
-            choices.append("Back")
+            choices.append(BackButton())
 
         menu: urwid.ListBox = self.create_menu(title=self.title, choices=choices)
         return self.create_padding(menu)
 
     def item_chosen(self, button, choice) -> None:
-        if choice == "Back":
-            ContextManager.pop_context()
+        pass
 
     def create_menu(self, title, choices: list[str | urwid.Widget]) -> urwid.ListBox:
         body: list[urwid.Widget] = [Text(title), urwid.Divider()]

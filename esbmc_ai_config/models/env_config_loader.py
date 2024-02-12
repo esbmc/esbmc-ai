@@ -7,6 +7,7 @@ from pathlib import Path
 from dataclasses import dataclass
 from typing_extensions import override, Optional
 from platform import system as system_name
+
 from esbmc_ai_config.models.config_loader import ConfigLoader
 
 __ALLOWED_ENV_TYPES = bool | float | int | str
@@ -31,6 +32,11 @@ class EnvConfigLoader(ConfigLoader):
             EnvConfigField("ESBMC_AI_CFG_PATH", "", is_optional=False),
             EnvConfigField("OPENAI_API_KEY", "", is_optional=True),
             EnvConfigField("HUGGINGFACE_API_KEY", "", is_optional=True),
+            EnvConfigField(
+                "ESBMC_LICENSE_AGREEMENT",
+                default_value=False,
+                is_optional=True,
+            ),
         ],
         create_missing_fields: bool = False,
     ) -> None:

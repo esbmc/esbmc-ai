@@ -5,11 +5,11 @@ from typing_extensions import override
 import urwid
 from urwid import Text, Widget
 
-from esbmc_ai_config.contexts.base_menu import BaseMenu
 from esbmc_ai_config.context_manager import ContextManager
+from esbmc_ai_config.contexts import BaseMenu
+from esbmc_ai_config.contexts.save_menu import SaveMenu
 from esbmc_ai_config.contexts.env_menu import EnvMenu
 from esbmc_ai_config.contexts.esbmc_menu import ESBMCMenu
-from esbmc_ai_config.contexts.save_menu import SaveMenu
 
 
 class MainMenu(BaseMenu):

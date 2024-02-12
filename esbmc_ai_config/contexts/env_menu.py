@@ -4,7 +4,7 @@ from typing_extensions import override
 import urwid
 from esbmc_ai_config.models.config_manager import ConfigManager
 
-from esbmc_ai_config.models.env_config_loader import EnvConfigField
+from esbmc_ai_config.models import EnvConfigField
 from esbmc_ai_config.contexts.base_menu import BaseMenu
 from esbmc_ai_config.widgets.text_input_button import TextInputButton
 
