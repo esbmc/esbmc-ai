@@ -20,7 +20,7 @@ class ESBMCMenu(BaseMenu):
         return [
             urwid.AttrMap(
                 urwid.Button(
-                    "Manage ESBMC installations",
+                    "Install ESBMC",
                     on_press=lambda button: ContextManager.push_context(ESBMCManage()),
                 ),
                 None,
