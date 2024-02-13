@@ -2,7 +2,8 @@
 
 
 from typing import Optional
-
+from pathlib import Path
+from platform import system as system_name
 
 from esbmc_ai_config.models.env_config_loader import EnvConfigLoader
 from esbmc_ai_config.models.json_config_loader import JsonConfigLoader
@@ -46,3 +47,21 @@ class ConfigManager(object):
             cls.env_config = EnvConfigLoader(
                 create_missing_fields=True,
             )
+
+    @classmethod
+    def get_esbmc_name(cls) -> str:
+        if system_name() == "Windows":
+            return "esbmc.exe"
+        else:
+            return "esbmc"
+
+    @classmethod
+    def get_esbmc_dir(cls) -> Path:
+        if system_name() == "Windows":
+            return Path.home() / "bin"
+        else:
+            return Path.home() / ".local/bin"
+
+    @classmethod
+    def get_esbmc_path(cls) -> Path:
+        return cls.get_esbmc_dir() / cls.get_esbmc_name()
