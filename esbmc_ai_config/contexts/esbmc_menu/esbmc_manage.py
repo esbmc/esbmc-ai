@@ -22,13 +22,16 @@ class ESBMCManage(Context):
     license_url: str = "https://raw.githubusercontent.com/esbmc/esbmc/master/COPYING"
 
     def __init__(self) -> None:
-        response: requests.Response = requests.get(ESBMCManage.license_url)
-        if response.status_code == status_codes.ok:
-            self.license: str = response.text
+        if self.license_accepted:
+            self.license: str = ""
         else:
-            self.license: str = (
-                f"Couldn't get the license: status code: {response.status_code}"
-            )
+            response: requests.Response = requests.get(ESBMCManage.license_url)
+            if response.status_code == status_codes.ok:
+                self.license: str = response.text
+            else:
+                self.license: str = (
+                    f"Couldn't get the license: status code: {response.status_code}"
+                )
 
         super().__init__(self.build_ui())
 

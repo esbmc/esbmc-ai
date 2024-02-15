@@ -19,8 +19,7 @@ class SaveMenu(Context):
     def _on_ok(self, button) -> None:
         ContextManager.pop_context()
         ConfigManager.env_config.save()
-        # TODO
-        # ConfigManager.json_config.save()
+        ConfigManager.json_config.save()
         ContextManager.push_context(
             DialogContext(
                 "Success",

@@ -21,6 +21,7 @@ class EnvMenu(BaseMenu):
                 initial_value=str(ConfigManager.env_config.values[field.name]),
             )
             for field in ConfigManager.env_config.fields
+            if field.show_in_config
         ]
         return choices
 
@@ -47,6 +48,7 @@ class EnvMenu(BaseMenu):
 
     def _on_value_submit(self, title: str, value: str, ok_pressed: bool) -> None:
         if ok_pressed:
+            # Find the correct field.
             field: EnvConfigField
             for i in ConfigManager.env_config.fields:
                 if i.name == title:
@@ -55,5 +57,6 @@ class EnvMenu(BaseMenu):
             else:
                 return
 
+            # Cast to the correct type.
             ConfigManager.env_config.values[title] = type(field.default_value)(value)
             self.widget = self.build_ui()

@@ -21,8 +21,7 @@ class ConfigManager(object):
         cls, env_path: Optional[str] = None, config_path: Optional[str] = None
     ) -> None:
         cls.load_env(env_path)
-        # TODO
-        # cls.load_json(config_path)
+        cls.load_json(config_path)
 
     @classmethod
     def load_json(cls, file_path: Optional[str] = None) -> None:

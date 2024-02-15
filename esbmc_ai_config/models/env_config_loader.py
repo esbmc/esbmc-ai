@@ -20,6 +20,8 @@ class EnvConfigField:
     is_optional: bool = False
     """Will not load the config if the value is not specified by the user. If
     true will assign default_value."""
+    show_in_config: bool = True
+    """Show in config tool UI."""
 
 
 class EnvConfigLoader(ConfigLoader):
@@ -36,6 +38,7 @@ class EnvConfigLoader(ConfigLoader):
                 "ESBMC_LICENSE_AGREEMENT",
                 default_value=False,
                 is_optional=True,
+                show_in_config=False,
             ),
         ],
         create_missing_fields: bool = False,
