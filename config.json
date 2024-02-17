@@ -1,7 +1,7 @@
 {
   "ai_model": "gpt-3.5-turbo-16k",
   "ai_custom": {},
-  "esbmc_path": "~/.local/bin/esbmc",
+  "esbmc_path": "~/ESBMC/bin/esbmc",
   "allow_successful": true,
   "esbmc_params": [
     "--interval-analysis",
@@ -63,6 +63,7 @@
         }
       ]
     },
+    
     "generate_solution": {
       "temperature": 1.3,
       "scenarios": {
@@ -71,6 +72,55 @@
             {
               "role": "System",
               "content": "Here's a C program with a vulnerability:\n```c\n{source_code}\n```\nA Formal Verification tool identified a division by zero issue:\n{esbmc_output}\nTask: Modify the C code to safely handle scenarios where division by zero might occur. The solution should prevent undefined behavior or crashes due to division by zero. \nGuidelines: Focus on making essential changes only. Avoid adding or modifying comments, and ensure the changes are precise and minimal.\nGuidelines: Ensure the revised code avoids undefined behavior and handles division by zero cases effectively.\nGuidelines: Implement safeguards (like comparison) to prevent division by zero instead of using literal divisions like 1.0/0.0.Output: Provide the corrected, complete C code. The solution should compile and run error-free, addressing the division by zero vulnerability.\nStart the code snippet with ```c and end with ```. Reply OK if you understand."
+            },
+            {
+              "role": "AI",
+              "content": "OK."
+            }
+          ]
+        },
+        "array out-of-bounds": {
+          "system" : [
+            {
+              "role":"System",
+              "content": "Here's a C program with a vulnerability:\n```c\n{source_code}\n```\nA Formal Verification tool identified an array out-of-bounds issue:\n{esbmc_output}\nTask: Modify the C code to safely handle scenarios where array out-of-bounds might occur. The solution should prevent undefined behavior,potential crashes, security vulnerabilities or data integrity compromises due to out-of-bounds array. \nGuidelines: Focus on making essential changes only. Avoid adding or modifying comments, and ensure the changes are precise and minimal.\nGuidelines: Ensure the revised code avoids undefined behavior and handles out-of-bounds arrays effectively.\nGuidelines: Implement assertions for the array indices. Output: Provide the corrected, complete C code. The solution should compile and run error-free, addressing the out-of-bounds array vulnerability.\nStart the code snippet with ```c and end with ```. Reply OK if you understand."
+            },
+            {
+              "role": "AI",
+              "content": "OK."
+            }
+          ]
+        }
+        ,
+        "arithmetic overflow":{
+          "system":[
+            {
+              "role": "System",
+              "content": "Here's a C program with a vulnerability:\n```c\n{source_code}\n```\nA Formal Verification tool identified an array out-of-bounds issue:\n{esbmc_output}\nTask: Modify the C code to safely handle scenarios where an arithmetic overflow might occur. The solution should prevent unexpected behaviour, crashes or vulnerabilites due to the arithmetic overflow. \nGuidelines: Focus on making essential changes only. Avoid adding or modifying comments, and ensure the changes are precise and minimal.\nGuidelines: Ensure the revised code avoids undefined behaviour and handles arithmetic overflows effectively.\nGuidelines: Implement precondition checks or assertions. Output: Provide the corrected, verified C code. The solution should compile and run error-free, addressing the arithmetic overflow vulnerability.\nStart the code snippet with```c and end with ```. Reply OK if you understand."
+            },
+            {
+              "role": "AI",
+              "content": "OK."
+            }
+          ]
+        },
+        "buffer overflow": {
+          "system":[
+            {
+              "role": "System",
+              "content": "Here's a C program with a vulnerability:\n```c\n{source_code}\n```\nA Formal Verification tool identified a buffer overflow issue:\n{esbmc_output}\nTask: Modify the C code to safely handle scenarios where a buffer overflow might occur. The solution should prevent unexpected behaviour, crashes or vulnerabilites due to the buffer overflow. \nGuidelines: Focus on making essential changes only. Avoid adding or modifying comments, and ensure the changes are precise and minimal.\nGuidelines: Ensure the revised code avoids undefined behaviour and handles buffer overflows effectively.\nGuidelines: Implement precondition checks or assertions. Output: Provide the corrected, verified C code. The solution should compile and run error-free, addressing the buffer overflow vulnerability.\nStart the code snippet with```c and end with ```. Reply OK if you understand."
+            },
+            {
+              "role": "AI", 
+              "content": "OK."
+            }
+          ]
+        },
+        "memory leak": {
+          "system":[
+            {
+              "role": "System",
+              "content": "Here's a C program with a vulnerability:\n```c\n{source_code}\n```\nA Formal Verification tool identified a memory leak issue:\n{esbmc_output}\nTask: Modify the C code to safely handle scenarios where a memory leak might occur. The solution should prevent unexpected behaviour, crashes or vulnerabilites due to the memory leak. \nGuidelines: Focus on making essential changes only. Avoid adding or modifying comments, and ensure the changes are precise and minimal.\nGuidelines: Ensure the revised code avoids undefined behaviour and handles memory leaks effectively.\nGuidelines: Implement memory frees where appropiate, check memory allocation return values, release resources in cleanup or exit functions, use automatic variables. Output: Provide the corrected, verified C code. The solution should compile and run error-free, addressing the memory leak vulnerability.\nStart the code snippet with```c and end with ```. Reply OK if you understand."
             },
             {
               "role": "AI",

@@ -22,7 +22,26 @@ def esbmc(path: str, esbmc_params: list):
     exit_code = process.wait()
     output: str = str(output_bytes).replace("\\n", "\n")
     err: str = str(err_bytes).replace("\\n", "\n")
+    output = esbmc_output_optimisation(output)
     return exit_code, output, err
+
+def esbmc_output_optimisation(esbmc_output:str) -> str:
+
+    esbmc_output =re.sub(r'^\d+. The output mentions that no solver was specified, so ESBMC defaults to using the Boolector solver\.', '', esbmc_output, flags=re.MULTILINE)
+    esbmc_output = re.sub(r'^\d+. This output states that the solving process with the Boolector solver took a certain amount of time\.','', esbmc_output, flags=re.MULTILINE)  
+    esbmc_output = re.sub(r'[-]+', '', esbmc_output)  # Remove lines of dashes
+    esbmc_output = re.sub(r'\b[0-9a-fA-F]{8} [0-9a-fA-F]{8} [0-9a-fA-F]{8} [0-9a-fA-F]{8}\b', '', esbmc_output)  # Remove hex patterns
+    esbmc_output = re.sub(r'^Line \d+: ESBMC is using the Boolector solver \d+\.\d+\.\d+ to solve the encoding\.$', '', esbmc_output, flags=re.MULTILINE)  # Remove Boolector lines
+    esbmc_output = re.sub(r'\d+. ESBMC is using the Boolector solver \d+\. \d+\. \d+ to solve the encoding\.$', '', esbmc_output, flags=re.MULTILINE)
+    esbmc_output = re.sub(r'^Line \d+: The solver takes \d+\.\d+s to determine the runtime decision procedure\.$', '', esbmc_output, flags=re.MULTILINE)  # Remove solver time lines
+    esbmc_output = re.sub(r'.*Boolector.*', '', esbmc_output, flags=re.MULTILINE)
+    esbmc_output =re.sub(r'/\*.*?\*/', '', esbmc_output, flags=re.MULTILINE)
+    pattern = r"- `.*Slicing time: \d+\.\d+s \(removed \d+ assignments\)`.*: ESBMC has performed slicing, a technique that removes irrelevant assignments from the program and reduces the complexity of analysis."
+    esbmc_output = re.sub(pattern, '', esbmc_output, flags=re.MULTILINE)
+    esbmc_output = re.sub(r'\n\*s\n', '\n', esbmc_output)
+    esbmc_output = esbmc_output.replace("output from ESBMC", "ESBMC output")
+
+    return esbmc_output
 
 
 def esbmc_load_source_code(
