@@ -193,6 +193,7 @@ def esbmc_output_optimisation(esbmc_output:str) -> str:
 
     return esbmc_output
 
+    esbmc_output = esbmc_output_optimisation(esbmc_output)
 def main() -> None:
     init_commands_list()
 
@@ -330,6 +331,7 @@ def main() -> None:
         api_keys=config.api_keys,
         temperature=config.chat_prompt_user_mode.temperature,
     )
+    esbmc_output = esbmc_output_optimisation(esbmc_output)
 
     printv("Creating user chat")
     global chat
@@ -385,7 +387,7 @@ def main() -> None:
                     source_code=get_main_source_file().content,
                     esbmc_output=esbmc_output,
                 )
-
+                
                 if not error:
                     print(
                         "\n\nESBMC-AI: Here is the corrected code, verified with ESBMC:"

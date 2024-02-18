@@ -1,6 +1,7 @@
 # Author: Yiannis Charalambous
 
 import os
+import re
 from subprocess import Popen, PIPE, STDOUT
 from pathlib import Path
 
