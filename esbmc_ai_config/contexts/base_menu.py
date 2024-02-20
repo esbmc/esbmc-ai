@@ -14,12 +14,19 @@ class BaseMenu(Context):
         title: str,
         choices: list[str | urwid.Widget],
         back_choice: bool = True,
+        initial_choice: int = 0,
     ) -> None:
         """Creates a Menu context and displays it on the screen."""
+
+        assert initial_choice >= 0 and initial_choice < len(choices) + (
+            1 if back_choice else 0
+        ), f"Initial choice index invalid: {initial_choice} / {len(choices)}"
 
         self.choices: list[str | urwid.Widget] = choices.copy()
         self.back_choice: bool = back_choice
         self.title: str = title
+        # + 2 for divider and title.
+        self.initial_choice: int = initial_choice + 2
 
         super().__init__()
 
@@ -61,4 +68,6 @@ class BaseMenu(Context):
             else:
                 raise ValueError(f"create_menu: {c} is not a str or urwid.Widget")
 
-        return urwid.ListBox(urwid.SimpleFocusListWalker(body))
+        walker: urwid.SimpleFocusListWalker = urwid.SimpleFocusListWalker(body)
+        walker.focus = self.initial_choice
+        return urwid.ListBox(walker)
