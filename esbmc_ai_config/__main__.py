@@ -1,8 +1,6 @@
 # Author: Yiannis Charalambous
 
-from urwid import (
-    MainLoop,
-)
+from urwid import MainLoop
 
 from esbmc_ai_config.context_manager import ContextManager
 from esbmc_ai_config.contexts.main_menu import MainMenu
