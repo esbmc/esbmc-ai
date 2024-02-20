@@ -46,11 +46,11 @@ class TextInputButton(urwid.WidgetWrap):
         button: urwid.Widget,
         ok_pressed: bool,
     ) -> None:
-        if self.on_submit:
-            self.on_submit(self.title, self.edit_widget.edit_text, ok_pressed)
-
         # Close dialog
         ContextManager.pop_context()
+
+        if self.on_submit:
+            self.on_submit(self.title, self.edit_widget.edit_text, ok_pressed)
 
     def open_dialog(self, button: urwid.Widget) -> None:
         # Create overlay menu with question.
