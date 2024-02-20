@@ -7,6 +7,7 @@ from esbmc_ai_config.context_manager import ContextManager
 from esbmc_ai_config.contexts.base_menu import BaseMenu
 from esbmc_ai_config.contexts.esbmc_menu.esbmc_manage import ESBMCManage
 from esbmc_ai_config.widgets.text_input_button import TextInputButton
+from esbmc_ai_config.models.config_manager import ConfigManager
 
 
 class ESBMCMenu(BaseMenu):
@@ -14,21 +15,24 @@ class ESBMCMenu(BaseMenu):
         super().__init__(title="ESBMC Options", choices=self._get_menu_choices())
 
     def _on_esbmc_path(self, title: str, value: str, ok_pressed: bool) -> None:
-        return
+        if ok_pressed:
+            ConfigManager.json_config.set_value(value, "esbmc_path")
+            # Refresh UI
+            self.widget = self.build_ui()
 
     def _get_menu_choices(self) -> list[str | urwid.Widget]:
         return [
             urwid.AttrMap(
                 urwid.Button(
                     "Install ESBMC",
-                    on_press=lambda button: ContextManager.push_context(ESBMCManage()),
+                    on_press=lambda _: ContextManager.push_context(ESBMCManage()),
                 ),
                 None,
                 "reversed",
             ),
             TextInputButton(
                 "ESBMC Path",
-                "",
+                str(ConfigManager.json_config.get_value("esbmc_path")),
                 on_submit=self._on_esbmc_path,
             ),
             "ESBMC Parameters",
