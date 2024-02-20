@@ -7,6 +7,7 @@ from urwid import Text, Widget
 
 from esbmc_ai_config.context_manager import ContextManager
 from esbmc_ai_config.contexts import BaseMenu
+from esbmc_ai_config.contexts.ai_config_menu import AIConfigMenu
 from esbmc_ai_config.contexts.save_menu import SaveMenu
 from esbmc_ai_config.contexts.env_menu import EnvMenu
 from esbmc_ai_config.contexts.esbmc_menu import ESBMCMenu
@@ -77,6 +78,8 @@ class MainMenu(BaseMenu):
             case "ESBMC Settings":
                 ContextManager.push_context(ESBMCMenu())
                 return
+            case "AI Configuration":
+                ContextManager.push_context(AIConfigMenu())
             case "Save":
                 ContextManager.push_context(SaveMenu())
                 return
