@@ -18,7 +18,7 @@ class ESBMCMenu(BaseMenu):
         if ok_pressed:
             ConfigManager.json_config.set_value(value, "esbmc_path")
             # Refresh UI
-            self.widget = self.build_ui()
+            self.refresh_ui()
 
     def _get_menu_choices(self) -> list[str | urwid.Widget]:
         return [

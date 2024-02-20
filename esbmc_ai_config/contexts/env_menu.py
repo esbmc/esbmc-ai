@@ -59,5 +59,4 @@ class EnvMenu(BaseMenu):
 
             # Cast to the correct type.
             ConfigManager.env_config.values[title] = type(field.default_value)(value)
-            # Refresh UI
-            self.widget = self.build_ui()
+            self.refresh_ui()

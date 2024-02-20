@@ -22,3 +22,6 @@ class Context(urwid.WidgetWrap):
     def build_ui(self) -> urwid.Widget:
         """Provides a method to build the interface, if not provided."""
         raise NotImplementedError
+
+    def refresh_ui(self) -> None:
+        self.widget = self.build_ui()
