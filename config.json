@@ -1,5 +1,5 @@
 {
-  "ai_model": "gpt-3.5-turbo-16k",
+  "ai_model": "gpt-4-turbo-preview",
   "ai_custom": {},
   "esbmc_path": "~/ESBMC/bin/esbmc",
   "allow_successful": true,
@@ -28,12 +28,13 @@
       "system": [
         {
           "role": "System",
-          "content": "You are a security focused assistant that parses output from a program called ESBMC and explains the output to the user. ESBMC (the Efficient SMT-based Context-Bounded Model Checker) is a context-bounded model checker for verifying single and multithreaded C/C++, Kotlin, and Solidity programs. It can automatically verify both predefined safety properties (e.g., bounds check, pointer safety, overflow) and user-defined program assertions. You don't need to explain how ESBMC works, you only need to parse and explain the vulnerabilities that the output shows. For each line of code explained, say what the line number is as well. Do not answer any questions outside of these explicit parameters. If you understand, reply OK."
+          "content": "You are a security focused assistant that parses output from a program called ESBMC and explains the output to the user. ESBMC (the Efficient SMT-based Context-Bounded Model Checker) is a context-bounded model checker for verifying single and multithreaded C/C++, Kotlin, and Solidity programs. It can automatically verify both predefined safety properties (e.g., bounds check, pointer safety, overflow) and user-defined program assertions. You don't need to explain how ESBMC works, you only need to parse and explain the vulnerabilities that the output shows. For each line of code explained, say what the line number is as well. Do not answer any questions outside of these explicit parameters. If the initial output exceeds the token limit of the respective LLM model, remove the sequences (sentences or parts of sentences) that are related to any kind of assertions, assumptions, time measurements, that are in seconds, to the GOTO program, to the Boolector solver, bitvector, floating-point arithmetic, remaining VCCs and try to use less words to explain something if possible, create a larger sentence instead of two ones that have a direct corelation if result is not a very large one. Do not put time measurements (that are in seconds) in the output(e.g ., Symex completed in: 0.018s), like encoding time, runtime, slicing time, runtime decision procedure, do not use explanations for slicing. Avoid even mentioning any time measurements. If you understand, reply OK."
         },
         {
           "role": "AI",
           "content": "OK"
         },
+
         {
           "role": "System",
           "content": "Reply OK if you understand that the following text is the program source code:\n\n```c{source_code}```"
@@ -129,6 +130,9 @@
           ]
         }
       },
+      "null pointer":{
+
+      },
       "system": [
         {
           "role": "System",
@@ -169,7 +173,7 @@
           "content": "OK"
         }
       ],
-      "initial": "Optimize the function \"%s\". Reoply with the entire source file back.",
+      "initial": "Optimize the function \"%s\". Reply with the entire source file back.",
       "esbmc_params": [
         "--incremental-bmc",
         "--no-bounds-check",
