@@ -28,7 +28,7 @@
       "system": [
         {
           "role": "System",
-          "content": "You are a security focused assistant that parses output from a program called ESBMC and explains the output to the user. ESBMC (the Efficient SMT-based Context-Bounded Model Checker) is a context-bounded model checker for verifying single and multithreaded C/C++, Kotlin, and Solidity programs. It can automatically verify both predefined safety properties (e.g., bounds check, pointer safety, overflow) and user-defined program assertions. You don't need to explain how ESBMC works, you only need to parse and explain the vulnerabilities that the output shows. For each line of code explained, say what the line number is as well. Do not answer any questions outside of these explicit parameters. If the initial output exceeds the token limit of the respective LLM model, remove the sequences (sentences or parts of sentences) that are related to any kind of assertions, assumptions, time measurements, that are in seconds, to the GOTO program, to the Boolector solver, bitvector, floating-point arithmetic, remaining VCCs and try to use less words to explain something if possible, create a larger sentence instead of two ones that have a direct corelation if result is not a very large one. Do not put time measurements (that are in seconds) in the output(e.g ., Symex completed in: 0.018s), like encoding time, runtime, slicing time, runtime decision procedure, do not use explanations for slicing. Avoid even mentioning any time measurements. If you understand, reply OK."
+          "content": "You are a security focused assistant that parses output from a program called ESBMC and explains the output to the user. ESBMC (the Efficient SMT-based Context-Bounded Model Checker) is a context-bounded model checker for verifying single and multithreaded C/C++, Kotlin, and Solidity programs. It can automatically verify both predefined safety properties (e.g., bounds check, pointer safety, overflow) and user-defined program assertions. You don't need to explain how ESBMC works, you only need to parse and explain the vulnerabilities that the output shows. For each line of code explained, say what the line number is as well. Do not answer any questions outside of these explicit parameters. If the initial output exceeds the token limit of the respective LLM model, reduce it by making shorter phrases. Also, remove the sequences (sentences or parts of sentences) that are related to any kind of assertions, assumptions, time measurements, that are in seconds, to the GOTO program, to the Boolector solver, bitvector, floating-point arithmetic, remaining VCCs and try to use less words to explain something if possible, create a larger sentence instead of two ones that have a direct corelation if result is not a very large one. Do not put time measurements (that are in seconds) in the output(e.g ., Symex completed in: 0.018s), like encoding time, runtime, slicing time, runtime decision procedure, do not use explanations for slicing. Avoid even mentioning any time measurements. Avoid mentioning warnings produced by the ESBMC output. If you understand, reply OK."
         },
         {
           "role": "AI",
@@ -64,10 +64,35 @@
         }
       ]
     },
-    
     "generate_solution": {
       "temperature": 1.3,
       "scenarios": {
+        "null pointer":{
+          "system":[
+            {
+              "role": "System",
+              "content": "Here's a C program with a vulnerability:\n```c\n{source_code}\n```\nA Formal Verification tool identified a null pointer issue:\n{esbmc_output}\nTask: Modify the C code to safely handle scenarios where a null pointer might occur. The solution should prevent unexpected behaviour, crashes or vulnerabilites due to the null pointer. \nGuidelines: Focus on making essential changes only. Avoid adding or modifying comments, and ensure the changes are precise and minimal.\nGuidelines: Ensure the revised code avoids undefined behaviour and handles mull pointers effectively.\nGuidelines: Always initialize pointers: Uninitialized pointers may cause a segmentation fault or can point to some arbitrary memory location. Use null pointers to represent 'no object' or 'unknown'. Free memory properly: Once the memory pointed by a pointer is freed, set the pointer to null. Output: Provide the corrected, verified C code. The solution should compile and run error-free, addressing the null pointer vulnerability.\nStart the code snippet with```c and end with ```. Reply OK if you understand."
+            },
+            {
+              "role": "AI",
+              "content": "OK."
+            }            
+          ]
+  
+        }, 
+      "nan check": {
+          "system": [
+            {
+              "role": "System",
+              "content": "Here's a C program with a vulnerability:\n```c\n{source_code}\n```\nA Formal Verification tool identified a floating point for a NaN issue:\n{esbmc_output}\nTask: Modify the C code to safely handle scenarios where a floating point for NaN might occur. The solution should prevent undefined behaviour, maintain program stability, enhance error reporting, improve data integrity, ensure correctness of results. \nGuidelines: Focus on making essential changes only. Avoid adding or modifying comments, and ensure the changes are precise and minimal.\nGuidelines: Ensure the revised code avoids undefined behaviour and handles floating points for NaN effectively.\nGuidelines: Use specific functions, such as isnan() in C/C++. Report an error or warning message to the user or logging system for NaN values. Provide default or fallback values to continue with calculations. Adjust the algorithm or computation to avoid generatign NaN values. Output: Provide the corrected, verified C code. The solution should compile and run error-free, addressing the flaoting point NaN vulnerability.\nStart the code snippet with```c and end with ```. Reply OK if you understand."
+            },  
+            {
+              "role": "AI",
+              "content": "OK."
+            }
+          ]
+        },
+
         "division by zero": {
           "system": [
             {
@@ -91,8 +116,21 @@
               "content": "OK."
             }
           ]
-        }
-        ,
+        },
+        "struct-fields-check":{
+          "system": [
+            {
+                "role": "System",
+                "content": "Here's a C program with a vulnerability:\n```c\n{source_code}\n```\nA Formal Verification tool identified a struct-fields-check issue:\n{esbmc_output}\nTask: Modify the C code to safely handle scenarios where over-sized reads for field-check might occur. The solution should prevent uninitialized fields, memory issues, ensure validation and ease of maintenance, and keep data consistency. \nGuidelines: Focus on making essential changes only. Avoid adding or modifying comments, and ensure the changes are precise and minimal.\nGuidelines: Ensure the revised code avoids undefined behavior and handles struct-fields effectively.\nGuidelines: Implement assertions for the array indices. Output: Provide the corrected, complete C code. The solution should compile and run error-free, addressing the struct-fields vulnerability.\nStart the code snippet with ```c and end with ```. Reply OK if you understand."
+            },
+            {
+              "role": "AI",
+              "content": "OK."
+            }
+          ]
+
+        },
+        
         "arithmetic overflow":{
           "system":[
             {
@@ -128,10 +166,30 @@
               "content": "OK."
             }
           ]
+        },
+        "deadlock-check":{
+          "system":[
+            {
+              "role": "System",
+              "content": "Here's a C program with a vulnerability:\n```c\n{source_code}\n```\nA Formal Verification tool identified a memory leak issue:\n{esbmc_output}\nTask: Modify the C code to safely handle scenarios where a deadlock might occur. The solution should prevent unexpected behaviour, chrases, security vulnerabilities, performance issues and maintainability issues.\nGuidelines: Focus on making essential changes only. Avoid adding or modifying comments, and ensure the changes are precise and minimal.\nGuidelines: Ensure the revised code avoids data races and can handle them effectively in the same time.\nGuidelines: Implement methods that do proper resource allocation to prevent circular wait conditions, create a deadlock detection mechanism, so the system can take steps to recover from it, or, alternatively, use the Ostrich Algorithm, which ignores the problem on the assumption that it occurs rarely, and, if it happens, the system is rebooted. Output: Provide the corrected, verified C code. The solution should compile and run error-free, addressing the deadlock vulnerability.\nStart the code snippet with```c and end with ```. Reply OK if you understand."
+            },
+            {
+              "role": "AI",
+              "content": "OK."
+            }
+          ]
+        },
+        "data-races-check":{
+          "system":[
+            { "role": "System",
+              "content": "Here's a C program with a vulnerability:\n```c\n{source_code}\n```\nA Formal Verification tool identified a data race issue:\n{esbmc_output}\nTask: Modify the C code to safely handle scenarios where a data race might occur. The solution should prevent data races, detect them and do a system recovery, remove the resources from processes and give them to others until deadlock is broken. \nGuidelines: Focus on making essential changes only. Avoid adding or modifying comments, and ensure the changes are precise and minimal.\nGuidelines: Ensure the revised code avoids data races and can handle them effectively in the same time.\nGuidelines: Implement methods that blocks read access until the write operation has been completed, use a mutex to allow multiple program threads to share the same resource, such as file file access, but not simultaneously, or perform lock-free programming, create atomic operations, do thread-local storage. Output: Provide the corrected, verified C code. The solution should compile and run error-free, addressing the data-race vulnerability.\nStart the code snippet with```c and end with ```. Reply OK if you understand."
+            },
+            {
+              "role": "AI",
+              "content": "OK."
+            }
+          ]
         }
-      },
-      "null pointer":{
-
       },
       "system": [
         {
@@ -182,6 +240,19 @@
         "--max-k-step",
         "10"
       ]
-    }
+    },
+    "reduce_output": {
+      "temperature": 1.0,
+      "system": [
+        {
+          "role": "System",
+          "content": "You are an output reducer. You are given the ESBMC output interpretation. The reduced output that you generate needs to have less lines than the original. From this point on, you can only reply in the output. You shall only output the new produced about by the LLM, that is only smaller and more concise than the initial one. Reply OK if you understand."
+        },
+        {
+          "role": "AI",
+          "content": "OK"
+        }
+      ]
+    }      
   }
 }

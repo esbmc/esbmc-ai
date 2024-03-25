@@ -89,7 +89,7 @@ def check_health() -> None:
     else:
         print(f"Error: ESBMC could not be found in {config.esbmc_path}")
         sys.exit(3)
-
+        
 
 def print_assistant_response(
     chat: UserChat,
