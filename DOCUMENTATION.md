@@ -1,5 +1,0 @@
-# Contribution
-
-I created three functions for reducing the output of ESBMC-AI by using regex patterns and the nltk library. Thes functions are created in the esbmc_ai/esbmc_util.py file, with the names esbmc_ouput_optimisation(), reduce_output2() and remove_patterns_nltk() and called in the esbmc() function. They work successfully on reducing the ESBMC-AI output with the line patterns that are created inside them. All of the patterns have been tested on varios ESBMC-Ai outputs and they work well. Besides that, I created more output scenarious in the config.json file: null pointer, arthmetic overflow, buffer overflow, struct-fileds check, NaN check, array out-of-bounds, division-by-zero
-
-To run the test file that I created, go to the esbmc_ai_fork/esbmc-ai/ folder and run this command python -m tests.test_output_reducer
