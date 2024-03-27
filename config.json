@@ -3,6 +3,7 @@
   "ai_custom": {},
   "esbmc_path": "~/.local/bin/esbmc",
   "allow_successful": true,
+  "verifier_timeout": 90,
   "esbmc_params": [
     "--interval-analysis",
     "--goto-unwind",
@@ -18,7 +19,10 @@
     "--context-bound",
     "2"
   ],
-  "consecutive_prompt_delay": 20,
+  "requests": {
+    "max_tries": 5,
+    "timeout": 60
+  },
   "temp_auto_clean": false,
   "temp_file_dir": "./temp",
   "loading_hints": true,
@@ -106,28 +110,6 @@
         }
       ],
       "initial": "Generate a correction for the source code provided. Show the code only. Do not reply with acknowledgements."
-    },
-    "optimize_code": {
-      "temperature": 1.0,
-      "system": [
-        {
-          "role": "System",
-          "content": "You are a code optimizer. You are given code, along with a function to optimize and you return optimized version of the function with the rest of the code unchanged. The optimized function should be smaller than the original function if possible and also execute faster than the original. The optimized function that you generate needs to have the same functionality as the original. From this point on, you can only reply in source code. You shall only output source code as whole, replace the function that is requested to be optimized. Reply OK if you understand."
-        },
-        {
-          "role": "AI",
-          "content": "OK"
-        }
-      ],
-      "initial": "Optimize the function \"%s\". Reoply with the entire source file back.",
-      "esbmc_params": [
-        "--incremental-bmc",
-        "--no-bounds-check",
-        "--no-pointer-check",
-        "--no-div-by-zero-check",
-        "--max-k-step",
-        "10"
-      ]
     }
   }
 }
