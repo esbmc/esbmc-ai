@@ -253,6 +253,9 @@ def main() -> None:
 
     check_health()
 
+    printv(f"Source code format: {config.source_code_format}")
+    printv(f"ESBMC output type: {config.esbmc_output_type}")
+
     anim: LoadingWidget = create_loading_widget()
 
     # Read the source code and esbmc output.
