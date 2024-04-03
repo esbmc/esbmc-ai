@@ -1,6 +1,5 @@
 # Author: Yiannis Charalambous
 
-from os import get_terminal_size
 import sys
 from typing import Any, Tuple
 from typing_extensions import override
@@ -40,12 +39,13 @@ class FixCodeCommand(ChatCommand):
     @override
     def execute(self, **kwargs: Any) -> Tuple[bool, str]:
         def print_raw_conversation() -> None:
-            print("Notice: Printing raw conversation...")
+            print_horizontal_line(0)
+            print("ESBMC-AI Notice: Printing raw conversation...")
             all_messages = solution_generator._system_messages.copy()
             all_messages.extend(solution_generator.messages.copy())
             messages: list[str] = [f"{msg.type}: {msg.content}" for msg in all_messages]
             print("\n" + "\n\n".join(messages))
-            print("Notice: End of conversation")
+            print("ESBMC-AI Notice: End of raw conversation")
 
         file_name: str = kwargs["file_name"]
         source_code: str = kwargs["source_code"]
@@ -119,8 +119,25 @@ class FixCodeCommand(ChatCommand):
             )
             self.anim.stop()
 
+            # Print verbose lvl 2
+            print_horizontal_line(2)
+            printvv(esbmc_output)
+            print_horizontal_line(2)
+
+            # Solution found
+            if exit_code == 0:
+                self.on_solution_signal.emit(llm_solution)
+
+                if config.raw_conversation:
+                    print_raw_conversation()
+
+                printv("ESBMC-AI Notice: Succesfully verified code")
+
+                return False, llm_solution
+
             # TODO Move this process into Solution Generator since have (beginning) is done
             # inside, and the other half is done here.
+            # Get formatted ESBMC output
             try:
                 esbmc_output = get_esbmc_output_formatted(
                     esbmc_output_type=config.esbmc_output_type,
@@ -132,21 +149,8 @@ class FixCodeCommand(ChatCommand):
                 print("error: ESBMC has timed out...")
                 sys.exit(1)
 
-            # Print verbose lvl 2
-            print_horizontal_line(2)
-            printvv(esbmc_output)
-            print_horizontal_line(2)
-
-            if exit_code == 0:
-                self.on_solution_signal.emit(llm_solution)
-
-                if config.raw_conversation:
-                    print_raw_conversation()
-
-                return False, llm_solution
-
             # Failure case
-            print(f"Failure {idx+1}/{max_retries}: Retrying...")
+            print(f"ESBMC-AI Notice: Failure {idx+1}/{max_retries}: Retrying...")
             # If final iteration no need to sleep.
             if idx < max_retries - 1:
 
@@ -172,4 +176,5 @@ class FixCodeCommand(ChatCommand):
 
         if config.raw_conversation:
             print_raw_conversation()
-        return True, "Failed all attempts..."
+
+        return True, "ESBMC-AI Notice: Failed all attempts..."
