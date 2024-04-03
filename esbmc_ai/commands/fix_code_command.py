@@ -16,7 +16,7 @@ from ..esbmc_util import (
     esbmc_load_source_code,
 )
 from ..solution_generator import SolutionGenerator, get_esbmc_output_formatted
-from ..logging import printv, printvv
+from ..logging import print_horizontal_line, printv, printvv
 
 # TODO Remove built in messages and move them to config.
 
@@ -33,6 +33,14 @@ class FixCodeCommand(ChatCommand):
 
     @override
     def execute(self, **kwargs: Any) -> Tuple[bool, str]:
+        def print_raw_conversation() -> None:
+            print("Notice: Printing raw conversation...")
+            all_messages = solution_generator._system_messages.copy()
+            all_messages.extend(solution_generator.messages.copy())
+            messages: list[str] = [f"{msg.type}: {msg.content}" for msg in all_messages]
+            print("\n" + "\n\n".join(messages))
+            print("Notice: End of conversation")
+
         file_name: str = kwargs["file_name"]
         source_code: str = kwargs["source_code"]
         esbmc_output: str = kwargs["esbmc_output"]
@@ -84,15 +92,15 @@ class FixCodeCommand(ChatCommand):
 
             # Print verbose lvl 2
             printvv("\nGeneration:")
-            printvv("-" * get_terminal_size().columns)
+            print_horizontal_line(2)
             printvv(llm_solution)
-            printvv("-" * get_terminal_size().columns)
+            print_horizontal_line(2)
             printvv("")
 
             # Pass to ESBMC, a workaround is used where the file is saved
             # to a temporary location since ESBMC needs it in file format.
             self.anim.start("Verifying with ESBMC... Please Wait")
-            exit_code, esbmc_output, esbmc_err_output = esbmc_load_source_code(
+            exit_code, esbmc_output = esbmc_load_source_code(
                 file_path=file_name,
                 source_code=llm_solution,
                 esbmc_params=config.esbmc_params,
@@ -113,13 +121,16 @@ class FixCodeCommand(ChatCommand):
                 pass
 
             # Print verbose lvl 2
-            printvv("-" * get_terminal_size().columns)
+            print_horizontal_line(2)
             printvv(esbmc_output)
-            printvv(esbmc_err_output)
-            printvv("-" * get_terminal_size().columns)
+            print_horizontal_line(2)
 
             if exit_code == 0:
                 self.on_solution_signal.emit(llm_solution)
+
+                if config.raw_conversation:
+                    print_raw_conversation()
+
                 return False, llm_solution
 
             # Failure case
@@ -128,17 +139,18 @@ class FixCodeCommand(ChatCommand):
             if idx < max_retries - 1:
 
                 # Inform solution generator chat about the ESBMC response.
+                # TODO Add option to customize in config.
                 if exit_code != 1:
                     # The program did not compile.
                     solution_generator.push_to_message_stack(
                         message=HumanMessage(
-                            content=f"The source code you provided does not compile. Fix the compilation errors. Use ESBMC output to fix the compilation errors:\n\n```\n{esbmc_output}\n```"
+                            content=f"Here is the ESBMC output:\n\n```\n{esbmc_output}\n```"
                         )
                     )
                 else:
                     solution_generator.push_to_message_stack(
                         message=HumanMessage(
-                            content=f"ESBMC has reported that verification failed, use the ESBMC output to find out what is wrong, and fix it. Here is ESBMC output:\n\n```\n{esbmc_output}\n```"
+                            content=f"Here is the ESBMC output:\n\n```\n{esbmc_output}\n```"
                         )
                     )
 
@@ -146,4 +158,6 @@ class FixCodeCommand(ChatCommand):
                     AIMessage(content="Understood.")
                 )
 
+        if config.raw_conversation:
+            print_raw_conversation()
         return True, "Failed all attempts..."

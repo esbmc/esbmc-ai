@@ -1,9 +1,10 @@
 # Author: Yiannis Charalambous 2023
 
+from re import S
 from typing import Optional
 from typing_extensions import override
 from langchain.base_language import BaseLanguageModel
-from langchain.schema import BaseMessage
+from langchain.schema import BaseMessage, HumanMessage
 
 from esbmc_ai.chat_response import ChatResponse, FinishReason
 from esbmc_ai.config import ChatPromptSettings, DynamicAIModelAgent
@@ -86,14 +87,17 @@ class SolutionGenerator(BaseChatInterface):
 
         self.source_code_format: str = source_code_format
         self.source_code_raw: str = source_code
-        self.source_code = get_source_code_formatted(
+
+        source_code_formatted: str = get_source_code_formatted(
             source_code_format=self.source_code_format,
             source_code=self.source_code_raw,
             esbmc_output=self.esbmc_output,
         )
 
-        self.set_template_value("source_code", self.source_code)
-        self.set_template_value("esbmc_output", self.esbmc_output)
+        self.apply_template_value(
+            source_code=source_code_formatted,
+            esbmc_output=self.esbmc_output,
+        )
 
     @override
     def compress_message_stack(self) -> None:
