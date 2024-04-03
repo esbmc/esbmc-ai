@@ -1,6 +1,7 @@
 # Author: Yiannis Charalambous
 
 from os import get_terminal_size
+import sys
 from typing import Any, Tuple
 from typing_extensions import override
 from langchain.schema import AIMessage, HumanMessage
@@ -15,7 +16,12 @@ from ..esbmc_util import (
     esbmc_get_error_type,
     esbmc_load_source_code,
 )
-from ..solution_generator import SolutionGenerator, get_esbmc_output_formatted
+from ..solution_generator import (
+    ESBMCTimedOutException,
+    SolutionGenerator,
+    SourceCodeParseError,
+    get_esbmc_output_formatted,
+)
 from ..logging import print_horizontal_line, printv, printvv
 
 # TODO Remove built in messages and move them to config.
@@ -55,21 +61,25 @@ class FixCodeCommand(ChatCommand):
             else "Using generic prompt..."
         )
 
-        solution_generator = SolutionGenerator(
-            ai_model_agent=config.chat_prompt_generator_mode,
-            source_code=source_code,
-            esbmc_output=esbmc_output,
-            ai_model=config.ai_model,
-            llm=config.ai_model.create_llm(
-                api_keys=config.api_keys,
-                temperature=config.chat_prompt_generator_mode.temperature,
-                requests_max_tries=config.requests_max_tries,
-                requests_timeout=config.requests_timeout,
-            ),
-            scenario=scenario,
-            source_code_format=config.source_code_format,
-            esbmc_output_type=config.esbmc_output_type,
-        )
+        try:
+            solution_generator = SolutionGenerator(
+                ai_model_agent=config.chat_prompt_generator_mode,
+                source_code=source_code,
+                esbmc_output=esbmc_output,
+                ai_model=config.ai_model,
+                llm=config.ai_model.create_llm(
+                    api_keys=config.api_keys,
+                    temperature=config.chat_prompt_generator_mode.temperature,
+                    requests_max_tries=config.requests_max_tries,
+                    requests_timeout=config.requests_timeout,
+                ),
+                scenario=scenario,
+                source_code_format=config.source_code_format,
+                esbmc_output_type=config.esbmc_output_type,
+            )
+        except ESBMCTimedOutException:
+            print("error: ESBMC has timed out...")
+            sys.exit(1)
 
         print()
 
@@ -116,9 +126,11 @@ class FixCodeCommand(ChatCommand):
                     esbmc_output_type=config.esbmc_output_type,
                     esbmc_output=esbmc_output,
                 )
-            except ValueError:
-                # Probably did not compile and so ESBMC source code is clang output.
+            except SourceCodeParseError:
                 pass
+            except ESBMCTimedOutException:
+                print("error: ESBMC has timed out...")
+                sys.exit(1)
 
             # Print verbose lvl 2
             print_horizontal_line(2)
