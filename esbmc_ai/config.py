@@ -11,7 +11,7 @@ from typing import Any, NamedTuple, Optional, Union, Sequence
 from dataclasses import dataclass
 from langchain.schema import BaseMessage
 
-from .logging import *
+from esbmc_ai.logging import printv, set_verbose
 from .ai_models import *
 from .api_key_collection import APIKeyCollection
 from .chat_response import json_to_base_messages
@@ -51,6 +51,8 @@ verifier_timeout: float = 60
 
 loading_hints: bool = False
 allow_successful: bool = False
+# Show the raw conversation after the command ends
+raw_conversation: bool = False
 
 cfg_path: str
 
@@ -474,6 +476,9 @@ def load_args(args) -> None:
         else:
             print(f"Error: invalid --ai-model parameter {args.ai_model}")
             sys.exit(4)
+
+    global raw_conversation
+    raw_conversation = args.raw_conversation
 
     global esbmc_params
     # If append flag is set, then append.
