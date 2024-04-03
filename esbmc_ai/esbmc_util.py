@@ -84,7 +84,7 @@ def esbmc(path: str, esbmc_params: list, timeout: Optional[float] = None):
     esbmc_cmd.extend(["--timeout", str(timeout)])
 
     # Add slack time to process to allow verifier to timeout and end gracefully.
-    process_timeout: Optional[float] = timeout + 1 if timeout else None
+    process_timeout: Optional[float] = timeout + 10 if timeout else None
 
     # Run ESBMC and get output
     process: CompletedProcess = run(
