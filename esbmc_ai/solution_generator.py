@@ -16,6 +16,7 @@ from esbmc_ai.esbmc_util import (
     esbmc_get_counter_example,
     esbmc_get_violated_property,
     get_source_code_err_line_idx,
+    get_clang_err_line_index,
 )
 
 
@@ -32,11 +33,19 @@ def get_source_code_formatted(
 ) -> str:
     match source_code_format:
         case "single":
+            # Get source code error line from esbmc output
             line: Optional[int] = get_source_code_err_line_idx(esbmc_output)
-            assert line, f"error line not found in esbmc output:\n{esbmc_output}"
-            # ESBMC reports errors starting from 1. To get the correct line, we need to use 0 based
-            # indexing.
-            return source_code.splitlines(True)[line]
+            if line:
+                return source_code.splitlines(True)[line]
+
+            # Check if it parses
+            line = get_clang_err_line_index(esbmc_output)
+            if line:
+                return source_code.splitlines(True)[line]
+
+            raise AssertionError(
+                f"error line not found in esbmc output:\n{esbmc_output}"
+            )
         case "full":
             return source_code
         case _:
@@ -108,6 +117,8 @@ class SolutionGenerator(BaseChatInterface):
                 esbmc_output=esbmc_output,
             )
         except SourceCodeParseError:
+            # When clang output is displayed, show it entirely as it doesn't get very
+            # big.
             self.esbmc_output = esbmc_output
 
     @override
