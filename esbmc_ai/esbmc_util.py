@@ -94,12 +94,8 @@ def esbmc(path: str, esbmc_params: list, timeout: Optional[float] = None):
         timeout=process_timeout,
     )
 
-    output_bytes: bytes = process.stdout
-    err_bytes: bytes = process.stderr
-    output: str = str(output_bytes).replace("\\n", "\n")
-    err: str = str(err_bytes).replace("\\n", "\n")
-
-    return process.returncode, output, err
+    output: str = process.stdout.decode("utf-8")
+    return process.returncode, output
 
 
 def esbmc_load_source_code(
