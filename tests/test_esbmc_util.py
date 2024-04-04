@@ -7,6 +7,7 @@ from esbmc_ai.esbmc_util import (
     esbmc_get_counter_example,
     esbmc_get_violated_property,
     get_source_code_err_line,
+    get_clang_err_line,
 )
 
 
@@ -104,3 +105,22 @@ def test_esbmc_get_violated_property(setup_get_data) -> None:
     start_idx = esbmc_output.find("Violated property:")
     end_idx = esbmc_output.find("VERIFICATION FAILED") - 3
     assert esbmc_get_violated_property(esbmc_output) == esbmc_output[start_idx:end_idx]
+
+
+@pytest.fixture(scope="module")
+def setup_clang_parse_errors() -> dict[str, str]:
+    data_esbmc_output: dict[str, str] = {}
+
+    dir_name = "./tests/samples/esbmc_output/clang_parse_errors/"
+    for file_name in listdir(dir_name):
+        with open(f"{dir_name}/{file_name}", "r") as file:
+            data_esbmc_output[file_name] = file.read()
+
+    return data_esbmc_output
+
+
+def test_get_clang_err_line_index(setup_clang_parse_errors) -> None:
+    data_esbmc_output = setup_clang_parse_errors
+    print(data_esbmc_output["threading.c"])
+    line = get_clang_err_line(data_esbmc_output["threading.c"])
+    assert line == 26
