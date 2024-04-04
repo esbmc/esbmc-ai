@@ -75,6 +75,8 @@ def get_clang_err_line(clang_output: str) -> Optional[int]:
     for line in lines:
         # Find the first line containing a filename along with error.
         line_split: list[str] = line.split(":")
+        if len(line_split) < 4:
+            return None
         # Check for the filename
         if line_split[0].endswith(".c") and " error" in line_split[3]:
             return int(line_split[1])
