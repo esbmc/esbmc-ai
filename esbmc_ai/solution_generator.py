@@ -152,6 +152,14 @@ class SolutionGenerator(BaseChatInterface):
             pass
         return solution
 
+    def update_state(
+        self, source_code: Optional[str] = None, esbmc_output: Optional[str] = None
+    ) -> None:
+        if source_code:
+            self.source_code_raw = source_code
+        if esbmc_output:
+            self.esbmc_output = esbmc_output
+
     def generate_solution(self) -> tuple[str, FinishReason]:
         self.push_to_message_stack(HumanMessage(content=self.initial_prompt))
 
@@ -188,6 +196,4 @@ class SolutionGenerator(BaseChatInterface):
                     self.source_code_raw, solution, err_line, err_line
                 )
 
-        # Remember it for next cycle
-        self.source_code_raw = solution
         return solution, response.finish_reason

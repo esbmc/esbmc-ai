@@ -87,7 +87,6 @@ class FixCodeCommand(ChatCommand):
         for idx in range(max_retries):
             # Get a response. Use while loop to account for if the message stack
             # gets full, then need to compress and retry.
-            llm_solution: str = ""
             while True:
                 # Generate AI solution
                 self.anim.start("Generating Solution... Please Wait")
@@ -98,12 +97,13 @@ class FixCodeCommand(ChatCommand):
                     solution_generator.compress_message_stack()
                     self.anim.stop()
                 else:
+                    source_code = llm_solution
                     break
 
             # Print verbose lvl 2
             printvv("\nGeneration:")
             print_horizontal_line(2)
-            printvv(llm_solution)
+            printvv(source_code)
             print_horizontal_line(2)
             printvv("")
 
@@ -112,7 +112,7 @@ class FixCodeCommand(ChatCommand):
             self.anim.start("Verifying with ESBMC... Please Wait")
             exit_code, esbmc_output = esbmc_load_source_code(
                 file_path=file_name,
-                source_code=llm_solution,
+                source_code=source_code,
                 esbmc_params=config.esbmc_params,
                 auto_clean=config.temp_auto_clean,
                 timeout=config.verifier_timeout,
@@ -126,14 +126,14 @@ class FixCodeCommand(ChatCommand):
 
             # Solution found
             if exit_code == 0:
-                self.on_solution_signal.emit(llm_solution)
+                self.on_solution_signal.emit(source_code)
 
                 if config.raw_conversation:
                     print_raw_conversation()
 
                 printv("ESBMC-AI Notice: Successfully verified code")
 
-                return False, llm_solution
+                return False, source_code
 
             # TODO Move this process into Solution Generator since have (beginning) is done
             # inside, and the other half is done here.
@@ -151,28 +151,9 @@ class FixCodeCommand(ChatCommand):
 
             # Failure case
             print(f"ESBMC-AI Notice: Failure {idx+1}/{max_retries}: Retrying...")
-            # If final iteration no need to sleep.
-            if idx < max_retries - 1:
 
-                # Inform solution generator chat about the ESBMC response.
-                # TODO Add option to customize in config.
-                if exit_code != 1:
-                    # The program did not compile.
-                    solution_generator.push_to_message_stack(
-                        message=HumanMessage(
-                            content=f"Here is the ESBMC output:\n\n```\n{esbmc_output}\n```"
-                        )
-                    )
-                else:
-                    solution_generator.push_to_message_stack(
-                        message=HumanMessage(
-                            content=f"Here is the ESBMC output:\n\n```\n{esbmc_output}\n```"
-                        )
-                    )
-
-                solution_generator.push_to_message_stack(
-                    AIMessage(content="Understood.")
-                )
+            # Update state
+            solution_generator.update_state(source_code, esbmc_output)
 
         if config.raw_conversation:
             print_raw_conversation()
