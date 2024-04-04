@@ -70,13 +70,12 @@ def get_source_code_err_line_idx(esbmc_output: str) -> Optional[int]:
 def get_clang_err_line(clang_output: str) -> Optional[int]:
     """For when the code does not compile, gets the error line reported in the clang
     output. This is useful for `esbmc_output_type single`"""
-    # TODO Test me
     lines: list[str] = clang_output.splitlines()
     for line in lines:
         # Find the first line containing a filename along with error.
         line_split: list[str] = line.split(":")
         if len(line_split) < 4:
-            return None
+            continue
         # Check for the filename
         if line_split[0].endswith(".c") and " error" in line_split[3]:
             return int(line_split[1])
@@ -85,7 +84,11 @@ def get_clang_err_line(clang_output: str) -> Optional[int]:
 
 
 def get_clang_err_line_index(clang_output: str) -> Optional[int]:
-    return get_clang_err_line(clang_output)
+    line: Optional[int] = get_clang_err_line(clang_output)
+    if line:
+        return line - 1
+    else:
+        return None
 
 
 def esbmc(path: str, esbmc_params: list, timeout: Optional[float] = None):
