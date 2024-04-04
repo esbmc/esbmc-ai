@@ -145,7 +145,8 @@ class SolutionGenerator(BaseChatInterface):
 
             # -4 = 3 backticks and also the \n before the backticks.
             code_end: int = len(solution) - 4 - code_end
-            assert code_start <= code_end
+            # +1 because of edge cases as in test_get_code_from_solution
+            assert code_start <= code_end + 1
 
             solution = solution[code_start:code_end]
         except (ValueError, AssertionError):
@@ -186,14 +187,15 @@ class SolutionGenerator(BaseChatInterface):
         # full source code before giving to ESBMC
         match self.source_code_format:
             case "single":
-                err_line: Optional[int] = get_source_code_err_line_idx(
-                    self.esbmc_output
-                )
+                # Get source code error line from esbmc output
+                line: Optional[int] = get_source_code_err_line_idx(self.esbmc_output)
+                if not line:
+                    # Check if it parses
+                    line = get_clang_err_line_index(self.esbmc_output)
+
                 assert (
-                    err_line
+                    line
                 ), "fix code command: error line could not be found to apply brutal patch replacement"
-                solution = apply_line_patch(
-                    self.source_code_raw, solution, err_line, err_line
-                )
+                solution = apply_line_patch(self.source_code_raw, solution, line, line)
 
         return solution, response.finish_reason
