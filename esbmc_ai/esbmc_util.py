@@ -67,6 +67,25 @@ def get_source_code_err_line_idx(esbmc_output: str) -> Optional[int]:
         return None
 
 
+def get_clang_err_line(clang_output: str) -> Optional[int]:
+    """For when the code does not compile, gets the error line reported in the clang
+    output. This is useful for `esbmc_output_type single`"""
+    # TODO Test me
+    lines: list[str] = clang_output.splitlines()
+    for line in lines:
+        # Find the first line containing a filename along with error.
+        line_split: list[str] = line.split(":")
+        # Check for the filename
+        if line_split[0].endswith(".c") and " error" in line_split[3]:
+            return int(line_split[1])
+
+    return None
+
+
+def get_clang_err_line_index(clang_output: str) -> Optional[int]:
+    return get_clang_err_line(clang_output)
+
+
 def esbmc(path: str, esbmc_params: list, timeout: Optional[float] = None):
     """Exit code will be 0 if verification successful, 1 if verification
     failed. And any other number for compilation error/general errors."""
@@ -84,7 +103,7 @@ def esbmc(path: str, esbmc_params: list, timeout: Optional[float] = None):
     esbmc_cmd.extend(["--timeout", str(timeout)])
 
     # Add slack time to process to allow verifier to timeout and end gracefully.
-    process_timeout: Optional[float] = timeout + 1 if timeout else None
+    process_timeout: Optional[float] = timeout + 10 if timeout else None
 
     # Run ESBMC and get output
     process: CompletedProcess = run(

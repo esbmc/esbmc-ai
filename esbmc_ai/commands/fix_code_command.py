@@ -1,6 +1,6 @@
 # Author: Yiannis Charalambous
 
-from os import get_terminal_size
+import sys
 from typing import Any, Tuple
 from typing_extensions import override
 from langchain.schema import AIMessage, HumanMessage
@@ -15,7 +15,12 @@ from ..esbmc_util import (
     esbmc_get_error_type,
     esbmc_load_source_code,
 )
-from ..solution_generator import SolutionGenerator, get_esbmc_output_formatted
+from ..solution_generator import (
+    ESBMCTimedOutException,
+    SolutionGenerator,
+    SourceCodeParseError,
+    get_esbmc_output_formatted,
+)
 from ..logging import print_horizontal_line, printv, printvv
 
 # TODO Remove built in messages and move them to config.
@@ -34,12 +39,13 @@ class FixCodeCommand(ChatCommand):
     @override
     def execute(self, **kwargs: Any) -> Tuple[bool, str]:
         def print_raw_conversation() -> None:
-            print("Notice: Printing raw conversation...")
+            print_horizontal_line(0)
+            print("ESBMC-AI Notice: Printing raw conversation...")
             all_messages = solution_generator._system_messages.copy()
             all_messages.extend(solution_generator.messages.copy())
             messages: list[str] = [f"{msg.type}: {msg.content}" for msg in all_messages]
             print("\n" + "\n\n".join(messages))
-            print("Notice: End of conversation")
+            print("ESBMC-AI Notice: End of raw conversation")
 
         file_name: str = kwargs["file_name"]
         source_code: str = kwargs["source_code"]
@@ -55,21 +61,25 @@ class FixCodeCommand(ChatCommand):
             else "Using generic prompt..."
         )
 
-        solution_generator = SolutionGenerator(
-            ai_model_agent=config.chat_prompt_generator_mode,
-            source_code=source_code,
-            esbmc_output=esbmc_output,
-            ai_model=config.ai_model,
-            llm=config.ai_model.create_llm(
-                api_keys=config.api_keys,
-                temperature=config.chat_prompt_generator_mode.temperature,
-                requests_max_tries=config.requests_max_tries,
-                requests_timeout=config.requests_timeout,
-            ),
-            scenario=scenario,
-            source_code_format=config.source_code_format,
-            esbmc_output_type=config.esbmc_output_type,
-        )
+        try:
+            solution_generator = SolutionGenerator(
+                ai_model_agent=config.chat_prompt_generator_mode,
+                source_code=source_code,
+                esbmc_output=esbmc_output,
+                ai_model=config.ai_model,
+                llm=config.ai_model.create_llm(
+                    api_keys=config.api_keys,
+                    temperature=config.chat_prompt_generator_mode.temperature,
+                    requests_max_tries=config.requests_max_tries,
+                    requests_timeout=config.requests_timeout,
+                ),
+                scenario=scenario,
+                source_code_format=config.source_code_format,
+                esbmc_output_type=config.esbmc_output_type,
+            )
+        except ESBMCTimedOutException:
+            print("error: ESBMC has timed out...")
+            sys.exit(1)
 
         print()
 
@@ -109,32 +119,38 @@ class FixCodeCommand(ChatCommand):
             )
             self.anim.stop()
 
-            # TODO Move this process into Solution Generator since have (beginning) is done
-            # inside, and the other half is done here.
-            try:
-                esbmc_output = get_esbmc_output_formatted(
-                    esbmc_output_type=config.esbmc_output_type,
-                    esbmc_output=esbmc_output,
-                )
-            except ValueError:
-                # Probably did not compile and so ESBMC source code is clang output.
-                pass
-
             # Print verbose lvl 2
             print_horizontal_line(2)
             printvv(esbmc_output)
             print_horizontal_line(2)
 
+            # Solution found
             if exit_code == 0:
                 self.on_solution_signal.emit(llm_solution)
 
                 if config.raw_conversation:
                     print_raw_conversation()
 
+                printv("ESBMC-AI Notice: Successfully verified code")
+
                 return False, llm_solution
 
+            # TODO Move this process into Solution Generator since have (beginning) is done
+            # inside, and the other half is done here.
+            # Get formatted ESBMC output
+            try:
+                esbmc_output = get_esbmc_output_formatted(
+                    esbmc_output_type=config.esbmc_output_type,
+                    esbmc_output=esbmc_output,
+                )
+            except SourceCodeParseError:
+                pass
+            except ESBMCTimedOutException:
+                print("error: ESBMC has timed out...")
+                sys.exit(1)
+
             # Failure case
-            print(f"Failure {idx+1}/{max_retries}: Retrying...")
+            print(f"ESBMC-AI Notice: Failure {idx+1}/{max_retries}: Retrying...")
             # If final iteration no need to sleep.
             if idx < max_retries - 1:
 
@@ -160,4 +176,5 @@ class FixCodeCommand(ChatCommand):
 
         if config.raw_conversation:
             print_raw_conversation()
-        return True, "Failed all attempts..."
+
+        return True, "ESBMC-AI Notice: Failed all attempts..."

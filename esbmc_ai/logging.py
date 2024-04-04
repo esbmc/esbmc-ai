@@ -36,8 +36,8 @@ def printvvv(m) -> None:
 
 
 def print_horizontal_line(verbosity: int) -> None:
-    if verbosity >= _verbose:
+    if _verbose >= verbosity:
         try:
-            printvv("-" * get_terminal_size().columns)
+            print("-" * get_terminal_size().columns)
         except OSError:
             pass
