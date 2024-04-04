@@ -10,13 +10,21 @@ def test_get_code_from_solution():
         )
         == "aaa"
     )
+
     assert (
         SolutionGenerator.get_code_from_solution(
             "This is a code block:\n\n```\nabc\n```"
         )
         == "abc"
     )
+
+    # Edge case
     assert (
         SolutionGenerator.get_code_from_solution("This is a code block:```abc\n```")
-        == "This is a code block:```abc\n```"
+        == ""
+    )
+
+    assert (
+        SolutionGenerator.get_code_from_solution("The repaired C code is:\n\n```\n```")
+        == ""
     )
