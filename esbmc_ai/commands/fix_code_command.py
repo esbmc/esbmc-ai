@@ -101,7 +101,7 @@ class FixCodeCommand(ChatCommand):
                     break
 
             # Print verbose lvl 2
-            printvv("\nGeneration:")
+            printvv("\nESBMC-AI Notice: Source Code Generation:")
             print_horizontal_line(2)
             printvv(source_code)
             print_horizontal_line(2)
@@ -120,6 +120,7 @@ class FixCodeCommand(ChatCommand):
             self.anim.stop()
 
             # Print verbose lvl 2
+            printvv("\nESBMC-AI Notice: ESBMC Output:")
             print_horizontal_line(2)
             printvv(esbmc_output)
             print_horizontal_line(2)
@@ -131,7 +132,7 @@ class FixCodeCommand(ChatCommand):
                 if config.raw_conversation:
                     print_raw_conversation()
 
-                printv("ESBMC-AI Notice: Successfully verified code")
+                printv("ESBMC-AI Notice: Successfuly verified code")
 
                 return False, source_code
 
@@ -146,11 +147,17 @@ class FixCodeCommand(ChatCommand):
             except SourceCodeParseError:
                 pass
             except ESBMCTimedOutException:
-                print("error: ESBMC has timed out...")
+                if config.raw_conversation:
+                    print_raw_conversation()
+                print("ESBMC-AI Notice: error: ESBMC has timed out...")
                 sys.exit(1)
 
             # Failure case
-            print(f"ESBMC-AI Notice: Failure {idx+1}/{max_retries}: Retrying...")
+            print(
+                f"ESBMC-AI Notice: Failure {idx+1}/{max_retries}" + ": Retrying..."
+                if idx != max_retries - 1
+                else ""
+            )
 
             # Update state
             solution_generator.update_state(source_code, esbmc_output)
