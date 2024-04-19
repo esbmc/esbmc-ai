@@ -84,8 +84,6 @@ class SolutionGenerator(BaseChatInterface):
         self,
         ai_model_agent: DynamicAIModelAgent | ChatPromptSettings,
         llm: BaseLanguageModel,
-        source_code: str,
-        esbmc_output: str,
         ai_model: AIModel,
         scenario: str = "",
         source_code_format: str = "full",
@@ -110,26 +108,17 @@ class SolutionGenerator(BaseChatInterface):
 
         self.esbmc_output_type: str = esbmc_output_type
         self.source_code_format: str = source_code_format
-        self.source_code_raw: str = source_code
-        # Used for resetting state.
-        self._original_source_code: str = source_code
 
-        # Format ESBMC output
-        try:
-            self.esbmc_output = get_esbmc_output_formatted(
-                esbmc_output_type=self.esbmc_output_type,
-                esbmc_output=esbmc_output,
-            )
-        except SourceCodeParseError:
-            # When clang output is displayed, show it entirely as it doesn't get very
-            # big.
-            self.esbmc_output = esbmc_output
+        self.source_code_raw: Optional[str] = None
+        self.source_code_formatted: Optional[str] = None
+        self.esbmc_output: Optional[str] = None
 
     @override
     def compress_message_stack(self) -> None:
         # Resets the conversation - cannot summarize code
+        # If generate_solution is called after this point, it will start new
+        # with the currently set state.
         self.messages: list[BaseMessage] = []
-        self.source_code_raw = self._original_source_code
 
     @classmethod
     def get_code_from_solution(cls, solution: str) -> str:
@@ -157,29 +146,43 @@ class SolutionGenerator(BaseChatInterface):
             pass
         return solution
 
-    def update_state(
-        self, source_code: Optional[str] = None, esbmc_output: Optional[str] = None
-    ) -> None:
-        if source_code:
-            self.source_code_raw = source_code
-        if esbmc_output:
+    def update_state(self, source_code: str, esbmc_output: str) -> None:
+        """Updates the latest state of the code and ESBMC output. This should be
+        called before generate_solution."""
+        self.source_code_raw = source_code
+
+        # Format ESBMC output
+        try:
+            self.esbmc_output = get_esbmc_output_formatted(
+                esbmc_output_type=self.esbmc_output_type,
+                esbmc_output=esbmc_output,
+            )
+        except SourceCodeParseError:
+            # When clang output is displayed, show it entirely as it doesn't get very
+            # big.
             self.esbmc_output = esbmc_output
 
+        # Format source code
+        self.source_code_formatted = get_source_code_formatted(
+            source_code_format=self.source_code_format,
+            source_code=source_code,
+            esbmc_output=self.esbmc_output,
+        )
+
     def generate_solution(self) -> tuple[str, FinishReason]:
+        assert (
+            self.source_code_raw is not None
+            and self.source_code_formatted is not None
+            and self.esbmc_output is not None
+        ), "Call update_state before calling generate_solution."
+
         self.push_to_message_stack(
             HumanMessage(content=self.ai_model_agent.initial_prompt)
         )
 
-        # Format source code
-        source_code_formatted: str = get_source_code_formatted(
-            source_code_format=self.source_code_format,
-            source_code=self.source_code_raw,
-            esbmc_output=self.esbmc_output,
-        )
-
         # Apply template substitution to message stack
         self.apply_template_value(
-            source_code=source_code_formatted,
+            source_code=self.source_code_formatted,
             esbmc_output=self.esbmc_output,
         )
 
