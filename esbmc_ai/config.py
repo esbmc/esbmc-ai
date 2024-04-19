@@ -44,6 +44,7 @@ esbmc_output_type: str = "full"
 source_code_format: str = "full"
 
 fix_code_max_attempts: int = 5
+fix_code_message_history: str = ""
 
 requests_max_tries: int = 5
 requests_timeout: float = 60
@@ -382,6 +383,17 @@ def load_config(file_path: str) -> None:
     if esbmc_output_type not in ["full", "vp", "ce"]:
         raise Exception(
             f"ESBMC output type in the config is not valid: {esbmc_output_type}"
+        )
+
+    global fix_code_message_history
+    fix_code_message_history, _ = _load_config_value(
+        config_file=config_file["chat_modes"]["generate_solution"],
+        name="message_history",
+    )
+
+    if fix_code_message_history not in ["normal", "latest_only", "reverse"]:
+        raise ValueError(
+            f"error: fix code mode message history not valid: {fix_code_message_history}"
         )
 
     global requests_max_tries
