@@ -58,6 +58,7 @@ raw_conversation: bool = False
 cfg_path: str
 
 
+# TODO Get rid of this class as soon as ConfigTool with the pyautoconfig
 class AIAgentConversation(NamedTuple):
     """Immutable class describing the conversation definition for an AI agent. The
     class represents the system messages of the AI agent defined and contains a load
