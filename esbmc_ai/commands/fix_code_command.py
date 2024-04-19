@@ -129,7 +129,7 @@ class FixCodeCommand(ChatCommand):
                 if config.raw_conversation:
                     print_raw_conversation()
 
-                printv("ESBMC-AI Notice: Successfuly verified code")
+                printv("ESBMC-AI Notice: Successfully verified code")
 
                 return False, source_code
 
