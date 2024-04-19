@@ -82,7 +82,7 @@ def get_esbmc_output_formatted(esbmc_output_type: str, esbmc_output: str) -> str
 class SolutionGenerator(BaseChatInterface):
     def __init__(
         self,
-        ai_model_agent: DynamicAIModelAgent,
+        ai_model_agent: DynamicAIModelAgent | ChatPromptSettings,
         llm: BaseLanguageModel,
         source_code: str,
         esbmc_output: str,
@@ -91,18 +91,22 @@ class SolutionGenerator(BaseChatInterface):
         source_code_format: str = "full",
         esbmc_output_type: str = "full",
     ) -> None:
-        # Convert to chat prompt
-        chat_prompt: ChatPromptSettings = DynamicAIModelAgent.to_chat_prompt_settings(
-            ai_model_agent=ai_model_agent, scenario=scenario
-        )
+        """Initializes the solution generator. This ModelChat provides Dynamic
+        Prompting. Will get the correct scenario from the DynamicAIModelAgent
+        supplied and create a ChatPrompt."""
+
+        chat_prompt: ChatPromptSettings = ai_model_agent
+        if isinstance(ai_model_agent, DynamicAIModelAgent):
+            # Convert to chat prompt
+            chat_prompt = DynamicAIModelAgent.to_chat_prompt_settings(
+                ai_model_agent=ai_model_agent, scenario=scenario
+            )
 
         super().__init__(
             ai_model_agent=chat_prompt,
             ai_model=ai_model,
             llm=llm,
         )
-
-        self.initial_prompt = ai_model_agent.initial_prompt
 
         self.esbmc_output_type: str = esbmc_output_type
         self.source_code_format: str = source_code_format
@@ -162,7 +166,9 @@ class SolutionGenerator(BaseChatInterface):
             self.esbmc_output = esbmc_output
 
     def generate_solution(self) -> tuple[str, FinishReason]:
-        self.push_to_message_stack(HumanMessage(content=self.initial_prompt))
+        self.push_to_message_stack(
+            HumanMessage(content=self.ai_model_agent.initial_prompt)
+        )
 
         # Format source code
         source_code_formatted: str = get_source_code_formatted(
