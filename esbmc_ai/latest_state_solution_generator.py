@@ -1,9 +1,11 @@
 # Author: Yiannis Charalambous
 
 from typing_extensions import override
-from langchain import BaseMessage
+from langchain_core.messages import BaseMessage
 from esbmc_ai.solution_generator import SolutionGenerator
 from esbmc_ai.chat_response import FinishReason
+
+# TODO Test me
 
 
 class LatestStateSolutionGenerator(SolutionGenerator):
@@ -18,6 +20,8 @@ class LatestStateSolutionGenerator(SolutionGenerator):
         messages: list[BaseMessage] = self.messages
         self.messages: list[BaseMessage] = []
         solution, finish_reason = super().generate_solution()
+        # Append last messages to the messages stack
+        messages.extend(self.messages)
         # Restore
         self.messages = messages
         return solution, finish_reason
