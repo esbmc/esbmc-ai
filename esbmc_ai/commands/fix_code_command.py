@@ -3,7 +3,6 @@
 import sys
 from typing import Any, Tuple
 from typing_extensions import override
-from langchain.schema import AIMessage, HumanMessage
 
 from esbmc_ai.chat_response import FinishReason
 
@@ -22,8 +21,6 @@ from ..solution_generator import (
     get_esbmc_output_formatted,
 )
 from ..logging import print_horizontal_line, printv, printvv
-
-# TODO Remove built in messages and move them to config.
 
 
 class FixCodeCommand(ChatCommand):
