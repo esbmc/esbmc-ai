@@ -3,7 +3,6 @@
 import sys
 from typing import Any, Tuple
 from typing_extensions import override
-from langchain.schema import AIMessage, HumanMessage
 
 from esbmc_ai.chat_response import FinishReason
 
