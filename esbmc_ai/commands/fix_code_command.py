@@ -6,6 +6,7 @@ from typing_extensions import override
 
 from esbmc_ai.chat_response import FinishReason
 from esbmc_ai.latest_state_solution_generator import LatestStateSolutionGenerator
+from esbmc_ai.reverse_order_solution_generator import ReverseOrderSolutionGenerator
 
 from .chat_command import ChatCommand
 from .. import config
@@ -95,8 +96,26 @@ class FixCodeCommand(ChatCommand):
                         source_code_format=config.source_code_format,
                         esbmc_output_type=config.esbmc_output_type,
                     )
+                case "reverse":
+                    solution_generator = ReverseOrderSolutionGenerator(
+                        ai_model_agent=config.chat_prompt_generator_mode,
+                        source_code=source_code,
+                        esbmc_output=esbmc_output,
+                        ai_model=config.ai_model,
+                        llm=config.ai_model.create_llm(
+                            api_keys=config.api_keys,
+                            temperature=config.chat_prompt_generator_mode.temperature,
+                            requests_max_tries=config.requests_max_tries,
+                            requests_timeout=config.requests_timeout,
+                        ),
+                        scenario=scenario,
+                        source_code_format=config.source_code_format,
+                        esbmc_output_type=config.esbmc_output_type,
+                    )
                 case _:
-                    raise ValueError()
+                    raise NotImplementedError(
+                        f"error: {config.fix_code_message_history} has not been implemented in the Fix Code Command"
+                    )
         except ESBMCTimedOutException:
             print("error: ESBMC has timed out...")
             sys.exit(1)
