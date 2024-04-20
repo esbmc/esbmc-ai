@@ -5,8 +5,6 @@ from langchain_core.messages import BaseMessage
 from esbmc_ai.solution_generator import SolutionGenerator
 from esbmc_ai.chat_response import FinishReason
 
-# TODO Test me
-
 
 class LatestStateSolutionGenerator(SolutionGenerator):
     """SolutionGenerator that only shows the latest source code and verifier

@@ -1,11 +1,13 @@
 # Author: Yiannis Charalambous
 
+from typing import Optional
 import pytest
 
 from langchain.schema import HumanMessage, AIMessage, SystemMessage
 from langchain_community.llms.fake import FakeListLLM
 
 from esbmc_ai.ai_models import AIModel
+from esbmc_ai.chat_response import ChatResponse
 from esbmc_ai.config import AIAgentConversation, ChatPromptSettings
 from esbmc_ai.latest_state_solution_generator import LatestStateSolutionGenerator
 
@@ -46,6 +48,43 @@ def test_call_update_state_first(setup_llm_model) -> None:
 
     with pytest.raises(AssertionError):
         solution_generator.generate_solution()
+
+
+def test_functionality(setup_llm_model) -> None:
+    """Test functionality to see if the latest state along with system messages
+    are passed to send_message only."""
+
+    def mocked_send_message(message: Optional[str] = None) -> ChatResponse:
+        assert len(solution_generator.messages) == 1
+        assert solution_generator.messages[0] == HumanMessage(
+            content="Initial test message"
+        )
+        return ChatResponse()
+
+    llm, model = setup_llm_model
+
+    chat_settings = ChatPromptSettings(
+        system_messages=AIAgentConversation(
+            messages=(
+                SystemMessage(content="Test message 1"),
+                HumanMessage(content="Test message 2"),
+                AIMessage(content="Test message 3"),
+            ),
+        ),
+        initial_prompt="Initial test message",
+        temperature=1.0,
+    )
+
+    solution_generator = LatestStateSolutionGenerator(
+        llm=llm,
+        ai_model=model,
+        ai_model_agent=chat_settings,
+    )
+
+    solution_generator.update_state("", "")
+
+    solution_generator.send_message = mocked_send_message
+    solution_generator.generate_solution()
 
 
 def test_message_stack(setup_llm_model) -> None:
