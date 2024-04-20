@@ -3,9 +3,10 @@
 import sys
 from typing import Any, Tuple
 from typing_extensions import override
-from langchain.schema import AIMessage, HumanMessage
 
 from esbmc_ai.chat_response import FinishReason
+from esbmc_ai.latest_state_solution_generator import LatestStateSolutionGenerator
+from esbmc_ai.reverse_order_solution_generator import ReverseOrderSolutionGenerator
 
 from .chat_command import ChatCommand
 from .. import config
@@ -18,8 +19,6 @@ from ..esbmc_util import (
 from ..solution_generator import (
     ESBMCTimedOutException,
     SolutionGenerator,
-    SourceCodeParseError,
-    get_esbmc_output_formatted,
 )
 from ..logging import print_horizontal_line, printv, printvv
 
@@ -61,21 +60,58 @@ class FixCodeCommand(ChatCommand):
             else "Using generic prompt..."
         )
 
+        match config.fix_code_message_history:
+            case "normal":
+                solution_generator = SolutionGenerator(
+                    ai_model_agent=config.chat_prompt_generator_mode,
+                    ai_model=config.ai_model,
+                    llm=config.ai_model.create_llm(
+                        api_keys=config.api_keys,
+                        temperature=config.chat_prompt_generator_mode.temperature,
+                        requests_max_tries=config.requests_max_tries,
+                        requests_timeout=config.requests_timeout,
+                    ),
+                    scenario=scenario,
+                    source_code_format=config.source_code_format,
+                    esbmc_output_type=config.esbmc_output_type,
+                )
+            case "latest_only":
+                solution_generator = LatestStateSolutionGenerator(
+                    ai_model_agent=config.chat_prompt_generator_mode,
+                    ai_model=config.ai_model,
+                    llm=config.ai_model.create_llm(
+                        api_keys=config.api_keys,
+                        temperature=config.chat_prompt_generator_mode.temperature,
+                        requests_max_tries=config.requests_max_tries,
+                        requests_timeout=config.requests_timeout,
+                    ),
+                    scenario=scenario,
+                    source_code_format=config.source_code_format,
+                    esbmc_output_type=config.esbmc_output_type,
+                )
+            case "reverse":
+                solution_generator = ReverseOrderSolutionGenerator(
+                    ai_model_agent=config.chat_prompt_generator_mode,
+                    ai_model=config.ai_model,
+                    llm=config.ai_model.create_llm(
+                        api_keys=config.api_keys,
+                        temperature=config.chat_prompt_generator_mode.temperature,
+                        requests_max_tries=config.requests_max_tries,
+                        requests_timeout=config.requests_timeout,
+                    ),
+                    scenario=scenario,
+                    source_code_format=config.source_code_format,
+                    esbmc_output_type=config.esbmc_output_type,
+                )
+            case _:
+                raise NotImplementedError(
+                    f"error: {config.fix_code_message_history} has not been implemented in the Fix Code Command"
+                )
+
         try:
-            solution_generator = SolutionGenerator(
-                ai_model_agent=config.chat_prompt_generator_mode,
+            solution_generator.update_state(
                 source_code=source_code,
                 esbmc_output=esbmc_output,
-                ai_model=config.ai_model,
-                llm=config.ai_model.create_llm(
-                    api_keys=config.api_keys,
-                    temperature=config.chat_prompt_generator_mode.temperature,
-                    requests_max_tries=config.requests_max_tries,
-                    requests_timeout=config.requests_timeout,
-                ),
-                scenario=scenario,
-                source_code_format=config.source_code_format,
-                esbmc_output_type=config.esbmc_output_type,
             )
         except ESBMCTimedOutException:
             print("error: ESBMC has timed out...")
@@ -93,9 +129,7 @@ class FixCodeCommand(ChatCommand):
                 llm_solution, finish_reason = solution_generator.generate_solution()
                 self.anim.stop()
                 if finish_reason == FinishReason.length:
-                    self.anim.start("Compressing message stack... Please Wait")
                     solution_generator.compress_message_stack()
-                    self.anim.stop()
                 else:
                     source_code = llm_solution
                     break
@@ -135,25 +169,15 @@ class FixCodeCommand(ChatCommand):
 
                 return False, source_code
 
-            # TODO Move this process into Solution Generator since have (beginning) is done
-            # inside, and the other half is done here.
-            # Get formatted ESBMC output
             try:
-                esbmc_output = get_esbmc_output_formatted(
-                    esbmc_output_type=config.esbmc_output_type,
-                    esbmc_output=esbmc_output,
-                )
-            except SourceCodeParseError:
-                pass
+                # Update state
+                solution_generator.update_state(source_code, esbmc_output)
             except ESBMCTimedOutException:
                 print("error: ESBMC has timed out...")
                 sys.exit(1)
 
             # Failure case
             print(f"ESBMC-AI Notice: Failure {idx+1}/{max_retries}: Retrying...")
-
-            # Update state
-            solution_generator.update_state(source_code, esbmc_output)
 
         if config.raw_conversation:
             print_raw_conversation()
