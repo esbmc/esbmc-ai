@@ -1,9 +1,15 @@
 # Author: Yiannis Charalambous
 
-from langchain.schema import BaseMessage
+from langchain.schema import BaseMessage, HumanMessage
 from typing_extensions import override, Optional
-from esbmc_ai.solution_generator import SolutionGenerator
-from esbmc_ai.chat_response import ChatResponse
+from esbmc_ai.solution_generator import (
+    SolutionGenerator,
+    get_source_code_formatted,
+    get_source_code_err_line_idx,
+    get_clang_err_line_index,
+    apply_line_patch,
+)
+from esbmc_ai.chat_response import FinishReason, ChatResponse
 
 # TODO Test me
 
