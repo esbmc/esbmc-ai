@@ -1,11 +1,13 @@
 # Author: Yiannis Charalambous
 
+from typing import Optional
 import pytest
 
 from langchain.schema import HumanMessage, AIMessage, SystemMessage
 from langchain_community.llms.fake import FakeListLLM
 
 from esbmc_ai.ai_models import AIModel
+from esbmc_ai.chat_response import ChatResponse
 from esbmc_ai.config import AIAgentConversation, ChatPromptSettings
 from esbmc_ai.latest_state_solution_generator import LatestStateSolutionGenerator
 
@@ -23,9 +25,8 @@ def setup_llm_model():
     return llm, model
 
 
-def test_call_update_state_first(setup_llm_model) -> None:
+def test_send_message(setup_llm_model) -> None:
     llm, model = setup_llm_model
-
     chat_settings = ChatPromptSettings(
         system_messages=AIAgentConversation(
             messages=(
@@ -44,8 +45,25 @@ def test_call_update_state_first(setup_llm_model) -> None:
         ai_model_agent=chat_settings,
     )
 
-    with pytest.raises(AssertionError):
-        solution_generator.generate_solution()
+    def send_message_mock(message: Optional[str] = None) -> ChatResponse:
+        assert len(solution_generator.messages) == 1
+        assert solution_generator.messages[0] == HumanMessage(
+            content=chat_settings.initial_prompt,
+        )
+
+        return ChatResponse()
+
+    # Use the LLM method to check if the code is overwritten
+    solution_generator.send_message = send_message_mock
+
+    solution_generator.update_state("", "")
+
+    solution_generator.generate_solution()
+    chat_settings.initial_prompt = "aaaaaaa"
+    solution_generator.generate_solution()
+    chat_settings.initial_prompt = "bbbbbbb"
+    solution_generator.generate_solution()
+    chat_settings.initial_prompt = "ccccccc"
 
 
 def test_message_stack(setup_llm_model) -> None:

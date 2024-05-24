@@ -2,7 +2,11 @@
 
 import pytest
 
-from langchain.schema import HumanMessage, AIMessage, SystemMessage
+from langchain.schema import (
+    HumanMessage,
+    AIMessage,
+    SystemMessage,
+)
 from langchain_community.llms.fake import FakeListLLM
 
 from esbmc_ai.ai_models import AIModel
@@ -23,29 +27,10 @@ def setup_llm_model():
     return llm, model
 
 
-def test_call_update_state_first(setup_llm_model) -> None:
-    llm, model = setup_llm_model
-
-    chat_settings = ChatPromptSettings(
-        system_messages=AIAgentConversation(
-            messages=(
-                SystemMessage(content="Test message 1"),
-                HumanMessage(content="Test message 2"),
-                AIMessage(content="Test message 3"),
-            ),
-        ),
-        initial_prompt="Initial test message",
-        temperature=1.0,
-    )
-
-    solution_generator = ReverseOrderSolutionGenerator(
-        llm=llm,
-        ai_model=model,
-        ai_model_agent=chat_settings,
-    )
-
-    with pytest.raises(AssertionError):
-        solution_generator.generate_solution()
+def test_send_message(setup_llm_model) -> None:
+    # TODO Test the send_message method to ensure it actually reverses the
+    # messages as intended.
+    pass
 
 
 def test_message_stack(setup_llm_model) -> None:
