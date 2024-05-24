@@ -32,7 +32,6 @@ pytest = "*"
 pytest-cov = "*"
 pytest-regtest = "*"
 py = "*" # Dependency of pytest-regtest
-build = "*"
 twine = "*"
 hatch = "*"
 transformers = "*"
