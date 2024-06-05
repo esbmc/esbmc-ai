@@ -22,8 +22,6 @@ from ..solution_generator import (
 )
 from ..logging import print_horizontal_line, printv, printvv
 
-# TODO Remove built in messages and move them to config.
-
 
 class FixCodeCommand(ChatCommand):
     on_solution_signal: Signal = Signal()
@@ -135,7 +133,7 @@ class FixCodeCommand(ChatCommand):
                     break
 
             # Print verbose lvl 2
-            printvv("\nGeneration:")
+            printvv("\nESBMC-AI Notice: Source Code Generation:")
             print_horizontal_line(2)
             printvv(source_code)
             print_horizontal_line(2)
@@ -154,6 +152,7 @@ class FixCodeCommand(ChatCommand):
             self.anim.stop()
 
             # Print verbose lvl 2
+            printvv("\nESBMC-AI Notice: ESBMC Output:")
             print_horizontal_line(2)
             printvv(esbmc_output)
             print_horizontal_line(2)
@@ -173,11 +172,17 @@ class FixCodeCommand(ChatCommand):
                 # Update state
                 solution_generator.update_state(source_code, esbmc_output)
             except ESBMCTimedOutException:
-                print("error: ESBMC has timed out...")
+                if config.raw_conversation:
+                    print_raw_conversation()
+                print("ESBMC-AI Notice: error: ESBMC has timed out...")
                 sys.exit(1)
 
             # Failure case
-            print(f"ESBMC-AI Notice: Failure {idx+1}/{max_retries}: Retrying...")
+            print(
+                f"ESBMC-AI Notice: Failure {idx+1}/{max_retries}" + ": Retrying..."
+                if idx != max_retries - 1
+                else ""
+            )
 
         if config.raw_conversation:
             print_raw_conversation()
