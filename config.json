@@ -19,7 +19,7 @@
     "--context-bound",
     "2"
   ],
-  "esbmc_output_type": "vp",
+  "esbmc_output_type": "full",
   "source_code_format": "full",
   "llm_requests": {
     "max_tries": 5,
@@ -70,8 +70,8 @@
       ]
     },
     "generate_solution": {
-      "max_attempts": 5,
-      "temperature": 1.3,
+      "max_attempts": 4,
+      "temperature": 0.0,
       "message_history": "normal",
       "scenarios": {
         "division by zero": {
@@ -87,33 +87,8 @@
           ]
         }
       },
-      "system": [
-        {
-          "role": "System",
-          "content": "You are an secure code generator that parses vulnerable source code, and output from a program called ESBMC, which contains vulnerability information about the source code. You should use the output from ESBMC to find the problem, and correct the source code. ESBMC is always correct. You shall add a NULL check for every heap allocation you make. From this point on, you can only reply in source code. You shall only output source code as whole. Reply OK if you understand."
-        },
-        {
-          "role": "AI",
-          "content": "OK"
-        },
-        {
-          "role": "Human",
-          "content": "The following text is the source code of the program, reply OK if you understand:\n\n```c\n{source_code}\n```"
-        },
-        {
-          "role": "AI",
-          "content": "OK"
-        },
-        {
-          "role": "Human",
-          "content": "The following text is the output of ESBMC, reply OK if you understand:\n\n```\n{esbmc_output}```"
-        },
-        {
-          "role": "AI",
-          "content": "OK"
-        }
-      ],
-      "initial": "Generate a correction for the source code provided. Show the code only. Do not reply with acknowledgements."
+      "system": [],
+      "initial": "From now on, act as an Automated Code Repair Tool that repairs AI C code. You will be shown AI C code, along with ESBMC output. Pay close attention to the ESBMC output, which contains a stack trace along with the type of error that occurred and its location. Provide the repaired C code as output, as would an Automated Code Repair Tool. Aside from the corrected source code, do not output any other text. The ESBMC output is {esbmc_output} The source code is {source_code}"
     }
   }
 }
