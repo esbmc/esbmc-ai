@@ -1,7 +1,7 @@
 # Author: Yiannis Charalambous
 
 from abc import abstractmethod
-from typing import Any, Iterable, Union
+from typing import Any, Iterable, Optional, Union
 from enum import Enum
 from pydantic.v1.types import SecretStr
 from typing_extensions import override
@@ -152,6 +152,7 @@ class AIModelOpenAI(AIModel):
         requests_max_tries: int = 5,
         requests_timeout: float = 60,
     ) -> BaseLanguageModel:
+        assert api_keys.openai, "No OpenAI api key has been specified..."
         return ChatOpenAI(
             model=self.name,
             api_key=SecretStr(api_keys.openai),
@@ -267,11 +268,10 @@ class AIModelTextGen(AIModel):
         )
 
 
-class AIModels(Enum):
-    GPT_3 = AIModelOpenAI(name="gpt-3.5-turbo", tokens=4096)
-    GPT_3_16K = AIModelOpenAI(name="gpt-3.5-turbo-16k", tokens=16384)
-    GPT_4 = AIModelOpenAI(name="gpt-4", tokens=8192)
-    GPT_4_32K = AIModelOpenAI(name="gpt-4-32k", tokens=32768)
+class _AIModels(Enum):
+    """Private enum that contains predefined AI Models. OpenAI models are not
+    defined because they are fetched from the API."""
+
     FALCON_7B = AIModelTextGen(
         name="falcon-7b",
         tokens=8192,
@@ -295,7 +295,7 @@ class AIModels(Enum):
 
 _custom_ai_models: list[AIModel] = []
 
-_ai_model_names: set[str] = set(item.value.name for item in AIModels)
+_ai_model_names: set[str] = set(item.value.name for item in _AIModels)
 
 
 def add_custom_ai_model(ai_model: AIModel) -> None:
@@ -307,19 +307,82 @@ def add_custom_ai_model(ai_model: AIModel) -> None:
     _custom_ai_models.append(ai_model)
 
 
-def is_valid_ai_model(ai_model: Union[str, AIModel]) -> bool:
-    """Accepts both the AIModel object and the name as parameter."""
-    name: str
-    if isinstance(ai_model, AIModel):
-        name = ai_model.name
-    else:
-        name = ai_model
+def is_valid_ai_model(
+    ai_model: Union[str, AIModel], api_keys: Optional[APIKeyCollection] = None
+) -> bool:
+    """Accepts both the AIModel object and the name as parameter. It checks the
+    openai servers to see if a model is defined on their servers, if not, then
+    it checks the internally defined AI models list."""
+
+    # Get the name of the model
+    name: str = ai_model.name if isinstance(ai_model, AIModel) else ai_model
+
+    # Try accessing openai api and checking if there is a model defined.
+    # NOTE: This is not tested as no way to mock API currently.
+    if api_keys and api_keys.openai:
+        try:
+            from openai import Client
+
+            for model in Client(api_key=api_keys.openai).models.list().data:
+                if model.id == name:
+                    return True
+        except ImportError:
+            pass
+
+    # Use the predefined list of models.
     return name in _ai_model_names
 
 
-def get_ai_model_by_name(name: str) -> AIModel:
+def _get_openai_model_max_tokens(name: str) -> int:
+    """NOTE: OpenAI currently does not expose an API for getting the model
+    length. Maybe add a config input value for this?"""
+
+    # https://platform.openai.com/docs/models
+    tokens = {
+        "gpt-4o": 128000,
+        "gpt-4": 8192,
+        "gpt-3.5-turbo": 16385,
+        "gpt-3.5-turbo-instruct": 4096,
+    }
+
+    # Split into - segments and remove each section from the end to find out
+    # which one matches the most.
+
+    # Base Case
+    if name in tokens:
+        return tokens[name]
+
+    # Step Case
+    name_split: list[str] = name.split("-")
+    for i in range(1, name.count("-")):
+        subname: str = "-".join(name_split[:-i])
+        if subname in tokens:
+            return tokens[subname]
+
+    raise ValueError(f"Could not figure out max tokens for model: {name}")
+
+
+def get_ai_model_by_name(
+    name: str, api_keys: Optional[APIKeyCollection] = None
+) -> AIModel:
+    # Check OpenAI models.
+    if api_keys and api_keys.openai:
+        try:
+            from openai import Client
+
+            for model in Client(api_key=api_keys.openai).models.list().data:
+                if model.id == name:
+                    add_custom_ai_model(
+                        AIModelOpenAI(
+                            model.id,
+                            _get_openai_model_max_tokens(model.id),
+                        ),
+                    )
+        except ImportError:
+            pass
+
     # Check AIModels enum.
-    for enum_value in AIModels:
+    for enum_value in _AIModels:
         ai_model: AIModel = enum_value.value
         if name == ai_model.name:
             return ai_model
