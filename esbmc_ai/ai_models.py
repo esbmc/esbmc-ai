@@ -318,6 +318,7 @@ def is_valid_ai_model(
     name: str = ai_model.name if isinstance(ai_model, AIModel) else ai_model
 
     # Try accessing openai api and checking if there is a model defined.
+    # NOTE: This is not tested as no way to mock API currently.
     if api_keys and api_keys.openai:
         try:
             from openai import Client
@@ -339,7 +340,6 @@ def _get_openai_model_max_tokens(name: str) -> int:
     # https://platform.openai.com/docs/models
     tokens = {
         "gpt-4o": 128000,
-        "gpt-4-turbo": 128000,
         "gpt-4": 8192,
         "gpt-3.5-turbo": 16385,
         "gpt-3.5-turbo-instruct": 4096,
@@ -348,11 +348,16 @@ def _get_openai_model_max_tokens(name: str) -> int:
     # Split into - segments and remove each section from the end to find out
     # which one matches the most.
 
+    # Base Case
+    if name in tokens:
+        return tokens[name]
+
+    # Step Case
     name_split: list[str] = name.split("-")
-    for i in range(name.count("-")):
+    for i in range(1, name.count("-")):
         subname: str = "-".join(name_split[:-i])
         if subname in tokens:
-            return tokens[name]
+            return tokens[subname]
 
     raise ValueError(f"Could not figure out max tokens for model: {name}")
 
