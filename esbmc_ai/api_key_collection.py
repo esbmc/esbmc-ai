@@ -2,11 +2,11 @@
 
 """API Key Collection definition."""
 
-from typing import NamedTuple
+from typing import NamedTuple, Optional
 
 
 class APIKeyCollection(NamedTuple):
     """Class that is used to pass keys to AIModels."""
 
-    openai: str = ""
-    huggingface: str = ""
+    openai: Optional[str]
+    huggingface: Optional[str]

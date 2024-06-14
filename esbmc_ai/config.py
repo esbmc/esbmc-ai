@@ -38,7 +38,7 @@ esbmc_params: list[str] = [
 
 temp_auto_clean: bool = True
 temp_file_dir: str = "."
-ai_model: AIModel = AIModels.GPT_3.value
+ai_model: AIModel
 
 esbmc_output_type: str = "full"
 source_code_format: str = "full"
@@ -455,11 +455,10 @@ def load_config(file_path: str) -> None:
     ai_model_name, _ = _load_config_value(
         config_file,
         "ai_model",
-        ai_model,
     )
-    if is_valid_ai_model(ai_model_name):
+    if is_valid_ai_model(ai_model_name, api_keys):
         # Load the ai_model from loaded models.
-        ai_model = get_ai_model_by_name(ai_model_name)
+        ai_model = get_ai_model_by_name(ai_model_name, api_keys)
     else:
         print(f"Error: {ai_model_name} is not a valid AI model")
         sys.exit(4)
@@ -484,8 +483,8 @@ def load_args(args) -> None:
 
     global ai_model
     if args.ai_model != "":
-        if is_valid_ai_model(args.ai_model):
-            ai_model = get_ai_model_by_name(args.ai_model)
+        if is_valid_ai_model(args.ai_model, api_keys):
+            ai_model = get_ai_model_by_name(args.ai_model, api_keys)
         else:
             print(f"Error: invalid --ai-model parameter {args.ai_model}")
             sys.exit(4)

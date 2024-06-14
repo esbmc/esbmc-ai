@@ -218,7 +218,7 @@ def main() -> None:
         "-m",
         "--ai-model",
         default="",
-        help="Which AI model to use. Built-in models: {"
+        help="Which AI model to use. Built-in models: {OpenAI GPT models, "
         + ", ".join(_ai_model_names)
         + ", +custom models}",
     )

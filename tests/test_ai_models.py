@@ -13,15 +13,15 @@ from esbmc_ai.ai_models import (
     add_custom_ai_model,
     is_valid_ai_model,
     AIModel,
-    AIModels,
+    _AIModels,
     get_ai_model_by_name,
     AIModelTextGen,
 )
 
 
 def test_is_valid_ai_model() -> None:
-    assert is_valid_ai_model(AIModels.FALCON_7B.value)
-    assert is_valid_ai_model(AIModels.GPT_3_16K.value)
+    assert is_valid_ai_model(_AIModels.FALCON_7B.value)
+    assert is_valid_ai_model(_AIModels.GPT_3_16K.value)
     assert is_valid_ai_model("gpt-3.5-turbo")
     assert is_valid_ai_model("falcon-7b")
 
