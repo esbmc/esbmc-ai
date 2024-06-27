@@ -1,12 +1,9 @@
-import re
 import sys
-import nltk
 import unittest
-from nltk.tokenize import word_tokenize,sent_tokenize
-print(sys.path)
+
 
 from esbmc_ai import esbmc_util
-nltk.download('punkt')
+
 
 class TestEsbmcOutputOptimisation(unittest.TestCase):
     
@@ -47,6 +44,7 @@ Let's go through the source code and the output of ESBMC to understand what is h
       expected_output = '''Starting with the source code, we see that it includes some external functions and declares global variables. These variables are of type int and are initialized with nondeterministic values using the `__VERIFIER_nondet_int()` function. The `assume()` function is then used to specify assumptions about the values of these variables
 
 After that, it mentions the number of verification condition checks (VCCs) generated and the number remaining after simplification.
+
 This is the result
 In this case, ESBMC reports "VERIFICATION SUCCESSFUL" and mentions that a solution was found by the forward condition. This means that all states in the program are reachable.
 Finally, ESBMC indicates a successful verification.'''
@@ -133,23 +131,14 @@ The output from ESBMC pertaining to this code indicates a verification process:
 - **"Solution found by the forward condition; all states are reachable (k = 1)"**: ESBMC concluded that, under the given conditions, every state it could consider within one step is reachable without uncovering any logical inconsistencies or errors.'''
         self.maxDiff = None
         output_str2 = esbmc_util.reduce_output2(input2)
-
-        #print('Filtered output2:')
         #print(output_str2)
-        #print('Expected output2: ')
         self.assertEqual(output_str2, expected_output2)
         output_str3 = esbmc_util.reduce_output2(input3)
         self.assertEqual(output_str3, expected_output3)
-        #print('Filtered output 3')
-        #print(output_str3)
-        #print('Expected output3:')
-        #print(expected_output3)
+
         output_str4 = esbmc_util.reduce_output2(input4) 
         self.assertEqual(output_str4, expected_output4)     
-        #print('Filtered output 4')
-        #print(output_str4)
-     #   print('Expected output4:')
-      #  print(expected_output4)
+        print(output_str4)
 
     def test_remove_patterns_nltk(self):
 
