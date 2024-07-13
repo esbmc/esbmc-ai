@@ -2,7 +2,7 @@
 
 from typing_extensions import override
 from langchain_core.messages import BaseMessage
-from esbmc_ai.solution_generator import SolutionGenerator
+from esbmc_ai.chats.solution_generator import SolutionGenerator
 from esbmc_ai.chat_response import FinishReason
 
 # TODO Test me

@@ -5,7 +5,8 @@ from typing import Any, Tuple
 from typing_extensions import override
 
 from esbmc_ai.chat_response import FinishReason
-from esbmc_ai.latest_state_solution_generator import LatestStateSolutionGenerator
+from esbmc_ai.chats import LatestStateSolutionGenerator, SolutionGenerator
+from esbmc_ai.chats.solution_generator import ESBMCTimedOutException
 from esbmc_ai.reverse_order_solution_generator import ReverseOrderSolutionGenerator
 
 from .chat_command import ChatCommand
@@ -15,10 +16,6 @@ from ..loading_widget import create_loading_widget
 from ..esbmc_util import (
     esbmc_get_error_type,
     esbmc_load_source_code,
-)
-from ..solution_generator import (
-    ESBMCTimedOutException,
-    SolutionGenerator,
 )
 from ..logging import print_horizontal_line, printv, printvv
 

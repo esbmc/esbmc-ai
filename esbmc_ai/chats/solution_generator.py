@@ -10,7 +10,7 @@ from esbmc_ai.chat_response import ChatResponse, FinishReason
 from esbmc_ai.config import ChatPromptSettings, DynamicAIModelAgent
 from esbmc_ai.frontend.solution import apply_line_patch
 
-from .ai_models import AIModel
+from esbmc_ai.ai_models import AIModel
 from .base_chat_interface import BaseChatInterface
 from esbmc_ai.esbmc_util import (
     esbmc_get_counter_example,

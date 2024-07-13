@@ -30,7 +30,7 @@ from esbmc_ai.commands import (
 )
 
 from esbmc_ai.loading_widget import LoadingWidget, create_loading_widget
-from esbmc_ai.user_chat import UserChat
+from esbmc_ai.chats import UserChat
 from esbmc_ai.logging import print_horizontal_line, printv, printvv
 from esbmc_ai.esbmc_util import esbmc
 from esbmc_ai.chat_response import FinishReason, ChatResponse
