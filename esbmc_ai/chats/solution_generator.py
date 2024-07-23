@@ -8,7 +8,7 @@ from langchain.schema import BaseMessage, HumanMessage
 
 from esbmc_ai.chat_response import ChatResponse, FinishReason
 from esbmc_ai.config import ChatPromptSettings, DynamicAIModelAgent
-from esbmc_ai.frontend.solution import apply_line_patch
+from esbmc_ai.solution import SourceFile
 
 from esbmc_ai.ai_models import AIModel
 from .base_chat_interface import BaseChatInterface
@@ -205,6 +205,8 @@ class SolutionGenerator(BaseChatInterface):
                 assert (
                     line
                 ), "fix code command: error line could not be found to apply brutal patch replacement"
-                solution = apply_line_patch(self.source_code_raw, solution, line, line)
+                solution = SourceFile.apply_line_patch(
+                    self.source_code_raw, solution, line, line
+                )
 
         return solution, response.finish_reason
