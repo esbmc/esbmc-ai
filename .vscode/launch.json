@@ -6,7 +6,7 @@
   "configurations": [
     {
       "name": "Launch ESBMC-AI on Open File",
-      "type": "python",
+      "type": "debugpy",
       "request": "launch",
       "module": "esbmc_ai",
       "justMyCode": true,
@@ -17,7 +17,7 @@
     },
     {
       "name": "Fix Code on Open File",
-      "type": "python",
+      "type": "debugpy",
       "request": "launch",
       "module": "esbmc_ai",
       "justMyCode": true,
@@ -31,7 +31,7 @@
     },
     {
       "name": "Optimize Code on Open File",
-      "type": "python",
+      "type": "debugpy",
       "request": "launch",
       "module": "esbmc_ai",
       "justMyCode": true,
@@ -44,7 +44,7 @@
     },
     {
       "name": "Python: Current File",
-      "type": "python",
+      "type": "debugpy",
       "request": "launch",
       "program": "${file}",
       "console": "integratedTerminal",
@@ -52,7 +52,7 @@
     },
     {
       "name": "Run tests",
-      "type": "python",
+      "type": "debugpy",
       "request": "launch",
       "module": "pytest",
       "justMyCode": true,
@@ -63,7 +63,7 @@
     },
     {
       "name": "Run coverage tests",
-      "type": "python",
+      "type": "debugpy",
       "request": "launch",
       "module": "pytest",
       "justMyCode": true,
