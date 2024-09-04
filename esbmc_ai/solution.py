@@ -5,9 +5,33 @@ Keeps track of all the source files that ESBMC-AI is targeting. """
 
 from typing import Optional
 from pathlib import Path
+from subprocess import PIPE, STDOUT, run, CompletedProcess
+from tempfile import NamedTemporaryFile
 
 
 class SourceFile(object):
+    @classmethod
+    def apply_line_patch(
+        cls, source_code: str, patch: str, start: int, end: int
+    ) -> str:
+        """Applies a patch to the source code.
+
+        To replace a single line, start and end are equal.
+
+        Args:
+            * source_code - The source code to apply the patch to.
+            * patch - Can be a line or multiple lines but will replace the start and
+            end region defined.
+            * start - Line index to mark start of replacement.
+            * end - Marks the end of the region where the patch will be applied to.
+            End is non-inclusive."""
+        assert (
+            start <= end
+        ), f"start ({start}) needs to be less than or equal to end ({end})"
+        lines: list[str] = source_code.splitlines()
+        lines = lines[:start] + [patch] + lines[end + 1 :]
+        return "\n".join(lines)
+
     def __init__(self, file_path: Optional[Path], content: str) -> None:
         self._file_path: Optional[Path] = file_path
         # Content file shows the file throughout the repair process. Index 0 is
@@ -48,9 +72,32 @@ class SourceFile(object):
     def get_patch(self, index_a: int, index_b: int) -> str:
         """Return diff between `index_a` and `index_b` which are indicies
         referencing the content list."""
-        raise NotImplementedError()
+        assert len(self._content) > index_a and len(self._content) > index_b
 
-    def push_line_path(self, patch: str, start: int, end: int) -> str:
+        # Save as temp files
+        file_a = NamedTemporaryFile(mode="w", dir="/tmp")
+        file_a.write(self._content[index_a])
+        file_b = NamedTemporaryFile(mode="w", dir="/tmp")
+        file_b.write(self._content[index_b])
+
+        cmd = ["diff", file_a.name, file_b.name]
+        process: CompletedProcess = run(
+            cmd,
+            stdout=PIPE,
+            stderr=STDOUT,
+        )
+
+        if process.returncode != 0:
+            raise ChildProcessError(
+                f"Diff for {index_a} and {index_b} for file {self._file_path} failed with exit code {process.returncode}"
+            )
+
+        file_a.close()
+        file_b.close()
+
+        return process.stdout.decode("utf-8")
+
+    def push_line_patch(self, patch: str, start: int, end: int) -> str:
         """Calls `apply_line_patch` using the latest source code and then pushes
         the new patch to the content."""
         new_source: str = SourceFile.apply_line_patch(
@@ -72,28 +119,6 @@ class SourceFile(object):
         if index < 0:
             index = len(self._content) - 1
         self._esbmc_output[index] = verifier_output
-
-    @classmethod
-    def apply_line_patch(
-        cls, source_code: str, patch: str, start: int, end: int
-    ) -> str:
-        """Applies a patch to the source code.
-
-        To replace a single line, start and end are equal.
-
-        Args:
-            * source_code - The source code to apply the patch to.
-            * patch - Can be a line or multiple lines but will replace the start and
-            end region defined.
-            * start - Line index to mark start of replacement.
-            * end - Marks the end of the region where the patch will be applied to.
-            End is non-inclusive."""
-        assert (
-            start <= end
-        ), f"start ({start}) needs to be less than or equal to end ({end})"
-        lines: list[str] = source_code.splitlines()
-        lines = lines[:start] + [patch] + lines[end + 1 :]
-        return "\n".join(lines)
 
 
 class Solution(object):

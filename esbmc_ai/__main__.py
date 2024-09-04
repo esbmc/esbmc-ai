@@ -284,6 +284,14 @@ def main() -> None:
         + "}",
     )
 
+    parser.add_argument(
+        "-p",
+        "--generate-patches",
+        action="store_true",
+        default=False,
+        help="Generate patch files and place them in the same folder as the source files.",
+    )
+
     args: argparse.Namespace = parser.parse_args()
 
     print(f"ESBMC-AI {__version__}")
@@ -307,7 +315,10 @@ def main() -> None:
 
     assert isinstance(args.filename, str)
 
-    # Command mode: Check if command is called and call it.
+    # ===========================================
+    # Command mode
+    # ===========================================
+    # Check if command is called and call it.
     # If not, then continue to user mode.
     if args.command != None:
         command = args.command
