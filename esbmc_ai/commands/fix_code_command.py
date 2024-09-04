@@ -1,12 +1,13 @@
 # Author: Yiannis Charalambous
 
 import sys
-from typing import Any, Tuple
+from typing import Any, Optional, Tuple
 from typing_extensions import override
 
 from esbmc_ai.chat_response import FinishReason
 from esbmc_ai.chats import LatestStateSolutionGenerator, SolutionGenerator
 from esbmc_ai.chats.solution_generator import ESBMCTimedOutException
+from esbmc_ai.commands.command_result import CommandResult
 from esbmc_ai.reverse_order_solution_generator import ReverseOrderSolutionGenerator
 from esbmc_ai.solution import SourceFile
 
@@ -19,6 +20,27 @@ from ..esbmc_util import (
     esbmc_load_source_code,
 )
 from ..logging import print_horizontal_line, printv, printvv
+from subprocess import CalledProcessError
+
+
+class FixCodeCommandResult(CommandResult):
+    def __init__(self, successful: bool, repaired_source: Optional[str] = None) -> None:
+        super().__init__()
+        self._successful: bool = successful
+        self.repaired_source: Optional[str] = repaired_source
+
+    @property
+    @override
+    def successful(self) -> bool:
+        return self._successful
+
+    @override
+    def __str__(self) -> str:
+        return (
+            self.repaired_source
+            if self._successful and self.repaired_source != None
+            else "ESBMC-AI Notice: Failed all attempts..."
+        )
 
 
 class FixCodeCommand(ChatCommand):
@@ -32,7 +54,7 @@ class FixCodeCommand(ChatCommand):
         self.anim = create_loading_widget()
 
     @override
-    def execute(self, **kwargs: Any) -> Tuple[bool, str]:
+    def execute(self, **kwargs: Any) -> FixCodeCommandResult:
         def print_raw_conversation() -> None:
             print_horizontal_line(0)
             print("ESBMC-AI Notice: Printing raw conversation...")
@@ -44,6 +66,9 @@ class FixCodeCommand(ChatCommand):
 
         source_file: SourceFile = kwargs["source_file"]
         assert source_file.file_path
+        generate_patches: bool = (
+            kwargs["generate_patches"] if "generate_patches" in kwargs else False
+        )
 
         # Parse the esbmc output here and determine what "Scenario" to use.
         scenario: str = esbmc_get_error_type(source_file.initial_verifier_output)
@@ -114,8 +139,8 @@ class FixCodeCommand(ChatCommand):
 
         print()
 
-        max_retries: int = config.fix_code_max_attempts
-        for idx in range(max_retries):
+        attempts: int = config.fix_code_max_attempts
+        for attempt in range(1, attempts + 1):
             # Get a response. Use while loop to account for if the message stack
             # gets full, then need to compress and retry.
             while True:
@@ -166,7 +191,13 @@ class FixCodeCommand(ChatCommand):
 
                 printv("ESBMC-AI Notice: Successfully verified code")
 
-                return False, source_file.latest_content
+                returned_source: str
+                if generate_patches:
+                    returned_source = source_file.get_patch(0, -1)
+                else:
+                    returned_source = source_file.latest_content
+
+                return FixCodeCommandResult(True, returned_source)
 
             try:
                 # Update state
@@ -180,13 +211,12 @@ class FixCodeCommand(ChatCommand):
                 sys.exit(1)
 
             # Failure case
-            print(
-                f"ESBMC-AI Notice: Failure {idx+1}/{max_retries}" + ": Retrying..."
-                if idx != max_retries - 1
-                else ""
-            )
+            if attempt != attempts:
+                print(f"ESBMC-AI Notice: Failure {attempt}/{attempts}: Retrying...")
+            else:
+                print(f"ESBMC-AI Notice: Failure {attempt}/{attempts}")
 
         if config.raw_conversation:
             print_raw_conversation()
 
-        return True, "ESBMC-AI Notice: Failed all attempts..."
+        return FixCodeCommandResult(False, None)

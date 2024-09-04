@@ -3,6 +3,8 @@
 from abc import ABC, abstractmethod
 from typing import Any, Optional
 
+from esbmc_ai.commands.command_result import CommandResult
+
 
 class ChatCommand(ABC):
     command_name: str
@@ -17,7 +19,6 @@ class ChatCommand(ABC):
         self.command_name = command_name
         self.help_message = help_message
 
-
     @abstractmethod
-    def execute(self, **kwargs: Optional[Any]) -> Optional[Any]:
+    def execute(self, **kwargs: Optional[Any]) -> Optional[CommandResult]:
         raise NotImplementedError(f"Command {self.command_name} is not implemented.")

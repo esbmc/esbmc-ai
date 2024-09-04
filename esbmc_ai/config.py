@@ -57,6 +57,8 @@ raw_conversation: bool = False
 
 cfg_path: str
 
+generate_patches: bool
+
 
 # TODO Get rid of this class as soon as ConfigTool with the pyautoconfig
 class AIAgentConversation(NamedTuple):
@@ -498,3 +500,6 @@ def load_args(args) -> None:
         esbmc_params.extend(args.remaining)
     elif len(args.remaining) != 0:
         esbmc_params = args.remaining
+
+    global generate_patches
+    generate_patches = args.generate_patches

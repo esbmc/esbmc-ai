@@ -11,6 +11,8 @@ import sys
 import readline
 from typing import Optional
 
+from esbmc_ai.commands.fix_code_command import FixCodeCommandResult
+
 _ = readline
 
 import argparse
@@ -19,7 +21,7 @@ from langchain.base_language import BaseLanguageModel
 
 import esbmc_ai.config as config
 from esbmc_ai import __author__, __version__
-from esbmc_ai.solution import SourceFile, Solution, get_solution, init_solution
+from esbmc_ai.solution import SourceFile, Solution, get_solution
 
 from esbmc_ai.commands import (
     ChatCommand,
@@ -166,15 +168,13 @@ def init_commands() -> None:
 def _run_command_mode(command: ChatCommand, args: argparse.Namespace) -> None:
     path_arg: Path = Path(args.filename)
 
-    solution: Solution
+    solution: Solution = get_solution()
     if path_arg.is_dir():
-        solution = init_solution(
-            Solution(
-                [path for path in path_arg.glob("**/*") if path.is_file() and path.name]
-            )
-        )
+        for path in path_arg.glob("**/*"):
+            if path.is_file() and path.name:
+                solution.add_source_file(path, None)
     else:
-        solution = init_solution(Solution([path_arg]))
+        solution.add_source_file(path_arg, None)
 
     match command.command_name:
         case fix_code_command.command_name:
@@ -183,14 +183,12 @@ def _run_command_mode(command: ChatCommand, args: argparse.Namespace) -> None:
                 esbmc_output: str = _run_esbmc(source_file)
                 source_file.assign_verifier_output(esbmc_output)
 
-                error, source_file_solution = fix_code_command.execute(
-                    source_file=source_file
+                result: FixCodeCommandResult = fix_code_command.execute(
+                    source_file=source_file,
+                    generate_patches=config.generate_patches,
                 )
 
-                if error:
-                    print("Failed all attempts...")
-                else:
-                    print(source_file_solution)
+                print(result)
         case _:
             command.execute()
     sys.exit(0)
@@ -346,7 +344,8 @@ def main() -> None:
         sys.exit(1)
     else:
         # Add the main source file to the solution explorer.
-        solution = init_solution(Solution([path_arg]))
+        solution: Solution = get_solution()
+        solution.add_source_file(path_arg, None)
     del path_arg
 
     # Assert that we have one file and one filepath
@@ -421,17 +420,16 @@ def main() -> None:
                 print()
                 print("ESBMC-AI will generate a fix for the code...")
 
-                error: bool
-                source_file_solution: str
-                error, source_file_solution = fix_code_command.execute(
-                    source_file=source_file
+                result: FixCodeCommandResult = fix_code_command.execute(
+                    source_file=source_file,
+                    generate_patches=config.generate_patches,
                 )
 
-                if not error:
+                if result.successful:
                     print(
                         "\n\nESBMC-AI: Here is the corrected code, verified with ESBMC:"
                     )
-                    print(f"```\n{source_file_solution}\n```")
+                    print(f"```\n{result.repaired_source}\n```")
                 continue
             else:
                 # Commands without parameters or returns are handled automatically.
