@@ -140,7 +140,7 @@ class SourceFile:
     #     return new_source
 
     def update_content(self, content: str, reset_changes: bool = False) -> None:
-        """Ascociates a new version of the content of a file to a file."""
+        """Ascociates a new version of the content of source code to a file."""
         if reset_changes:
             self._content = [content]
         else:
@@ -150,7 +150,8 @@ class SourceFile:
         """Assigns verifier output to the ascociated file. If no file is given,
         then assigns to the latest one."""
         if index < 0:
-            index = len(self._content) - 1
+            # Simulate negative indicies like with Lists.
+            index = len(self._content) + index
         self._esbmc_output[index] = verifier_output
 
     def save_file(
@@ -203,12 +204,15 @@ class SourceFile:
 
     @classmethod
     def calculate_cyclomatic_complexity_delta(
-        cls, source_1: "SourceFile", source_2: "SourceFile"
+        cls,
+        source_1: "SourceFile",
+        source_2: "SourceFile",
+        temp_dir: bool = True,
     ) -> Optional[float]:
         """Calculates the cyclomatic complexity difference between the two source files."""
         try:
-            file_1: Path = source_1.save_file(None, True)
-            file_2: Path = source_2.save_file(None, True)
+            file_1: Path = source_1.save_file(None, temp_dir=temp_dir)
+            file_2: Path = source_2.save_file(None, temp_dir=temp_dir)
 
             cc1 = lizard.analyze_file(file_1)
             cc2 = lizard.analyze_file(file_2)
