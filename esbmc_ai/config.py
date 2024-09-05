@@ -37,7 +37,7 @@ esbmc_params: list[str] = [
 ]
 
 temp_auto_clean: bool = True
-temp_file_dir: str = "."
+temp_file_dir: Optional[str] = None
 ai_model: AIModel
 
 esbmc_output_type: str = "full"
