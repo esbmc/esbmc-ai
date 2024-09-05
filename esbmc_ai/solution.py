@@ -38,18 +38,30 @@ class SourceFile:
         lines = lines[:start] + [patch] + lines[end + 1 :]
         return "\n".join(lines)
 
-    def __init__(self, file_path: Optional[Path], content: str) -> None:
+    def __init__(
+        self, file_path: Optional[Path], content: str, file_ext: Optional[str] = None
+    ) -> None:
         self._file_path: Optional[Path] = file_path
         # Content file shows the file throughout the repair process. Index 0 is
         # the orignial.
         self._content: list[str] = [content]
         # Map _content (each iteration) to esbmc output
         self._esbmc_output: dict[int, str] = {}
+        self._file_ext: Optional[str] = file_ext
 
     @property
     def file_path(self) -> Optional[Path]:
         """Returns the file path of this source file."""
         return self._file_path
+
+    @property
+    def file_extension(self) -> str:
+        if self._file_ext:
+            return self._file_ext
+        elif self._file_path:
+            return self._file_path.suffix
+        else:
+            raise ValueError("No extension for SourceFile could be resolved")
 
     @property
     def initial_content(self) -> str:
@@ -147,19 +159,23 @@ class SourceFile:
         """Saves the source code file. If file_path is not specified, it
         will generate an automatic name. If temp_dir is True, it will place
         the saved file in /tmp and use the file_path file name only."""
-        # Ensure if file_path if given, then it is a file.
-        assert not file_path or file_path.is_file(), "file_path needs to be a file"
 
-        file_name: str
+        file_name: Optional[str] = None
         dir_path: Optional[Path] = None
         if file_path:
-            file_name = file_path.name
-            dir_path = file_path.parent
+            # If file path is a file, then use the name and directory. If not
+            # then use a temporary name and just store the folder.
+            if file_path.is_file():
+                file_name = file_path.name
+                dir_path = file_path.parent
+            else:
+                dir_path = file_path
         else:
             if not self._file_path:
                 raise ValueError(
                     "Source code file does not have a name or file_path to save to"
                 )
+            # Just store the file and use the temp dir.
             file_name = self._file_path.name
 
         if temp_dir:
@@ -177,7 +193,7 @@ class SourceFile:
             mode="w",
             buffering=-1,
             newline=None,
-            suffix=None,
+            suffix=self.file_extension,
             prefix=file_name,
             dir=dir_path,
             delete=False,
