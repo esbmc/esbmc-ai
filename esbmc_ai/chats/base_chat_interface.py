@@ -13,8 +13,8 @@ from langchain.schema import (
 )
 
 from esbmc_ai.config import ChatPromptSettings
-from .chat_response import ChatResponse, FinishReason
-from .ai_models import AIModel
+from esbmc_ai.chat_response import ChatResponse, FinishReason
+from esbmc_ai.ai_models import AIModel
 
 
 class BaseChatInterface(object):

@@ -9,8 +9,8 @@ from langchain_community.chat_message_histories import ChatMessageHistory
 from langchain.schema import BaseMessage, SystemMessage
 
 from esbmc_ai.config import AIAgentConversation, ChatPromptSettings
+from esbmc_ai.ai_models import AIModel
 
-from .ai_models import AIModel
 from .base_chat_interface import BaseChatInterface
 
 

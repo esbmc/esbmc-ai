@@ -37,7 +37,7 @@ esbmc_params: list[str] = [
 ]
 
 temp_auto_clean: bool = True
-temp_file_dir: str = "."
+temp_file_dir: Optional[str] = None
 ai_model: AIModel
 
 esbmc_output_type: str = "full"
@@ -56,6 +56,8 @@ allow_successful: bool = False
 raw_conversation: bool = False
 
 cfg_path: str
+
+generate_patches: bool
 
 
 # TODO Get rid of this class as soon as ConfigTool with the pyautoconfig
@@ -498,3 +500,6 @@ def load_args(args) -> None:
         esbmc_params.extend(args.remaining)
     elif len(args.remaining) != 0:
         esbmc_params = args.remaining
+
+    global generate_patches
+    generate_patches = args.generate_patches

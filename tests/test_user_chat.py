@@ -2,13 +2,13 @@
 
 import pytest
 
-from langchain.llms.fake import FakeListLLM
+from langchain_community.llms import FakeListLLM
 from langchain.schema import AIMessage, SystemMessage
 
 from esbmc_ai.ai_models import AIModel
 from esbmc_ai.chat_response import ChatResponse, FinishReason
 from esbmc_ai.config import AIAgentConversation, ChatPromptSettings
-from esbmc_ai.user_chat import UserChat
+from esbmc_ai.chats.user_chat import UserChat
 
 
 @pytest.fixture

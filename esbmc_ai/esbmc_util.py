@@ -6,6 +6,8 @@ from subprocess import PIPE, STDOUT, run, CompletedProcess
 from pathlib import Path
 from typing import Optional
 
+from esbmc_ai.solution import SourceFile
+
 from . import config
 
 
@@ -91,13 +93,13 @@ def get_clang_err_line_index(clang_output: str) -> Optional[int]:
         return None
 
 
-def esbmc(path: str, esbmc_params: list, timeout: Optional[float] = None):
+def esbmc(path: Path, esbmc_params: list, timeout: Optional[float] = None):
     """Exit code will be 0 if verification successful, 1 if verification
     failed. And any other number for compilation error/general errors."""
     # Build parameters
     esbmc_cmd = [config.esbmc_path]
     esbmc_cmd.extend(esbmc_params)
-    esbmc_cmd.append(path)
+    esbmc_cmd.append(str(path))
 
     if "--timeout" in esbmc_cmd:
         print(
@@ -123,38 +125,34 @@ def esbmc(path: str, esbmc_params: list, timeout: Optional[float] = None):
 
 
 def esbmc_load_source_code(
-    file_path: str,
-    source_code: str,
+    source_file: SourceFile,
+    source_file_content_index: int,
     esbmc_params: list = config.esbmc_params,
     auto_clean: bool = config.temp_auto_clean,
     timeout: Optional[float] = None,
 ):
-    source_code_path = Path(file_path)
 
-    # Create temp path.
-    delete_path: bool = False
-    if not os.path.exists(config.temp_file_dir):
-        os.mkdir(config.temp_file_dir)
-        delete_path = True
+    file_path: Path
+    if config.temp_file_dir:
+        file_path = source_file.save_file(
+            file_path=Path(config.temp_file_dir),
+            temp_dir=False,
+            index=source_file_content_index,
+        )
+    else:
+        file_path = source_file.save_file(
+            file_path=None,
+            temp_dir=True,
+            index=source_file_content_index,
+        )
 
-    temp_file_path = f"{config.temp_file_dir}{os.sep}{source_code_path.name}"
-
-    # Create temp file.
-    with open(temp_file_path, "w") as file:
-        # Save to temporary folder and flush contents.
-        file.write(source_code)
-        file.flush()
-
-        # Call ESBMC to temporary folder.
-        results = esbmc(file.name, esbmc_params, timeout=timeout)
+    # Call ESBMC to temporary folder.
+    results = esbmc(file_path, esbmc_params, timeout=timeout)
 
     # Delete temp files and path
     if auto_clean:
         # Remove file
-        os.remove(temp_file_path)
-        # Remove file path if created this run and is empty.
-        if delete_path and len(os.listdir(config.temp_file_dir)) == 0:
-            os.rmdir(config.temp_file_dir)
+        os.remove(file_path)
 
     # Return
     return results

@@ -15,6 +15,6 @@ class ExitCommand(ChatCommand):
         )
 
     @override
-    def execute(self, **_: Optional[Any]) -> Optional[Any]:
+    def execute(self, **_: Optional[Any]) -> None:
         print("exiting...")
         sys.exit(0)
