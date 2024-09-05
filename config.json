@@ -70,7 +70,7 @@
       ]
     },
     "generate_solution": {
-      "max_attempts": 4,
+      "max_attempts": 5,
       "temperature": 0.0,
       "message_history": "normal",
       "scenarios": {
@@ -87,8 +87,13 @@
           ]
         }
       },
-      "system": [],
-      "initial": "From now on, act as an Automated Code Repair Tool that repairs AI C code. You will be shown AI C code, along with ESBMC output. Pay close attention to the ESBMC output, which contains a stack trace along with the type of error that occurred and its location. Provide the repaired C code as output, as would an Automated Code Repair Tool. Aside from the corrected source code, do not output any other text. The ESBMC output is {esbmc_output} The source code is {source_code}"
+      "system": [
+        {
+          "role": "System",
+          "content": "From now on, act as an Automated Code Repair Tool that repairs AI C code. You will be shown AI C code, along with ESBMC output. Pay close attention to the ESBMC output, which contains a stack trace along with the type of error that occurred and its location. "
+        }
+      ],
+      "initial": "Provide the repaired C code as output, as would an Automated Code Repair Tool. Aside from the corrected source code, do not output any other text. The ESBMC output is {esbmc_output} The source code is {source_code}"
     }
   }
 }
