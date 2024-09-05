@@ -3,6 +3,10 @@
 import pytest
 from esbmc_ai.solution import Solution, SourceFile
 
+#####################################
+# Solution
+#####################################
+
 
 @pytest.fixture(scope="function")
 def solution() -> Solution:
@@ -44,18 +48,3 @@ def test_apply_line_patch() -> None:
     text = "\n".join(["a", "b", "c", "d", "e", "f", "g"])
     answer = "\n".join(["a", "b", "c", "1", "e", "f", "g"])
     assert SourceFile.apply_line_patch(text, "1", 3, 3) == answer
-
-
-def test_get_patch() -> None:
-    raise NotImplementedError()
-
-
-def test_update_content() -> None:
-    raise NotImplementedError()
-
-
-def test_assign_verifier_output() -> None:
-    raise NotImplementedError()
-
-
-# TODO Add more tests for solution and sourcefile

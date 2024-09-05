@@ -9,7 +9,7 @@ from langchain_community.llms.fake import FakeListLLM
 from esbmc_ai.ai_models import AIModel
 from esbmc_ai.chat_response import ChatResponse
 from esbmc_ai.config import AIAgentConversation, ChatPromptSettings
-from esbmc_ai.latest_state_solution_generator import LatestStateSolutionGenerator
+from esbmc_ai.chats.latest_state_solution_generator import LatestStateSolutionGenerator
 
 
 @pytest.fixture(scope="function")

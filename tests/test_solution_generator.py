@@ -6,7 +6,7 @@ import pytest
 
 from esbmc_ai.ai_models import AIModel
 from esbmc_ai.config import AIAgentConversation, ChatPromptSettings
-from esbmc_ai.solution_generator import SolutionGenerator
+from esbmc_ai.chats.solution_generator import SolutionGenerator
 
 
 @pytest.fixture(scope="function")
