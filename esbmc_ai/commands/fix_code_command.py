@@ -165,8 +165,8 @@ class FixCodeCommand(ChatCommand):
             # to a temporary location since ESBMC needs it in file format.
             self.anim.start("Verifying with ESBMC... Please Wait")
             exit_code, esbmc_output = esbmc_load_source_code(
-                file_path=source_file.file_path,
-                source_code=source_file.latest_content,
+                source_file=source_file,
+                source_file_content_index=-1,
                 esbmc_params=config.esbmc_params,
                 auto_clean=config.temp_auto_clean,
                 timeout=config.verifier_timeout,
