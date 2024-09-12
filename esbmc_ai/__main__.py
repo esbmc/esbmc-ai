@@ -11,12 +11,13 @@ import sys
 import readline
 from typing import Optional
 
+from langchain_core.language_models import BaseChatModel
+
 from esbmc_ai.commands.fix_code_command import FixCodeCommandResult
 
 _ = readline
 
 import argparse
-from langchain.base_language import BaseLanguageModel
 
 
 import esbmc_ai.config as config
@@ -365,7 +366,7 @@ def main() -> None:
     del esbmc_output
 
     printv(f"Initializing the LLM: {config.ai_model.name}\n")
-    chat_llm: BaseLanguageModel = config.ai_model.create_llm(
+    chat_llm: BaseChatModel = config.ai_model.create_llm(
         api_keys=config.api_keys,
         temperature=config.chat_prompt_user_mode.temperature,
         requests_max_tries=config.requests_max_tries,

@@ -3,14 +3,12 @@
 from abc import abstractmethod
 from typing import Optional
 
-from langchain.base_language import BaseLanguageModel
 from langchain.schema import (
-    AIMessage,
     BaseMessage,
     HumanMessage,
-    LLMResult,
     PromptValue,
 )
+from langchain_core.language_models import BaseChatModel
 
 from esbmc_ai.config import ChatPromptSettings
 from esbmc_ai.chat_response import ChatResponse, FinishReason
@@ -18,10 +16,13 @@ from esbmc_ai.ai_models import AIModel
 
 
 class BaseChatInterface(object):
+    """Base class for interacting with an LLM. It allows for interactions with
+    text generation LLMs and also chat LLMs."""
+
     def __init__(
         self,
         ai_model_agent: ChatPromptSettings,
-        llm: BaseLanguageModel,
+        llm: BaseChatModel,
         ai_model: AIModel,
     ) -> None:
         super().__init__()
@@ -31,7 +32,7 @@ class BaseChatInterface(object):
             ai_model_agent.system_messages.messages
         )
         self.messages: list[BaseMessage] = []
-        self.llm: BaseLanguageModel = llm
+        self.llm: BaseChatModel = llm
 
     @abstractmethod
     def compress_message_stack(self) -> None:
@@ -84,25 +85,9 @@ class BaseChatInterface(object):
         all_messages = self._system_messages.copy()
         all_messages.extend(self.messages.copy())
 
-        # Transform message stack to ChatPromptValue: If this is a ChatLLM then the
-        # function will simply be an identity function that does nothing and simply
-        # returns the messages as a ChatPromptValue. If this is a text generation
-        # LLM, then the function should inject the config message around the
-        # conversation to make the LLM behave like a ChatLLM.
-        # Do not replace any values.
-        message_prompts: PromptValue = self.ai_model.apply_chat_template(
-            messages=all_messages,
-        )
-
         response: ChatResponse
         try:
-            result: LLMResult = self.llm.generate_prompt(
-                prompts=[message_prompts],
-            )
-
-            response_message: BaseMessage = AIMessage(
-                content=result.generations[0][0].text
-            )
+            response_message: BaseMessage = self.llm.invoke(input=all_messages)
 
             self.push_to_message_stack(message=response_message)
 
