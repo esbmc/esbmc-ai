@@ -1,12 +1,12 @@
 # Author: Yiannis Charalambous 2023
 
-from langchain_core.language_models import BaseChatModel
 from typing_extensions import override
 
 from langchain.memory import ConversationSummaryMemory
+from langchain.schema import BaseMessage, SystemMessage
+from langchain_core.language_models import BaseChatModel
 from langchain_community.chat_message_histories import ChatMessageHistory
 
-from langchain.schema import BaseMessage, SystemMessage
 
 from esbmc_ai.config import AIAgentConversation, ChatPromptSettings
 from esbmc_ai.ai_models import AIModel
