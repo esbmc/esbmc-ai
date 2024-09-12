@@ -2,11 +2,11 @@
 
 from typing_extensions import override
 
-from langchain.base_language import BaseLanguageModel
 from langchain.memory import ConversationSummaryMemory
+from langchain.schema import BaseMessage, SystemMessage
+from langchain_core.language_models import BaseChatModel
 from langchain_community.chat_message_histories import ChatMessageHistory
 
-from langchain.schema import BaseMessage, SystemMessage
 
 from esbmc_ai.config import AIAgentConversation, ChatPromptSettings
 from esbmc_ai.ai_models import AIModel
@@ -21,7 +21,7 @@ class UserChat(BaseChatInterface):
         self,
         ai_model_agent: ChatPromptSettings,
         ai_model: AIModel,
-        llm: BaseLanguageModel,
+        llm: BaseChatModel,
         source_code: str,
         esbmc_output: str,
         set_solution_messages: AIAgentConversation,

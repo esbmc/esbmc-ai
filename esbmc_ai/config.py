@@ -153,48 +153,36 @@ def _load_custom_ai(config: dict) -> None:
         assert (
             isinstance(custom_ai_max_tokens, int) and custom_ai_max_tokens > 0
         ), f'custom_ai_max_tokens in ai_custom entry "{name}" needs to be an int and greater than 0.'
+        
         # Load the URL
         custom_ai_url, ok = _load_config_value(
             config_file=ai_data,
             name="url",
         )
         assert ok, f'url field not found in "ai_custom" entry "{name}".'
-        stop_sequences, ok = _load_config_value(
-            config_file=ai_data,
-            name="stop_sequences",
-        )
-        # Load the config message
-        config_message: dict[str, str] = ai_data["config_message"]
-        template, ok = _load_config_value(
-            config_file=config_message,
-            name="template",
-        )
-        human, ok = _load_config_value(
-            config_file=config_message,
-            name="human",
-        )
-        ai, ok = _load_config_value(
-            config_file=config_message,
-            name="ai",
-        )
-        system, ok = _load_config_value(
-            config_file=config_message,
-            name="system",
-        )
 
-        # Add the custom AI.
-        add_custom_ai_model(
-            AIModelTextGen(
+        # Get provider type
+        server_type, ok = _load_config_value(
+            config_file=ai_data,
+            name="server_type",
+            default="localhost:11434",
+        )
+        assert ok, f"server_type for custom AI '{name}' is invalid, it needs to be a valid string"
+
+        # Create correct type of LLM
+        llm: AIModel
+        match server_type:
+            case "ollama":
+                llm = OllamaAIModel(
                 name=name,
                 tokens=custom_ai_max_tokens,
                 url=custom_ai_url,
-                config_message=template,
-                ai_template=ai,
-                human_template=human,
-                system_template=system,
-                stop_sequences=stop_sequences,
-            )
-        )
+                )
+            case _:
+                raise NotImplementedError(f"The custom AI server type is not implemented: {server_type}")
+
+        # Add the custom AI.
+        add_custom_ai_model(llm)
 
 
 def load_envs() -> None:

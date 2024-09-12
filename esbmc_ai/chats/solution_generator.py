@@ -2,8 +2,8 @@
 
 from re import S
 from typing import Optional
+from langchain_core.language_models import BaseChatModel
 from typing_extensions import override
-from langchain.base_language import BaseLanguageModel
 from langchain.schema import BaseMessage, HumanMessage
 
 from esbmc_ai.chat_response import ChatResponse, FinishReason
@@ -83,7 +83,7 @@ class SolutionGenerator(BaseChatInterface):
     def __init__(
         self,
         ai_model_agent: DynamicAIModelAgent | ChatPromptSettings,
-        llm: BaseLanguageModel,
+        llm: BaseChatModel,
         ai_model: AIModel,
         scenario: str = "",
         source_code_format: str = "full",

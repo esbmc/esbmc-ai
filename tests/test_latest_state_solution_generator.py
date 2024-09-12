@@ -1,10 +1,10 @@
 # Author: Yiannis Charalambous
 
 from typing import Optional
+from langchain_core.language_models import FakeListChatModel
 import pytest
 
 from langchain.schema import HumanMessage, AIMessage, SystemMessage
-from langchain_community.llms.fake import FakeListLLM
 
 from esbmc_ai.ai_models import AIModel
 from esbmc_ai.chat_response import ChatResponse
@@ -14,7 +14,7 @@ from esbmc_ai.chats.latest_state_solution_generator import LatestStateSolutionGe
 
 @pytest.fixture(scope="function")
 def setup_llm_model():
-    llm = FakeListLLM(
+    llm = FakeListChatModel(
         responses=[
             "This is a test response",
             "Another test response",

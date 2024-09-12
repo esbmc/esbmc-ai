@@ -25,6 +25,7 @@ clang = "*"
 langchain = "*"
 langchain-openai = "*"
 langchain-community = "*"
+langchain-ollama = "*"
 lizard = "*"
 
 [dev-packages]

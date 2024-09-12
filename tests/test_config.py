@@ -80,12 +80,7 @@ def test_load_custom_ai() -> None:
         "example_ai": {
             "max_tokens": 4096,
             "url": "www.example.com",
-            "config_message": {
-                "template": "example",
-                "system": "{content}",
-                "ai": "{content}",
-                "human": "{content}",
-            },
+            "server_type": "ollama"
         }
     }
 

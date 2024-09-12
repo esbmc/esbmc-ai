@@ -1,8 +1,8 @@
 # Author: Yiannis Charalambous
 
+from langchain_core.language_models import FakeListChatModel
 import pytest
 
-from langchain_community.llms import FakeListLLM
 from langchain.schema import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from esbmc_ai.ai_models import AIModel
 from esbmc_ai.chats.base_chat_interface import BaseChatInterface
@@ -23,7 +23,7 @@ def setup():
 
 
 def test_push_message_stack(setup) -> None:
-    llm: FakeListLLM = FakeListLLM(responses=[])
+    llm: FakeListChatModel = FakeListChatModel(responses=[])
 
     ai_model, system_messages = setup
 
@@ -56,7 +56,7 @@ def test_push_message_stack(setup) -> None:
 
 def test_send_message(setup) -> None:
     responses: list[str] = ["OK 1", "OK 2", "OK 3"]
-    llm: FakeListLLM = FakeListLLM(responses=responses)
+    llm: FakeListChatModel = FakeListChatModel(responses=responses)
 
     ai_model, system_messages = setup
 
@@ -98,7 +98,7 @@ def test_apply_template() -> None:
         "Replace with also replaced message",
         "replacedalso replaced",
     ]
-    llm: FakeListLLM = FakeListLLM(responses=responses)
+    llm: FakeListChatModel = FakeListChatModel(responses=responses)
 
     chat: BaseChatInterface = BaseChatInterface(
         ai_model_agent=ChatPromptSettings(

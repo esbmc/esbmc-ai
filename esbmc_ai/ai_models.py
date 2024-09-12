@@ -3,23 +3,14 @@
 from abc import abstractmethod
 from typing import Any, Iterable, Optional, Union
 from enum import Enum
+from langchain_core.language_models import BaseChatModel
 from pydantic.v1.types import SecretStr
 from typing_extensions import override
 
-from langchain.prompts import PromptTemplate
-from langchain.base_language import BaseLanguageModel
-
 from langchain_openai import ChatOpenAI
-from langchain_community.llms.huggingface_text_gen_inference import (
-    HuggingFaceTextGenInference,
-)
+from langchain_ollama import ChatOllama
 
-from langchain.prompts.chat import (
-    AIMessagePromptTemplate,
-    ChatPromptTemplate,
-    HumanMessagePromptTemplate,
-    SystemMessagePromptTemplate,
-)
+from langchain.prompts.chat import ChatPromptTemplate
 from langchain.schema import (
     BaseMessage,
     PromptValue,
@@ -30,6 +21,8 @@ from esbmc_ai.api_key_collection import APIKeyCollection
 
 
 class AIModel(object):
+    """This base class represents an abstract AI model."""
+
     name: str
     tokens: int
 
@@ -48,7 +41,7 @@ class AIModel(object):
         temperature: float = 1.0,
         requests_max_tries: int = 5,
         requests_timeout: float = 60,
-    ) -> BaseLanguageModel:
+    ) -> BaseChatModel:
         """Initializes a large language model model with the provided parameters."""
         raise NotImplementedError()
 
@@ -132,7 +125,9 @@ class AIModel(object):
         messages: Iterable[BaseMessage],
         **format_values: Any,
     ) -> PromptValue:
-        # Default one, identity function essentially.
+        """Applies the formatted values onto the message chat template. For example,
+        if the message contains the token {source}, then format_values contains a
+        value for {source} then it will be substituted."""
         escaped_messages = AIModel.escape_messages(messages, list(format_values.keys()))
         message_tuples = AIModel.convert_messages_to_tuples(escaped_messages)
         return ChatPromptTemplate.from_messages(messages=message_tuples).format_prompt(
@@ -151,7 +146,7 @@ class AIModelOpenAI(AIModel):
         temperature: float = 1.0,
         requests_max_tries: int = 5,
         requests_timeout: float = 60,
-    ) -> BaseLanguageModel:
+    ) -> BaseChatModel:
         assert api_keys.openai, "No OpenAI api key has been specified..."
         return ChatOpenAI(
             model=self.name,
@@ -163,108 +158,23 @@ class AIModelOpenAI(AIModel):
             model_kwargs={},
         )
 
-
-class AIModelTextGen(AIModel):
-    """Below are only used for models that need them, such as models that
-    are using the provider "text_inference_server"."""
-
-    def __init__(
-        self,
-        name: str,
-        tokens: int,
-        url: str,
-        config_message: str = "{history}\n\n{user_prompt}",
-        system_template: str = "{content}",
-        human_template: str = "{content}",
-        ai_template: str = "{content}",
-        stop_sequences: list[str] = [],
-    ) -> None:
+class OllamaAIModel(AIModel):
+    def __init__(self, name: str, tokens: int, url: str) -> None:
         super().__init__(name, tokens)
-
         self.url: str = url
-        self.chat_template: PromptTemplate = PromptTemplate.from_template(
-            template=config_message,
-        )
-        """The chat template to place all messages in."""
-
-        self.system_template: SystemMessagePromptTemplate = (
-            SystemMessagePromptTemplate.from_template(
-                template=system_template,
-            )
-        )
-        """Template for each system message."""
-
-        self.human_template: HumanMessagePromptTemplate = (
-            HumanMessagePromptTemplate.from_template(
-                template=human_template,
-            )
-        )
-        """Template for each human message."""
-
-        self.ai_template: AIMessagePromptTemplate = (
-            AIMessagePromptTemplate.from_template(
-                template=ai_template,
-            )
-        )
-        """Template for each AI message."""
-
-        self.stop_sequences: list[str] = stop_sequences
-
+    
     @override
-    def create_llm(
-        self,
-        api_keys: APIKeyCollection,
-        temperature: float = 1.0,
-        requests_max_tries: int = 5,
-        requests_timeout: float = 60,
-    ) -> BaseLanguageModel:
-        return HuggingFaceTextGenInference(
-            client=None,
-            async_client=None,
-            inference_server_url=self.url,
-            server_kwargs={
-                "headers": {"Authorization": f"Bearer {api_keys.huggingface}"}
-            },
-            # FIXME Need to find a way to make output bigger. When token
-            # tracking for this LLM type is added.
-            max_new_tokens=5000,
+    def create_llm(self, api_keys: APIKeyCollection, temperature: float = 1, requests_max_tries: int = 5, requests_timeout: float = 60) -> BaseChatModel:
+        # Ollama does not use API keys
+        _ = api_keys
+        _ = requests_max_tries
+        return ChatOllama(
+            base_url=self.url,
+            model=self.name,
             temperature=temperature,
-            stop_sequences=self.stop_sequences,
-            max_retries=requests_max_tries,
-            timeout=requests_timeout,
-        )
-
-    @override
-    def apply_chat_template(
-        self,
-        messages: Iterable[BaseMessage],
-        **format_values: Any,
-    ) -> PromptValue:
-        """Text generation LLMs take single string of text as input. So the conversation
-        is converted into a string and returned back in a single prompt value. The config
-        message is also applied to the conversation."""
-
-        escaped_messages = AIModel.escape_messages(messages, list(format_values.keys()))
-
-        formatted_messages: list[BaseMessage] = []
-        for msg in escaped_messages:
-            formatted_msg: BaseMessage
-            if msg.type == "ai":
-                formatted_msg = self.ai_template.format(content=msg.content)
-            elif msg.type == "system":
-                formatted_msg = self.system_template.format(content=msg.content)
-            elif msg.type == "human":
-                formatted_msg = self.human_template.format(content=msg.content)
-            else:
-                raise ValueError(
-                    f"Got unsupported message type: {msg.type}: {msg.content}"
-                )
-            formatted_messages.append(formatted_msg)
-
-        return self.chat_template.format_prompt(
-            history="\n\n".join([str(msg.content) for msg in formatted_messages[:-1]]),
-            user_prompt=formatted_messages[-1].content,
-            **format_values,
+            client_kwargs={
+                "timeout":requests_timeout,
+            },
         )
 
 
@@ -272,25 +182,8 @@ class _AIModels(Enum):
     """Private enum that contains predefined AI Models. OpenAI models are not
     defined because they are fetched from the API."""
 
-    FALCON_7B = AIModelTextGen(
-        name="falcon-7b",
-        tokens=8192,
-        url="https://api-inference.huggingface.co/models/tiiuae/falcon-7b-instruct",
-        config_message='>>DOMAIN<<You are a helpful assistant that answers any questions asked based on the previous messages in the conversation. The questions are asked by Human. The "AI" is the assistant. The AI shall not impersonate any other entity in the interaction including System and Human. The Human may refer to the AI directly, the AI should refer to the Human directly back, for example, when asked "How do you suggest a fix?", the AI shall respond "You can try...". The AI should use markdown formatting in its responses. The AI should follow the instructions given by System.\n\n>>SUMMARY<<{history}\n\n{user_prompt}\n\n',
-        ai_template=">>ANSWER<<{content}",
-        human_template=">>QUESTION<<Human:{content}>>ANSWER<<",
-        system_template="System: {content}",
-    )
-    STARCHAT_BETA = AIModelTextGen(
-        name="starchat-beta",
-        tokens=8192,
-        url="https://api-inference.huggingface.co/models/HuggingFaceH4/starchat-beta",
-        config_message="{history}\n{user_prompt}\n<|assistant|>\n",
-        system_template="<|system|>\n{content}\n<|end|>",
-        ai_template="<|assistant|>\n{content}\n<|end|>",
-        human_template="<|user|>\n{content}\n<|end|>",
-        stop_sequences=["<|end|>"],
-    )
+    # FALCON_7B = OllamaAIModel(...)
+    pass
 
 
 _custom_ai_models: list[AIModel] = []
