@@ -9,4 +9,3 @@ class APIKeyCollection(NamedTuple):
     """Class that is used to pass keys to AIModels."""
 
     openai: Optional[str]
-    huggingface: Optional[str]

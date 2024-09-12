@@ -205,7 +205,7 @@ def load_envs() -> None:
             if value != None:
                 values[k] = value
 
-    keys: list[str] = ["OPENAI_API_KEY", "HUGGINGFACE_API_KEY", "ESBMC_AI_CFG_PATH"]
+    keys: list[str] = ["OPENAI_API_KEY", "ESBMC_AI_CFG_PATH"]
     values: dict[str, str] = {}
 
     # Load from system env
@@ -246,7 +246,6 @@ def load_envs() -> None:
     global api_keys
     api_keys = APIKeyCollection(
         openai=str(os.getenv("OPENAI_API_KEY")),
-        huggingface=str(os.getenv("HUGGINGFACE_API_KEY")),
     )
 
     global cfg_path
