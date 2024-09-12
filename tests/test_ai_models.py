@@ -15,7 +15,7 @@ from esbmc_ai.ai_models import (
     AIModel,
     _AIModels,
     get_ai_model_by_name,
-    AIModelTextGen,
+    OllamaAIModel,
     _get_openai_model_max_tokens,
 )
 
@@ -93,19 +93,15 @@ def test_apply_chat_template() -> None:
     assert prompt == ChatPromptValue(messages=messages)
 
     # Test the text gen method
-    custom_model_2: AIModelTextGen = AIModelTextGen(
+    custom_model_2: OllamaAIModel = OllamaAIModel(
         name="custom",
         tokens=999,
         url="",
-        config_message="{history}\n\n{user_prompt}",
-        ai_template="AI: {content}",
-        human_template="Human: {content}",
-        system_template="System: {content}",
     )
 
     prompt_text: str = custom_model_2.apply_chat_template(messages=messages).to_string()
 
-    assert prompt_text == "System: M1\n\nHuman: M2\n\nAI: M3"
+    assert prompt_text == "System: M1\nHuman: M2\nAI: M3"
 
 
 def test_escape_messages() -> None:

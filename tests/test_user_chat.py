@@ -1,8 +1,8 @@
 # Author: Yiannis Charalambous
 
+from langchain_core.language_models import FakeListChatModel
 import pytest
 
-from langchain_community.llms import FakeListLLM
 from langchain.schema import AIMessage, SystemMessage
 
 from esbmc_ai.ai_models import AIModel
@@ -30,7 +30,7 @@ def setup():
             temperature=1.0,
         ),
         ai_model=AIModel(name="test", tokens=12),
-        llm=FakeListLLM(responses=[summary_text]),
+        llm=FakeListChatModel(responses=[summary_text]),
         source_code="This is source code",
         esbmc_output="This is esbmc output",
         set_solution_messages=AIAgentConversation.from_seq(set_solution_messages),

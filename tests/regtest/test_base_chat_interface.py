@@ -1,8 +1,8 @@
 # Author: Yiannis Charalambous
 
+from langchain_core.language_models import FakeListChatModel
 import pytest
 
-from langchain_community.llms import FakeListLLM
 from langchain.schema import BaseMessage, HumanMessage, AIMessage, SystemMessage
 
 from esbmc_ai.ai_models import AIModel
@@ -14,7 +14,7 @@ from esbmc_ai.config import AIAgentConversation, ChatPromptSettings
 @pytest.fixture
 def setup():
     responses: list[str] = ["OK 1", "OK 2", "OK 3"]
-    llm: FakeListLLM = FakeListLLM(responses=responses)
+    llm: FakeListChatModel = FakeListChatModel(responses=responses)
 
     ai_model: AIModel = AIModel("test", 1024)
 
@@ -64,6 +64,13 @@ def test_send_message(regtest, setup) -> None:
     ]
 
     with regtest:
-        print(chat.ai_model_agent.system_messages.messages)
-        print(chat.messages)
-        print(chat_responses)
+        print("System Messages:")
+        for m in chat.ai_model_agent.system_messages.messages:
+            print(f"{m.type}: {m.content}")
+        print("Chat Messages:")
+        for m in chat.messages:
+            print(f"{m.type}: {m.content}")
+        print("Responses:")
+        for m in chat_responses:
+            print(f"{m.message.type}({m.total_tokens} - {m.finish_reason}): {m.message.content}")
+

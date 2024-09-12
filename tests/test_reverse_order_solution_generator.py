@@ -1,5 +1,6 @@
 # Author: Yiannis Charalambous
 
+from langchain_core.language_models import FakeListChatModel
 import pytest
 
 from langchain.schema import (
@@ -7,7 +8,6 @@ from langchain.schema import (
     AIMessage,
     SystemMessage,
 )
-from langchain_community.llms.fake import FakeListLLM
 
 from esbmc_ai.ai_models import AIModel
 from esbmc_ai.config import AIAgentConversation, ChatPromptSettings
@@ -16,7 +16,7 @@ from esbmc_ai.reverse_order_solution_generator import ReverseOrderSolutionGenera
 
 @pytest.fixture(scope="function")
 def setup_llm_model():
-    llm = FakeListLLM(
+    llm = FakeListChatModel(
         responses=[
             "This is a test response",
             "Another test response",

@@ -1,3 +1,14 @@
-(SystemMessage(content='System message'), AIMessage(content='OK'))
-[HumanMessage(content='Test 1'), AIMessage(content='OK 1'), HumanMessage(content='Test 2'), AIMessage(content='OK 2'), HumanMessage(content='Test 3'), AIMessage(content='OK 3')]
-[ChatResponse(message=AIMessage(content='OK 1'), total_tokens=15, finish_reason=<FinishReason.stop: 1>), ChatResponse(message=AIMessage(content='OK 2'), total_tokens=23, finish_reason=<FinishReason.stop: 1>), ChatResponse(message=AIMessage(content='OK 3'), total_tokens=31, finish_reason=<FinishReason.stop: 1>)]
+System Messages:
+system: System message
+ai: OK
+Chat Messages:
+human: Test 1
+ai: OK 1
+human: Test 2
+ai: OK 2
+human: Test 3
+ai: OK 3
+Responses:
+ai(15 - FinishReason.stop): OK 1
+ai(23 - FinishReason.stop): OK 2
+ai(31 - FinishReason.stop): OK 3
