@@ -34,7 +34,7 @@ from esbmc_ai.commands import (
 from esbmc_ai.loading_widget import LoadingWidget, create_loading_widget
 from esbmc_ai.chats import UserChat
 from esbmc_ai.logging import print_horizontal_line, printv, printvv
-from esbmc_ai.esbmc_util import esbmc
+from esbmc_ai.esbmc_util import ESBMCUtil
 from esbmc_ai.chat_response import FinishReason, ChatResponse
 from esbmc_ai.ai_models import _ai_model_names
 
@@ -133,7 +133,8 @@ def _run_esbmc(source_file: SourceFile, anim: Optional[LoadingWidget] = None) ->
 
     if anim:
         anim.start("ESBMC is processing... Please Wait")
-    exit_code, esbmc_output = esbmc(
+    exit_code, esbmc_output = ESBMCUtil.esbmc(
+        esbmc_path=config.esbmc_path,
         path=source_file.file_path,
         esbmc_params=config.esbmc_params,
         timeout=config.verifier_timeout,
@@ -300,6 +301,8 @@ def main() -> None:
     config.load_envs()
     config.load_config(config.cfg_path)
     config.load_args(args)
+
+    ESBMCUtil.init(config.esbmc_path)
 
     check_health()
 
