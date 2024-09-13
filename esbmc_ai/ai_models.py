@@ -158,13 +158,50 @@ class AIModelOpenAI(AIModel):
             model_kwargs={},
         )
 
+    @classmethod
+    def get_openai_model_max_tokens(self, name: str) -> int:
+        """Dynamically resolves the max tokens from a base model."""
+
+        # https://platform.openai.com/docs/models
+        tokens = {
+            "gpt-4o": 128000,
+            "chatgpt-4o": 128000,
+            "o1": 128000,
+            "gpt-4": 8192,
+            "gpt-3.5-turbo": 16385,
+            "gpt-3.5-turbo-instruct": 4096,
+        }
+
+        # Split into - segments and remove each section from the end to find out
+        # which one matches the most.
+
+        # Base Case
+        if name in tokens:
+            return tokens[name]
+
+        # Step Case
+        name_split: list[str] = name.split("-")
+        for i in range(1, name.count("-")):
+            subname: str = "-".join(name_split[:-i])
+            if subname in tokens:
+                return tokens[subname]
+
+        raise ValueError(f"Could not figure out max tokens for model: {name}")
+
+
 class OllamaAIModel(AIModel):
     def __init__(self, name: str, tokens: int, url: str) -> None:
         super().__init__(name, tokens)
         self.url: str = url
-    
+
     @override
-    def create_llm(self, api_keys: APIKeyCollection, temperature: float = 1, requests_max_tries: int = 5, requests_timeout: float = 60) -> BaseChatModel:
+    def create_llm(
+        self,
+        api_keys: APIKeyCollection,
+        temperature: float = 1,
+        requests_max_tries: int = 5,
+        requests_timeout: float = 60,
+    ) -> BaseChatModel:
         # Ollama does not use API keys
         _ = api_keys
         _ = requests_max_tries
@@ -173,7 +210,7 @@ class OllamaAIModel(AIModel):
             model=self.name,
             temperature=temperature,
             client_kwargs={
-                "timeout":requests_timeout,
+                "timeout": requests_timeout,
             },
         )
 
@@ -226,38 +263,10 @@ def is_valid_ai_model(
     return name in _ai_model_names
 
 
-def _get_openai_model_max_tokens(name: str) -> int:
-    """NOTE: OpenAI currently does not expose an API for getting the model
-    length. Maybe add a config input value for this?"""
-
-    # https://platform.openai.com/docs/models
-    tokens = {
-        "gpt-4o": 128000,
-        "gpt-4": 8192,
-        "gpt-3.5-turbo": 16385,
-        "gpt-3.5-turbo-instruct": 4096,
-    }
-
-    # Split into - segments and remove each section from the end to find out
-    # which one matches the most.
-
-    # Base Case
-    if name in tokens:
-        return tokens[name]
-
-    # Step Case
-    name_split: list[str] = name.split("-")
-    for i in range(1, name.count("-")):
-        subname: str = "-".join(name_split[:-i])
-        if subname in tokens:
-            return tokens[subname]
-
-    raise ValueError(f"Could not figure out max tokens for model: {name}")
-
-
 def get_ai_model_by_name(
     name: str, api_keys: Optional[APIKeyCollection] = None
 ) -> AIModel:
+    """Checks for built-in and custom_ai models"""
     # Check OpenAI models.
     if api_keys and api_keys.openai:
         try:
@@ -268,7 +277,7 @@ def get_ai_model_by_name(
                     add_custom_ai_model(
                         AIModelOpenAI(
                             model.id,
-                            _get_openai_model_max_tokens(model.id),
+                            AIModelOpenAI.get_openai_model_max_tokens(model.id),
                         ),
                     )
         except ImportError:
