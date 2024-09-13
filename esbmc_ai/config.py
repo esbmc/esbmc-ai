@@ -19,7 +19,7 @@ from .chat_response import json_to_base_messages
 
 api_keys: APIKeyCollection
 
-esbmc_path: str = "~/.local/bin/esbmc"
+esbmc_path: Path = Path("~/.local/bin/esbmc")
 esbmc_params: list[str] = [
     "--interval-analysis",
     "--goto-unwind",
@@ -153,7 +153,7 @@ def _load_custom_ai(config: dict) -> None:
         assert (
             isinstance(custom_ai_max_tokens, int) and custom_ai_max_tokens > 0
         ), f'custom_ai_max_tokens in ai_custom entry "{name}" needs to be an int and greater than 0.'
-        
+
         # Load the URL
         custom_ai_url, ok = _load_config_value(
             config_file=ai_data,
@@ -167,19 +167,23 @@ def _load_custom_ai(config: dict) -> None:
             name="server_type",
             default="localhost:11434",
         )
-        assert ok, f"server_type for custom AI '{name}' is invalid, it needs to be a valid string"
+        assert (
+            ok
+        ), f"server_type for custom AI '{name}' is invalid, it needs to be a valid string"
 
         # Create correct type of LLM
         llm: AIModel
         match server_type:
             case "ollama":
                 llm = OllamaAIModel(
-                name=name,
-                tokens=custom_ai_max_tokens,
-                url=custom_ai_url,
+                    name=name,
+                    tokens=custom_ai_max_tokens,
+                    url=custom_ai_url,
                 )
             case _:
-                raise NotImplementedError(f"The custom AI server type is not implemented: {server_type}")
+                raise NotImplementedError(
+                    f"The custom AI server type is not implemented: {server_type}"
+                )
 
         # Add the custom AI.
         add_custom_ai_model(llm)
@@ -452,15 +456,16 @@ def load_config(file_path: str) -> None:
         print(f"Error: {ai_model_name} is not a valid AI model")
         sys.exit(4)
 
-    global esbmc_path
     # Health check verifies this later in the init process.
-    esbmc_path, _ = _load_config_value(
+    global esbmc_path
+    esbmc_path_str: str
+    esbmc_path_str, _ = _load_config_value(
         config_file,
         "esbmc_path",
-        esbmc_path,
+        str(esbmc_path),
     )
     # Expand variables and tilde.
-    esbmc_path = os.path.expanduser(os.path.expandvars(esbmc_path))
+    esbmc_path = Path(os.path.expanduser(os.path.expandvars(esbmc_path_str)))
 
     # Load the AI data from the file that will command the AI for all modes.
     printv("Initializing AI data")
