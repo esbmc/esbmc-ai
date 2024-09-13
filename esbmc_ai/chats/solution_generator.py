@@ -12,12 +12,7 @@ from esbmc_ai.solution import SourceFile
 
 from esbmc_ai.ai_models import AIModel
 from .base_chat_interface import BaseChatInterface
-from esbmc_ai.esbmc_util import (
-    esbmc_get_counter_example,
-    esbmc_get_violated_property,
-    get_source_code_err_line_idx,
-    get_clang_err_line_index,
-)
+from esbmc_ai.esbmc_util import ESBMCUtil
 
 
 class ESBMCTimedOutException(Exception):
@@ -34,12 +29,12 @@ def get_source_code_formatted(
     match source_code_format:
         case "single":
             # Get source code error line from esbmc output
-            line: Optional[int] = get_source_code_err_line_idx(esbmc_output)
+            line: Optional[int] = ESBMCUtil.get_source_code_err_line_idx(esbmc_output)
             if line:
                 return source_code.splitlines(True)[line]
 
             # Check if it parses
-            line = get_clang_err_line_index(esbmc_output)
+            line = ESBMCUtil.get_clang_err_line_index(esbmc_output)
             if line:
                 return source_code.splitlines(True)[line]
 
@@ -64,12 +59,12 @@ def get_esbmc_output_formatted(esbmc_output_type: str, esbmc_output: str) -> str
 
     match esbmc_output_type:
         case "vp":
-            value: Optional[str] = esbmc_get_violated_property(esbmc_output)
+            value: Optional[str] = ESBMCUtil.esbmc_get_violated_property(esbmc_output)
             if not value:
                 raise ValueError("Not found violated property." + esbmc_output)
             return value
         case "ce":
-            value: Optional[str] = esbmc_get_counter_example(esbmc_output)
+            value: Optional[str] = ESBMCUtil.esbmc_get_counter_example(esbmc_output)
             if not value:
                 raise ValueError("Not found counterexample.")
             return value
@@ -197,10 +192,12 @@ class SolutionGenerator(BaseChatInterface):
         match self.source_code_format:
             case "single":
                 # Get source code error line from esbmc output
-                line: Optional[int] = get_source_code_err_line_idx(self.esbmc_output)
+                line: Optional[int] = ESBMCUtil.get_source_code_err_line_idx(
+                    self.esbmc_output
+                )
                 if not line:
                     # Check if it parses
-                    line = get_clang_err_line_index(self.esbmc_output)
+                    line = ESBMCUtil.get_clang_err_line_index(self.esbmc_output)
 
                 assert (
                     line

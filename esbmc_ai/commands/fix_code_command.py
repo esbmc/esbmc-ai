@@ -15,12 +15,8 @@ from .chat_command import ChatCommand
 from .. import config
 from ..msg_bus import Signal
 from ..loading_widget import create_loading_widget
-from ..esbmc_util import (
-    esbmc_get_error_type,
-    esbmc_load_source_code,
-)
+from ..esbmc_util import ESBMCUtil
 from ..logging import print_horizontal_line, printv, printvv
-from subprocess import CalledProcessError
 
 
 class FixCodeCommandResult(CommandResult):
@@ -71,7 +67,9 @@ class FixCodeCommand(ChatCommand):
         )
 
         # Parse the esbmc output here and determine what "Scenario" to use.
-        scenario: str = esbmc_get_error_type(source_file.initial_verifier_output)
+        scenario: str = ESBMCUtil.esbmc_get_error_type(
+            source_file.initial_verifier_output
+        )
 
         printv(f"Scenario: {scenario}")
         printv(
@@ -164,7 +162,7 @@ class FixCodeCommand(ChatCommand):
             # Pass to ESBMC, a workaround is used where the file is saved
             # to a temporary location since ESBMC needs it in file format.
             self.anim.start("Verifying with ESBMC... Please Wait")
-            exit_code, esbmc_output = esbmc_load_source_code(
+            exit_code, esbmc_output = ESBMCUtil.esbmc_load_source_code(
                 source_file=source_file,
                 source_file_content_index=-1,
                 esbmc_params=config.esbmc_params,
