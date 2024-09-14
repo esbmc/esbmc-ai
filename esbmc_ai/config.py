@@ -1,149 +1,397 @@
 # Author: Yiannis Charalambous 2023
 
 import os
-import json
 import sys
 from platform import system as system_name
 from pathlib import Path
 from dotenv import load_dotenv, find_dotenv
+from langchain.schema import HumanMessage
+import toml
 
-from typing import Any, NamedTuple, Optional, Union, Sequence
-from dataclasses import dataclass
-from langchain.schema import BaseMessage
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    List,
+    NamedTuple,
+    Optional,
+)
 
-from esbmc_ai.logging import printv, set_verbose
+from esbmc_ai.chat_response import list_to_base_messages
+from esbmc_ai.logging import set_verbose
 from .ai_models import *
 from .api_key_collection import APIKeyCollection
-from .chat_response import json_to_base_messages
 
 
-api_keys: APIKeyCollection
+class ConfigField(NamedTuple):
+    # The name of the config field and also namespace
+    name: str
+    # If a default value is supplied, then it can be omitted from the config
+    default_value: Any
+    # If true, then the default value will be None, so during
+    # validation, if no value is supplied, then None will be the
+    # the default value, instead of failing due to None being the
+    # default value which under normal circumstances means that the
+    # field is not optional.
+    default_value_none: bool = False
 
-esbmc_path: Path = Path("~/.local/bin/esbmc")
-esbmc_params: list[str] = [
-    "--interval-analysis",
-    "--goto-unwind",
-    "--unlimited-goto-unwind",
-    "--k-induction",
-    "--state-hashing",
-    "--add-symex-value-sets",
-    "--k-step",
-    "2",
-    "--floatbv",
-    "--unlimited-k-steps",
-    "--compact-trace",
-    "--context-bound",
-    "2",
-]
-
-temp_auto_clean: bool = True
-temp_file_dir: Optional[str] = None
-ai_model: AIModel
-
-esbmc_output_type: str = "full"
-source_code_format: str = "full"
-
-fix_code_max_attempts: int = 5
-fix_code_message_history: str = ""
-
-requests_max_tries: int = 5
-requests_timeout: float = 60
-verifier_timeout: float = 60
-
-loading_hints: bool = False
-allow_successful: bool = False
-# Show the raw conversation after the command ends
-raw_conversation: bool = False
-
-cfg_path: str
-
-generate_patches: bool
+    # Lambda function to validate if field has a valid value.
+    # Default is identity function which is return true.
+    validate: Callable[[Any], bool] = lambda _: True
+    # Transform the value once loaded, this allows the value to be saved
+    # as a more complex type than that which is represented in the config
+    # file.
+    on_load: Callable[[Any], Any] = lambda v: v
+    error_message: Optional[str] = None
 
 
-# TODO Get rid of this class as soon as ConfigTool with the pyautoconfig
-class AIAgentConversation(NamedTuple):
-    """Immutable class describing the conversation definition for an AI agent. The
-    class represents the system messages of the AI agent defined and contains a load
-    class method for efficiently loading it from config."""
+def _validate_prompt_template_conversation(prompt_template: List[Dict]) -> bool:
+    """Used to validate if a prompt template conversation is of the correct format
+    in the config before loading it."""
 
-    messages: tuple[BaseMessage, ...]
+    for msg in prompt_template:
+        if (
+            not isinstance(msg, dict)
+            or "content" not in msg
+            or "role" not in msg
+            or not isinstance(msg["content"], str)
+            or not isinstance(msg["role"], str)
+        ):
+            return False
+    return True
+
+
+def _validate_prompt_template(conv: Dict[str, List[Dict]]) -> bool:
+    """Used to check if a prompt template (contains conversation and initial message) is
+    of the correct format."""
+    if (
+        "initial" not in conv
+        or not isinstance(conv["initial"], str)
+        or "system" not in conv
+        or not _validate_prompt_template_conversation(conv["system"])
+    ):
+        return False
+    return True
+
+
+class Config:
+    api_keys: APIKeyCollection
+    raw_conversation: bool = False
+    cfg_path: Path
+    generate_patches: bool
+
+    _fields: List[ConfigField] = [
+        ConfigField(
+            name="ai_model",
+            default_value=None,
+            # Api keys are loaded from system env so they are already
+            # available
+            validate=lambda v: isinstance(v, str)
+            and is_valid_ai_model(v, Config.api_keys),
+            on_load=lambda v: get_ai_model_by_name(v, Config.api_keys),
+        ),
+        ConfigField(
+            name="temp_auto_clean",
+            default_value=True,
+            validate=lambda v: isinstance(v, bool),
+        ),
+        ConfigField(
+            name="temp_file_dir",
+            default_value=None,
+            validate=lambda v: isinstance(v, str) and Path(v).is_file(),
+            on_load=lambda v: Path(v),
+            default_value_none=True,
+        ),
+        ConfigField(
+            name="allow_successful",
+            default_value=False,
+            validate=lambda v: isinstance(v, bool),
+        ),
+        ConfigField(
+            name="loading_hints",
+            default_value=True,
+            validate=lambda v: isinstance(v, bool),
+        ),
+        ConfigField(
+            name="source_code_format",
+            default_value="full",
+            validate=lambda v: isinstance(v, str) and v in ["full", "single"],
+            error_message="source_code_format can only be 'full' or 'single'",
+        ),
+        ConfigField(
+            name="esbmc.path",
+            default_value=None,
+            validate=lambda v: isinstance(v, str) and Path(v).is_file(),
+            on_load=lambda v: Path(v),
+        ),
+        ConfigField(
+            name="esbmc.params",
+            default_value=[
+                "--interval-analysis",
+                "--goto-unwind",
+                "--unlimited-goto-unwind",
+                "--k-induction",
+                "--state-hashing",
+                "--add-symex-value-sets",
+                "--k-step",
+                "2",
+                "--floatbv",
+                "--unlimited-k-steps",
+                "--compact-trace",
+                "--context-bound",
+                "2",
+            ],
+            validate=lambda v: isinstance(v, List),
+        ),
+        ConfigField(
+            name="esbmc.output_type",
+            default_value="full",
+            validate=lambda v: v in ["full", "vp", "ce"],
+        ),
+        ConfigField(
+            name="esbmc.timeout",
+            default_value=60,
+            validate=lambda v: isinstance(v, float),
+        ),
+        ConfigField(
+            name="llm_requests.max_tries",
+            default_value=5,
+            validate=lambda v: isinstance(v, int),
+        ),
+        ConfigField(
+            name="llm_requests.timeout",
+            default_value=60,
+            validate=lambda v: isinstance(v, float),
+        ),
+        ConfigField(
+            name="user_chat.temperature",
+            default_value=1.0,
+            validate=lambda v: isinstance(v, float) and v >= 0 and v <= 2.0,
+            error_message="Temperature needs to be a value between 0 and 2.0",
+        ),
+        ConfigField(
+            name="fix_code.temperature",
+            default_value=1.0,
+            validate=lambda v: isinstance(v, float) and v >= 0 and v <= 2.0,
+            error_message="Temperature needs to be a value between 0 and 2.0",
+        ),
+        ConfigField(
+            name="fix_code.max_attempts",
+            default_value=5,
+            validate=lambda v: isinstance(v, int),
+        ),
+        ConfigField(
+            name="fix_code.message_history",
+            default_value="normal",
+            validate=lambda v: v in ["normal", "latest_only", "reverse"],
+            error_message='fix_code.message_history can only be "normal", "latest_only", "reverse"',
+        ),
+        ConfigField(
+            name="prompt_templates.user_chat.initial",
+            default_value=None,
+            validate=lambda v: isinstance(v, str),
+            on_load=lambda v: HumanMessage(content=v),
+        ),
+        ConfigField(
+            name="prompt_templates.user_chat.system",
+            default_value=None,
+            validate=lambda v: _validate_prompt_template_conversation(v),
+            on_load=lambda v: list_to_base_messages(v),
+        ),
+        # Here we have a list of prompt templates that are for each scenario.
+        # The base scenario prompt template is required.
+        ConfigField(
+            name="prompt_templates.fix_code",
+            default_value=None,
+            validate=lambda v: "base" in v
+            and all(
+                [
+                    _validate_prompt_template(prompt_template)
+                    for prompt_template in v.values()
+                ]
+            ),
+            on_load=lambda v: {
+                scenario: {
+                    "initial": HumanMessage(content=conv["initial"]),
+                    "system": list_to_base_messages(conv["system"]),
+                }
+                for scenario, conv in v.items()
+            },
+        ),
+    ]
+    _values: Dict[str, Any] = {}
 
     @classmethod
-    def from_seq(cls, message_list: Sequence[BaseMessage]) -> "AIAgentConversation":
-        return cls(messages=tuple(message_list))
+    def get_ai_model(cls) -> AIModel:
+        return cls.get_value("ai_model")
 
     @classmethod
-    def load_from_config(
-        cls, messages_list: list[dict[str, str]]
-    ) -> "AIAgentConversation":
-        return cls(messages=tuple(json_to_base_messages(messages_list)))
-
-
-@dataclass
-class ChatPromptSettings:
-    """Settings for the AI Model. These settings act as an actor/agent, allowing the
-    AI model to be applied into a specific scenario."""
-
-    system_messages: AIAgentConversation
-    """The generic prompt system messages of the AI. Generic meaning it is used in
-    every scenario, as opposed to dynamic system message. The value is a list of
-    converstaions."""
-    initial_prompt: str
-    """The generic initial prompt to use for the agent."""
-    temperature: float
-
-
-@dataclass
-class DynamicAIModelAgent(ChatPromptSettings):
-    """Extension of the ChatPromptSettings to include dynamic"""
-
-    scenarios: dict[str, AIAgentConversation]
-    """Scenarios dictionary that contains system messages for different errors that
-    ESBMC can give. More information can be found in the
-    [wiki](https://github.com/Yiannis128/esbmc-ai/wiki/Configuration#dynamic-prompts). 
-    Reads from the config file the following hierarchy:
-    * Dictionary mapping of error type to dictionary. Accepts the following entries:
-      * `system` mapping to an array. The array contains the conversation for the
-      system message for this particular error."""
+    def get_user_chat_temperature(cls) -> float:
+        return cls.get_value("user_chat.temperature")
 
     @classmethod
-    def to_chat_prompt_settings(
-        cls, ai_model_agent: "DynamicAIModelAgent", scenario: str
-    ) -> ChatPromptSettings:
-        """DynamicAIModelAgent extensions are not used by BaseChatInterface derived classes
-        directly, since they only use the SystemMessages of ChatPromptSettings. This applies
-        the correct scenario as a System Message and returns a pure ChatPromptSettings object
-        for use. **Will return a shallow copy even if the system message is to be used**.
+    def get_prompt_templates_user_chat_initial(cls) -> BaseMessage:
+        return cls.get_value("prompt_templates.user_chat.initial")
+
+    @classmethod
+    def init(cls, args: Any, config_path: Path) -> None:
+        cls._load_envs()
+
+        if not config_path.exists() and config_path.is_file():
+            print(f"Error: Config not found: {config_path}")
+            sys.exit(1)
+
+        with open(config_path, "r") as file:
+            config_file: dict[str, Any] = toml.loads(file.read())
+
+        # Load custom AIs
+        _load_custom_ai(config_file["custom_ai"])
+
+        # Load all the config file field entries
+        for field in cls._fields:
+            # Is field entry found in config?
+            if field.name in config_file:
+                if field.default_value == None and not field.default_value_none:
+                    raise ValueError(
+                        f"The config entry is None when it can't be: {field.name}"
+                    )
+
+                # Validate field
+                assert field.validate(config_file[field.name]), (
+                    field.error_message
+                    if field.error_message
+                    else f"Field: {field.name} is invalid."
+                )
+
+                # Assign field from config file
+                cls._values[field.name] = field.on_load(config_file[field.name])
+            elif field.default_value == None and not field.default_value_none:
+                raise KeyError(f"{field.name} is missing from config file")
+            else:
+                # Use default value
+                cls._values[field.name] = field.default_value
+
+        cls._load_args(args)
+
+    @classmethod
+    def get_value(cls, name: str) -> Any:
+        return cls._values[name]
+
+    @classmethod
+    def set_value(cls, name: str, value: Any) -> None:
+        cls._values[name] = value
+
+    @classmethod
+    def _load_envs(cls) -> None:
+        """Environment variables are loaded in the following order:
+
+        1. Environment variables already loaded. Any variable not present will be looked for in
+        .env files in the following locations.
+        2. .env file in the current directory, moving upwards in the directory tree.
+        3. esbmc-ai.env file in the current directory, moving upwards in the directory tree.
+        4. esbmc-ai.env file in $HOME/.config/ for Linux/macOS and %userprofile% for Windows.
+
+        Note: ESBMC_AI_CFG_PATH undergoes tilde user expansion and also environment
+        variable expansion.
         """
-        if scenario in ai_model_agent.scenarios:
-            return ChatPromptSettings(
-                initial_prompt=ai_model_agent.initial_prompt,
-                system_messages=ai_model_agent.scenarios[scenario],
-                temperature=ai_model_agent.temperature,
-            )
+
+        def get_env_vars() -> None:
+            """Gets all the system environment variables that are currently loaded."""
+            for k in keys:
+                value: Optional[str] = os.getenv(k)
+                if value != None:
+                    values[k] = value
+
+        keys: list[str] = ["OPENAI_API_KEY", "ESBMC_AI_CFG_PATH"]
+        values: dict[str, str] = {}
+
+        # Load from system env
+        get_env_vars()
+
+        # Find .env in current working directory and load it.
+        dotenv_file_path: str = find_dotenv(usecwd=True)
+        if dotenv_file_path != "":
+            load_dotenv(dotenv_path=dotenv_file_path, override=False, verbose=True)
         else:
-            return ChatPromptSettings(
-                initial_prompt=ai_model_agent.initial_prompt,
-                system_messages=ai_model_agent.system_messages,
-                temperature=ai_model_agent.temperature,
-            )
+            # Find esbmc-ai.env in current working directory and load it.
+            dotenv_file_path: str = find_dotenv(filename="esbmc-ai.env", usecwd=True)
+            if dotenv_file_path != "":
+                load_dotenv(dotenv_path=dotenv_file_path, override=False, verbose=True)
 
+        get_env_vars()
 
-chat_prompt_user_mode: DynamicAIModelAgent
-chat_prompt_generator_mode: DynamicAIModelAgent
-chat_prompt_optimize_code: ChatPromptSettings
+        # Look for .env in home folder.
+        home_path: Path = Path.home()
+        match system_name():
+            case "Linux" | "Darwin":
+                home_path /= ".config/esbmc-ai.env"
+            case "Windows":
+                home_path /= "esbmc-ai.env"
+            case _:
+                raise ValueError(f"Unknown OS type: {system_name()}")
 
-esbmc_params_optimize_code: list[str] = [
-    "--incremental-bmc",
-    "--no-bounds-check",
-    "--no-pointer-check",
-    "--no-div-by-zero-check",
-]
+        load_dotenv(home_path, override=False, verbose=True)
+
+        get_env_vars()
+
+        # Check if all the values are set, else error.
+        for key in keys:
+            if key not in values:
+                print(f"Error: No ${key} in environment.")
+                sys.exit(1)
+
+        cls.api_keys = APIKeyCollection(
+            openai=str(os.getenv("OPENAI_API_KEY")),
+        )
+
+        cls.cfg_path = Path(
+            os.path.expanduser(os.path.expandvars(str(os.getenv("ESBMC_AI_CFG_PATH"))))
+        )
+
+    @classmethod
+    def _load_args(cls, args) -> None:
+        set_verbose(args.verbose)
+
+        # AI Model -m
+        if args.ai_model != "":
+            if is_valid_ai_model(args.ai_model, cls.api_keys):
+                ai_model = get_ai_model_by_name(args.ai_model, cls.api_keys)
+                cls.set_value("ai_model", ai_model)
+            else:
+                print(f"Error: invalid --ai-model parameter {args.ai_model}")
+                sys.exit(4)
+
+        # If append flag is set, then append.
+        if args.append:
+            esbmc_params: List[str] = cls.get_value("esbmc.params")
+            esbmc_params.extend(args.remaining)
+            cls.set_value("esbmc_params", esbmc_params)
+        elif len(args.remaining) != 0:
+            cls.set_value("esbmc_params", args.remaining)
+
+        global raw_conversation
+        raw_conversation = args.raw_conversation
+
+        global generate_patches
+        generate_patches = args.generate_patches
 
 
 def _load_custom_ai(config: dict) -> None:
-    ai_custom: dict = config
-    for name, ai_data in ai_custom.items():
+    """Loads custom AI defined in the config and ascociates it with the AIModels
+    module."""
+
+    def _load_config_value(
+        config_file: dict, name: str, default: object = None
+    ) -> tuple[Any, bool]:
+        if name in config_file:
+            return config_file[name], True
+        else:
+            print(
+                f"Warning: {name} not found in config... Using default value: {default}"
+            )
+            return default, False
+
+    for name, ai_data in config.items():
         # Load the max tokens
         custom_ai_max_tokens, ok = _load_config_value(
             config_file=ai_data,
@@ -187,311 +435,3 @@ def _load_custom_ai(config: dict) -> None:
 
         # Add the custom AI.
         add_custom_ai_model(llm)
-
-
-def load_envs() -> None:
-    """Environment variables are loaded in the following order:
-
-    1. Environment variables already loaded. Any variable not present will be looked for in
-    .env files in the following locations.
-    2. .env file in the current directory, moving upwards in the directory tree.
-    3. esbmc-ai.env file in the current directory, moving upwards in the directory tree.
-    4. esbmc-ai.env file in $HOME/.config/ for Linux/macOS and %userprofile% for Windows.
-
-    Note: ESBMC_AI_CFG_PATH undergoes tilde user expansion and also environment
-    variable expansion.
-    """
-
-    def get_env_vars() -> None:
-        """Gets all the system environment variables that are currently loaded."""
-        for k in keys:
-            value: Optional[str] = os.getenv(k)
-            if value != None:
-                values[k] = value
-
-    keys: list[str] = ["OPENAI_API_KEY", "ESBMC_AI_CFG_PATH"]
-    values: dict[str, str] = {}
-
-    # Load from system env
-    get_env_vars()
-
-    # Find .env in current working directory and load it.
-    dotenv_file_path: str = find_dotenv(usecwd=True)
-    if dotenv_file_path != "":
-        load_dotenv(dotenv_path=dotenv_file_path, override=False, verbose=True)
-    else:
-        # Find esbmc-ai.env in current working directory and load it.
-        dotenv_file_path: str = find_dotenv(filename="esbmc-ai.env", usecwd=True)
-        if dotenv_file_path != "":
-            load_dotenv(dotenv_path=dotenv_file_path, override=False, verbose=True)
-
-    get_env_vars()
-
-    # Look for .env in home folder.
-    home_path: Path = Path.home()
-    match system_name():
-        case "Linux" | "Darwin":
-            home_path /= ".config/esbmc-ai.env"
-        case "Windows":
-            home_path /= "esbmc-ai.env"
-        case _:
-            raise ValueError(f"Unknown OS type: {system_name()}")
-
-    load_dotenv(home_path, override=False, verbose=True)
-
-    get_env_vars()
-
-    # Check if all the values are set, else error.
-    for key in keys:
-        if key not in values:
-            print(f"Error: No ${key} in environment.")
-            sys.exit(1)
-
-    global api_keys
-    api_keys = APIKeyCollection(
-        openai=str(os.getenv("OPENAI_API_KEY")),
-    )
-
-    global cfg_path
-    cfg_path = os.path.expanduser(
-        os.path.expandvars(str(os.getenv("ESBMC_AI_CFG_PATH")))
-    )
-
-
-def _load_ai_data(config: dict) -> None:
-    # User chat mode will store extra AIAgentConversations into scenarios.
-    global chat_prompt_user_mode
-    chat_prompt_user_mode = DynamicAIModelAgent(
-        system_messages=AIAgentConversation.load_from_config(
-            config["chat_modes"]["user_chat"]["system"]
-        ),
-        initial_prompt=config["chat_modes"]["user_chat"]["initial"],
-        temperature=config["chat_modes"]["user_chat"]["temperature"],
-        scenarios={
-            "set_solution": AIAgentConversation.load_from_config(
-                messages_list=config["chat_modes"]["user_chat"]["set_solution"],
-            ),
-        },
-    )
-
-    # Generator mode loads scenarios normally.
-    json_fcm_scenarios: dict = config["chat_modes"]["generate_solution"]["scenarios"]
-    fcm_scenarios: dict = {
-        scenario: AIAgentConversation.load_from_config(messages["system"])
-        for scenario, messages in json_fcm_scenarios.items()
-    }
-    global chat_prompt_generator_mode
-    chat_prompt_generator_mode = DynamicAIModelAgent(
-        system_messages=AIAgentConversation.load_from_config(
-            config["chat_modes"]["generate_solution"]["system"]
-        ),
-        initial_prompt=config["chat_modes"]["generate_solution"]["initial"],
-        temperature=config["chat_modes"]["generate_solution"]["temperature"],
-        scenarios=fcm_scenarios,
-    )
-
-
-def _load_config_value(
-    config_file: dict, name: str, default: object = None
-) -> tuple[Any, bool]:
-    if name in config_file:
-        return config_file[name], True
-    else:
-        print(f"Warning: {name} not found in config... Using default value: {default}")
-        return default, False
-
-
-def _load_config_bool(
-    config_file: dict,
-    name: str,
-    default: bool = False,
-) -> bool:
-    value, _ = _load_config_value(config_file, name, default)
-    if isinstance(value, bool):
-        return value
-    else:
-        raise TypeError(
-            f"Error: config invalid {name} value: {value} "
-            + "Make sure it is a bool value."
-        )
-
-
-def _load_config_real_number(
-    config_file: dict, name: str, default: object = None
-) -> Union[int, float]:
-    value, _ = _load_config_value(config_file, name, default)
-    # Type check
-    if type(value) is float or type(value) is int:
-        return value
-    else:
-        raise TypeError(
-            f"Error: config invalid {name} value: {value} "
-            + "Make sure it is a float or int..."
-        )
-
-
-def load_config(file_path: str) -> None:
-    if not os.path.exists(file_path) and os.path.isfile(file_path):
-        print(f"Error: Config not found: {file_path}")
-        sys.exit(1)
-
-    config_file = None
-    with open(file_path, mode="r") as file:
-        config_file = json.load(file)
-
-    global esbmc_params
-    esbmc_params, _ = _load_config_value(
-        config_file,
-        "esbmc_params",
-        esbmc_params,
-    )
-
-    global fix_code_max_attempts
-    fix_code_max_attempts = int(
-        _load_config_real_number(
-            config_file=config_file["chat_modes"]["generate_solution"],
-            name="max_attempts",
-            default=fix_code_max_attempts,
-        )
-    )
-
-    global source_code_format
-    source_code_format, _ = _load_config_value(
-        config_file=config_file,
-        name="source_code_format",
-        default=source_code_format,
-    )
-
-    if source_code_format not in ["full", "single"]:
-        raise Exception(
-            f"Source code format in the config is not valid: {source_code_format}"
-        )
-
-    global esbmc_output_type
-    esbmc_output_type, _ = _load_config_value(
-        config_file=config_file,
-        name="esbmc_output_type",
-        default=esbmc_output_type,
-    )
-
-    if esbmc_output_type not in ["full", "vp", "ce"]:
-        raise Exception(
-            f"ESBMC output type in the config is not valid: {esbmc_output_type}"
-        )
-
-    global fix_code_message_history
-    fix_code_message_history, _ = _load_config_value(
-        config_file=config_file["chat_modes"]["generate_solution"],
-        name="message_history",
-    )
-
-    if fix_code_message_history not in ["normal", "latest_only", "reverse"]:
-        raise ValueError(
-            f"error: fix code mode message history not valid: {fix_code_message_history}"
-        )
-
-    global requests_max_tries
-    requests_max_tries = int(
-        _load_config_real_number(
-            config_file=config_file["llm_requests"],
-            name="max_tries",
-            default=requests_max_tries,
-        )
-    )
-
-    global requests_timeout
-    requests_timeout = _load_config_real_number(
-        config_file=config_file["llm_requests"],
-        name="timeout",
-        default=requests_timeout,
-    )
-
-    global verifier_timeout
-    verifier_timeout = _load_config_real_number(
-        config_file=config_file,
-        name="verifier_timeout",
-        default=verifier_timeout,
-    )
-
-    global temp_auto_clean
-    temp_auto_clean, _ = _load_config_value(
-        config_file,
-        "temp_auto_clean",
-        temp_auto_clean,
-    )
-
-    global temp_file_dir
-    temp_file_dir, _ = _load_config_value(
-        config_file,
-        "temp_file_dir",
-        temp_file_dir,
-    )
-
-    global allow_successful
-    allow_successful = _load_config_bool(
-        config_file,
-        "allow_successful",
-        False,
-    )
-
-    global loading_hints
-    loading_hints = _load_config_bool(
-        config_file,
-        "loading_hints",
-        True,
-    )
-
-    # Load the custom ai configs.
-    _load_custom_ai(config_file["ai_custom"])
-
-    global ai_model
-    ai_model_name, _ = _load_config_value(
-        config_file,
-        "ai_model",
-    )
-    if is_valid_ai_model(ai_model_name, api_keys):
-        # Load the ai_model from loaded models.
-        ai_model = get_ai_model_by_name(ai_model_name, api_keys)
-    else:
-        print(f"Error: {ai_model_name} is not a valid AI model")
-        sys.exit(4)
-
-    # Health check verifies this later in the init process.
-    global esbmc_path
-    esbmc_path_str: str
-    esbmc_path_str, _ = _load_config_value(
-        config_file,
-        "esbmc_path",
-        str(esbmc_path),
-    )
-    # Expand variables and tilde.
-    esbmc_path = Path(os.path.expanduser(os.path.expandvars(esbmc_path_str)))
-
-    # Load the AI data from the file that will command the AI for all modes.
-    printv("Initializing AI data")
-    _load_ai_data(config=config_file)
-
-
-def load_args(args) -> None:
-    set_verbose(args.verbose)
-
-    global ai_model
-    if args.ai_model != "":
-        if is_valid_ai_model(args.ai_model, api_keys):
-            ai_model = get_ai_model_by_name(args.ai_model, api_keys)
-        else:
-            print(f"Error: invalid --ai-model parameter {args.ai_model}")
-            sys.exit(4)
-
-    global raw_conversation
-    raw_conversation = args.raw_conversation
-
-    global esbmc_params
-    # If append flag is set, then append.
-    if args.append:
-        esbmc_params.extend(args.remaining)
-    elif len(args.remaining) != 0:
-        esbmc_params = args.remaining
-
-    global generate_patches
-    generate_patches = args.generate_patches
