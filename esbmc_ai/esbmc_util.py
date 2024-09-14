@@ -99,7 +99,6 @@ class ESBMCUtil:
     @classmethod
     def esbmc(
         cls,
-        esbmc_path: Path,
         path: Path,
         esbmc_params: list,
         timeout: Optional[float] = None,
@@ -107,7 +106,7 @@ class ESBMCUtil:
         """Exit code will be 0 if verification successful, 1 if verification
         failed. And any other number for compilation error/general errors."""
         # Build parameters
-        esbmc_cmd = [str(esbmc_path)]
+        esbmc_cmd = [str(cls.esbmc_path)]
         esbmc_cmd.extend(esbmc_params)
         esbmc_cmd.append(str(path))
 
@@ -160,7 +159,6 @@ class ESBMCUtil:
 
         # Call ESBMC to temporary folder.
         results = cls.esbmc(
-            esbmc_path=cls.esbmc_path,
             path=file_path,
             esbmc_params=esbmc_params,
             timeout=timeout,
