@@ -27,6 +27,7 @@ langchain-openai = "*"
 langchain-community = "*"
 langchain-ollama = "*"
 lizard = "*"
+toml = "*"
 
 [dev-packages]
 pylint = "*"
