@@ -31,7 +31,7 @@ class ChatResponse(NamedTuple):
     finish_reason: FinishReason = FinishReason.null
 
 
-def json_to_base_message(json_string: dict) -> BaseMessage:
+def dict_to_base_message(json_string: dict) -> BaseMessage:
     """Converts a json representation of messages (such as in config.json),
     into LangChain object messages. The three recognized roles are:
     1. System
@@ -49,6 +49,6 @@ def json_to_base_message(json_string: dict) -> BaseMessage:
         raise Exception()
 
 
-def json_to_base_messages(json_messages: list[dict]) -> list[BaseMessage]:
+def list_to_base_messages(json_messages: list[dict]) -> list[BaseMessage]:
     """Converts a list of messages from JSON format to a list of BaseMessage."""
-    return [json_to_base_message(msg) for msg in json_messages]
+    return [dict_to_base_message(msg) for msg in json_messages]
