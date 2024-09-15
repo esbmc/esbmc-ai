@@ -20,7 +20,7 @@ _ = readline
 import argparse
 
 
-import esbmc_ai.config as config
+from esbmc_ai import Config
 from esbmc_ai import __author__, __version__
 from esbmc_ai.solution import SourceFile, Solution, get_solution
 
@@ -85,10 +85,11 @@ For all the options, run ESBMC with -h as a parameter:
 def check_health() -> None:
     printv("Performing health check...")
     # Check that ESBMC exists.
-    if os.path.exists(config.esbmc_path):
+    esbmc_path: Path = Config.get_value("esbmc.path")
+    if esbmc_path.exists():
         printv("ESBMC has been located")
     else:
-        print(f"Error: ESBMC could not be found in {config.esbmc_path}")
+        print(f"Error: ESBMC could not be found in {esbmc_path}")
         sys.exit(3)
 
 
@@ -134,17 +135,16 @@ def _run_esbmc(source_file: SourceFile, anim: Optional[LoadingWidget] = None) ->
     if anim:
         anim.start("ESBMC is processing... Please Wait")
     exit_code, esbmc_output = ESBMCUtil.esbmc(
-        esbmc_path=config.esbmc_path,
         path=source_file.file_path,
-        esbmc_params=config.esbmc_params,
-        timeout=config.verifier_timeout,
+        esbmc_params=Config.get_value("esbmc.params"),
+        timeout=Config.get_value("esbmc.timeout"),
     )
     if anim:
         anim.stop()
 
     # ESBMC will output 0 for verification success and 1 for verification
     # failed, if anything else gets thrown, it's an ESBMC error.
-    if not config.allow_successful and exit_code == 0:
+    if not Config.get_value("allow_successful") and exit_code == 0:
         printv("Success!")
         print(esbmc_output)
         sys.exit(0)
@@ -167,6 +167,28 @@ def init_commands() -> None:
     fix_code_command.on_solution_signal.add_listener(update_solution)
 
 
+def _execute_fix_code_command(source_file: SourceFile) -> FixCodeCommandResult:
+    """Shortcut method to execute fix code command."""
+    return fix_code_command.execute(
+        ai_model=Config.get_ai_model(),
+        source_file=source_file,
+        generate_patches=Config.generate_patches,
+        message_history=Config.get_value("fix_code.message_history"),
+        api_keys=Config.api_keys,
+        temperature=Config.get_value("fix_code.temperature"),
+        max_attempts=Config.get_value("fix_code.max_attempts"),
+        requests_max_tries=Config.get_llm_requests_max_tries(),
+        requests_timeout=Config.get_llm_requests_timeout(),
+        esbmc_params=Config.get_value("esbmc.params"),
+        raw_conversation=Config.raw_conversation,
+        temp_auto_clean=Config.get_value("temp_auto_clean"),
+        verifier_timeout=Config.get_value("esbmc.timeout"),
+        source_code_format=Config.get_value("source_code_format"),
+        esbmc_output_format=Config.get_value("esbmc.output_type"),
+        scenarios=Config.get_fix_code_scenarios(),
+    )
+
+
 def _run_command_mode(command: ChatCommand, args: argparse.Namespace) -> None:
     path_arg: Path = Path(args.filename)
 
@@ -185,10 +207,7 @@ def _run_command_mode(command: ChatCommand, args: argparse.Namespace) -> None:
                 esbmc_output: str = _run_esbmc(source_file)
                 source_file.assign_verifier_output(esbmc_output)
 
-                result: FixCodeCommandResult = fix_code_command.execute(
-                    source_file=source_file,
-                    generate_patches=config.generate_patches,
-                )
+                result: FixCodeCommandResult = _execute_fix_code_command(source_file)
 
                 print(result)
         case _:
@@ -234,7 +253,6 @@ def main() -> None:
     )
 
     parser.add_argument(
-        "-V",
         "--version",
         action="version",
         version="%(prog)s {version}".format(version=__version__),
@@ -292,28 +310,32 @@ def main() -> None:
         help="Generate patch files and place them in the same folder as the source files.",
     )
 
+    # parser.add_argument(
+    #     "--generate-default-config",
+    #     action="store_true",
+    #     default=False,
+    #     help="Will generate and save the default config to the current working directory as 'esbmcai.toml'."
+    # )
+
     args: argparse.Namespace = parser.parse_args()
 
     print(f"ESBMC-AI {__version__}")
     print(f"Made by {__author__}")
     print()
 
-    config.load_envs()
-    config.load_config(config.cfg_path)
-    config.load_args(args)
-
-    ESBMCUtil.init(config.esbmc_path)
+    Config.init(args)
+    ESBMCUtil.init(Config.get_value("esbmc.path"))
 
     check_health()
 
-    printv(f"Source code format: {config.source_code_format}")
-    printv(f"ESBMC output type: {config.esbmc_output_type}")
+    printv(f"Source code format: {Config.get_value('source_code_format')}")
+    printv(f"ESBMC output type: {Config.get_value('esbmc.output_type')}")
 
     anim: LoadingWidget = create_loading_widget()
 
     # Read the source code and esbmc output.
     printv("Reading source code...")
-    print(f"Running ESBMC with {config.esbmc_params}\n")
+    print(f"Running ESBMC with {Config.get_value('esbmc.params')}\n")
 
     assert isinstance(args.filename, str)
 
@@ -368,23 +390,23 @@ def main() -> None:
     source_file.assign_verifier_output(esbmc_output)
     del esbmc_output
 
-    printv(f"Initializing the LLM: {config.ai_model.name}\n")
-    chat_llm: BaseChatModel = config.ai_model.create_llm(
-        api_keys=config.api_keys,
-        temperature=config.chat_prompt_user_mode.temperature,
-        requests_max_tries=config.requests_max_tries,
-        requests_timeout=config.requests_timeout,
+    printv(f"Initializing the LLM: {Config.get_ai_model().name}\n")
+    chat_llm: BaseChatModel = Config.get_ai_model().create_llm(
+        api_keys=Config.api_keys,
+        temperature=Config.get_value("user_chat.temperature"),
+        requests_max_tries=Config.get_value("requests.max_tries"),
+        requests_timeout=Config.get_value("requests.timeout"),
     )
 
     printv("Creating user chat")
     global chat
     chat = UserChat(
-        ai_model_agent=config.chat_prompt_user_mode,
-        ai_model=config.ai_model,
+        ai_model=Config.get_ai_model(),
         llm=chat_llm,
         source_code=source_file.latest_content,
         esbmc_output=source_file.latest_verifier_output,
-        set_solution_messages=config.chat_prompt_user_mode.scenarios["set_solution"],
+        system_messages=Config.get_user_chat_system_messages(),
+        set_solution_messages=Config.get_user_chat_set_solution(),
     )
 
     printv("Initializing commands...")
@@ -392,11 +414,11 @@ def main() -> None:
 
     # Show the initial output.
     response: ChatResponse
-    if len(config.chat_prompt_user_mode.initial_prompt) > 0:
+    if len(str(Config.get_user_chat_initial().content)) > 0:
         printv("Using initial prompt from file...\n")
         anim.start("Model is parsing ESBMC output... Please Wait")
         response = chat.send_message(
-            message=config.chat_prompt_user_mode.initial_prompt,
+            message=str(Config.get_user_chat_initial().content),
         )
         anim.stop()
 
@@ -424,10 +446,7 @@ def main() -> None:
                 print()
                 print("ESBMC-AI will generate a fix for the code...")
 
-                result: FixCodeCommandResult = fix_code_command.execute(
-                    source_file=source_file,
-                    generate_patches=config.generate_patches,
-                )
+                result: FixCodeCommandResult = _execute_fix_code_command(source_file)
 
                 if result.successful:
                     print(

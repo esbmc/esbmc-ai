@@ -12,7 +12,7 @@ from itertools import cycle
 from threading import Thread
 from typing import Optional
 
-from esbmc_ai import config
+from esbmc_ai import Config
 
 
 class LoadingWidget(object):
@@ -56,7 +56,7 @@ class LoadingWidget(object):
         terminal.flush()
 
     def start(self, text: str = "Please Wait") -> None:
-        if not config.loading_hints:
+        if not Config.get_value("loading_hints"):
             return
         self.done = False
         self.loading_text = text
@@ -65,7 +65,7 @@ class LoadingWidget(object):
         self.thread.start()
 
     def stop(self) -> None:
-        if not config.loading_hints:
+        if not Config.get_value("loading_hints"):
             return
         self.done = True
         # Block until end.

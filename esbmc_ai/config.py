@@ -15,12 +15,22 @@ from typing import (
     List,
     NamedTuple,
     Optional,
+    Sequence,
 )
 
 from esbmc_ai.chat_response import list_to_base_messages
 from esbmc_ai.logging import set_verbose
 from .ai_models import *
 from .api_key_collection import APIKeyCollection
+
+
+FixCodeScenarios = dict[str, dict[str, str | Sequence[BaseMessage]]]
+"""Type for scenarios. A single scenario contains initial and system components.
+
+* Initial message can be accessed like so: `x["base"]["initial"]`
+* System message can be accessed like so: `x["base"]["system"]`"""
+
+default_scenario: str = "base"
 
 
 class ConfigField(NamedTuple):
@@ -42,6 +52,11 @@ class ConfigField(NamedTuple):
     # as a more complex type than that which is represented in the config
     # file.
     on_load: Callable[[Any], Any] = lambda v: v
+    # If defined, will be called and allows to custom load complex types that
+    # may not match 1-1 in the config. The config file passed as a parameter here
+    # is the original, unflattened version. The value returned should be the value
+    # assigned to this field.
+    on_read: Optional[Callable[[dict[str, Any]], Any]] = None
     error_message: Optional[str] = None
 
 
@@ -121,8 +136,8 @@ class Config:
         ConfigField(
             name="esbmc.path",
             default_value=None,
-            validate=lambda v: isinstance(v, str) and Path(v).is_file(),
-            on_load=lambda v: Path(v),
+            validate=lambda v: isinstance(v, str) and Path(v).expanduser().is_file(),
+            on_load=lambda v: Path(v).expanduser(),
         ),
         ConfigField(
             name="esbmc.params",
@@ -151,7 +166,7 @@ class Config:
         ConfigField(
             name="esbmc.timeout",
             default_value=60,
-            validate=lambda v: isinstance(v, float),
+            validate=lambda v: isinstance(v, int),
         ),
         ConfigField(
             name="llm_requests.max_tries",
@@ -161,7 +176,7 @@ class Config:
         ConfigField(
             name="llm_requests.timeout",
             default_value=60,
-            validate=lambda v: isinstance(v, float),
+            validate=lambda v: isinstance(v, int),
         ),
         ConfigField(
             name="user_chat.temperature",
@@ -198,69 +213,113 @@ class Config:
             validate=lambda v: _validate_prompt_template_conversation(v),
             on_load=lambda v: list_to_base_messages(v),
         ),
+        ConfigField(
+            name="prompt_templates.user_chat.set_solution",
+            default_value=None,
+            validate=lambda v: _validate_prompt_template_conversation(v),
+            on_load=lambda v: list_to_base_messages(v),
+        ),
         # Here we have a list of prompt templates that are for each scenario.
         # The base scenario prompt template is required.
         ConfigField(
             name="prompt_templates.fix_code",
             default_value=None,
-            validate=lambda v: "base" in v
+            validate=lambda v: default_scenario in v
             and all(
                 [
                     _validate_prompt_template(prompt_template)
                     for prompt_template in v.values()
                 ]
             ),
-            on_load=lambda v: {
+            on_read=lambda config_file: {
                 scenario: {
                     "initial": HumanMessage(content=conv["initial"]),
                     "system": list_to_base_messages(conv["system"]),
                 }
-                for scenario, conv in v.items()
+                for scenario, conv in config_file["prompt_templates"][
+                    "fix_code"
+                ].items()
             },
         ),
     ]
     _values: Dict[str, Any] = {}
+
+    # Define some shortcuts for the values here (instead of having to use get_value)
 
     @classmethod
     def get_ai_model(cls) -> AIModel:
         return cls.get_value("ai_model")
 
     @classmethod
-    def get_user_chat_temperature(cls) -> float:
-        return cls.get_value("user_chat.temperature")
+    def get_llm_requests_max_tries(cls) -> int:
+        return cls.get_value("llm_requests.max_tries")
 
     @classmethod
-    def get_prompt_templates_user_chat_initial(cls) -> BaseMessage:
+    def get_llm_requests_timeout(cls) -> float:
+        return cls.get_value("llm_requests.timeout")
+
+    @classmethod
+    def get_user_chat_initial(cls) -> BaseMessage:
         return cls.get_value("prompt_templates.user_chat.initial")
 
     @classmethod
-    def init(cls, args: Any, config_path: Path) -> None:
+    def get_user_chat_system_messages(cls) -> list[BaseMessage]:
+        return cls.get_value("prompt_templates.user_chat.system")
+
+    @classmethod
+    def get_user_chat_set_solution(cls) -> list[BaseMessage]:
+        return cls.get_value("prompt_templates.user_chat.set_solution")
+
+    @classmethod
+    def get_fix_code_scenarios(cls) -> FixCodeScenarios:
+        return cls.get_value("prompt_templates.fix_code")
+
+    @classmethod
+    def init(cls, args: Any) -> None:
         cls._load_envs()
 
-        if not config_path.exists() and config_path.is_file():
-            print(f"Error: Config not found: {config_path}")
+        if not Config.cfg_path.exists() and Config.cfg_path.is_file():
+            print(f"Error: Config not found: {Config.cfg_path}")
             sys.exit(1)
 
-        with open(config_path, "r") as file:
-            config_file: dict[str, Any] = toml.loads(file.read())
+        with open(Config.cfg_path, "r") as file:
+            original_config_file: dict[str, Any] = toml.loads(file.read())
 
         # Load custom AIs
-        _load_custom_ai(config_file["custom_ai"])
+        if "ai_custom" in original_config_file:
+            _load_custom_ai(original_config_file["ai_custom"])
+
+        # Flatten dict as the _fields are defined in a flattened format for
+        # convenience.
+        config_file: dict[str, Any] = cls._flatten_dict(original_config_file)
 
         # Load all the config file field entries
         for field in cls._fields:
+            # If on_read is overwritten, then the reading process is manually
+            # defined so fallback to that.
+            if field.on_read:
+                cls._values[field.name] = field.on_read(original_config_file)
+                continue
+
+            # Proceed to default read
+
             # Is field entry found in config?
             if field.name in config_file:
-                if field.default_value == None and not field.default_value_none:
+                # Check if None and not allowed!
+                if (
+                    field.default_value == None
+                    and not field.default_value_none
+                    and config_file[field.name] == None
+                ):
                     raise ValueError(
-                        f"The config entry is None when it can't be: {field.name}"
+                        f"The config entry {field.name} has a None value when it can't be"
                     )
 
                 # Validate field
                 assert field.validate(config_file[field.name]), (
                     field.error_message
                     if field.error_message
-                    else f"Field: {field.name} is invalid."
+                    else f"Field: {field.name} is invalid: {config_file[field.name]}"
                 )
 
                 # Assign field from config file
@@ -369,11 +428,20 @@ class Config:
         elif len(args.remaining) != 0:
             cls.set_value("esbmc_params", args.remaining)
 
-        global raw_conversation
-        raw_conversation = args.raw_conversation
+        Config.raw_conversation = args.raw_conversation
+        Config.generate_patches = args.generate_patches
 
-        global generate_patches
-        generate_patches = args.generate_patches
+    @classmethod
+    def _flatten_dict(cls, d, parent_key="", sep="."):
+        """Recursively flattens a nested dictionary."""
+        items = {}
+        for k, v in d.items():
+            new_key = parent_key + sep + k if parent_key else k
+            if isinstance(v, dict):
+                items.update(cls._flatten_dict(v, new_key, sep=sep))
+            else:
+                items[new_key] = v
+        return items
 
 
 def _load_custom_ai(config: dict) -> None:

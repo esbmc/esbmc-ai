@@ -4,7 +4,7 @@ from abc import abstractmethod
 from typing import Any, Iterable, Optional, Union
 from enum import Enum
 from langchain_core.language_models import BaseChatModel
-from pydantic.v1.types import SecretStr
+from pydantic.types import SecretStr
 from typing_extensions import override
 
 from langchain_openai import ChatOpenAI

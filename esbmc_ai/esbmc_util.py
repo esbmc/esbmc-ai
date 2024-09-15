@@ -101,7 +101,7 @@ class ESBMCUtil:
         cls,
         path: Path,
         esbmc_params: list,
-        timeout: Optional[float] = None,
+        timeout: Optional[int] = None,
     ):
         """Exit code will be 0 if verification successful, 1 if verification
         failed. And any other number for compilation error/general errors."""
@@ -140,7 +140,7 @@ class ESBMCUtil:
         esbmc_params: list,
         auto_clean: bool,
         temp_file_dir: Optional[Path] = None,
-        timeout: Optional[float] = None,
+        timeout: Optional[int] = None,
     ):
 
         file_path: Path
