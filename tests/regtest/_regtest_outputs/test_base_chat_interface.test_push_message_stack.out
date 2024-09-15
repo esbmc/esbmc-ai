@@ -1,2 +1,5 @@
-(SystemMessage(content='System message'), AIMessage(content='OK'))
-[AIMessage(content='Test 1'), HumanMessage(content='Test 2'), SystemMessage(content='Test 3')]
+system: System message
+ai: OK
+ai: Test 1
+human: Test 2
+system: Test 3

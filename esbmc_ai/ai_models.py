@@ -115,7 +115,7 @@ class AIModel(object):
             if content.find("}", look_pointer) != -1:
                 # Do it in reverse with reverse keys.
                 content = add_safeguards(content[::-1], "}", reversed_keys)[::-1]
-            new_msg = msg.copy()
+            new_msg = msg.model_copy()
             new_msg.content = content
             result.append(new_msg)
         return result

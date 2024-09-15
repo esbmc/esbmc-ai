@@ -9,8 +9,8 @@ from langchain.schema import (
     SystemMessage,
 )
 
+from esbmc_ai.config import default_scenario
 from esbmc_ai.ai_models import AIModel
-from esbmc_ai.config import AIAgentConversation, ChatPromptSettings
 from esbmc_ai.reverse_order_solution_generator import ReverseOrderSolutionGenerator
 
 
@@ -36,22 +36,19 @@ def test_send_message(setup_llm_model) -> None:
 def test_message_stack(setup_llm_model) -> None:
     llm, model = setup_llm_model
 
-    chat_settings = ChatPromptSettings(
-        system_messages=AIAgentConversation(
-            messages=(
-                SystemMessage(content="Test message 1"),
-                HumanMessage(content="Test message 2"),
-                AIMessage(content="Test message 3"),
-            ),
-        ),
-        initial_prompt="Initial test message",
-        temperature=1.0,
-    )
-
     solution_generator = ReverseOrderSolutionGenerator(
         llm=llm,
         ai_model=model,
-        ai_model_agent=chat_settings,
+        scenarios={
+            "base": {
+                "initial": "Initial test message",
+                "system": (
+                    SystemMessage(content="Test message 1"),
+                    HumanMessage(content="Test message 2"),
+                    AIMessage(content="Test message 3"),
+                ),
+            }
+        },
     )
 
     with pytest.raises(AssertionError):
@@ -61,10 +58,10 @@ def test_message_stack(setup_llm_model) -> None:
 
     solution, _ = solution_generator.generate_solution()
     assert solution == llm.responses[0]
-    solution_generator.ai_model_agent.initial_prompt = "Test message 2"
+    solution_generator.scenarios[default_scenario]["initial"] = "Test message 2"
     solution, _ = solution_generator.generate_solution()
     assert solution == llm.responses[1]
-    solution_generator.ai_model_agent.initial_prompt = "Test message 3"
+    solution_generator.scenarios[default_scenario]["initial"] = "Test message 3"
     solution, _ = solution_generator.generate_solution()
     assert solution == llm.responses[2]
 

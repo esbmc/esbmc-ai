@@ -1,14 +1,14 @@
 # Author: Yiannis Charalambous
 
-from typing import Optional
+from typing import Any, Optional
 from langchain_core.language_models import FakeListChatModel
 import pytest
 
 from langchain.schema import HumanMessage, AIMessage, SystemMessage
 
+from esbmc_ai.config import default_scenario
 from esbmc_ai.ai_models import AIModel
 from esbmc_ai.chat_response import ChatResponse
-from esbmc_ai.config import AIAgentConversation, ChatPromptSettings
 from esbmc_ai.chats.latest_state_solution_generator import LatestStateSolutionGenerator
 
 
@@ -27,64 +27,73 @@ def setup_llm_model():
 
 def test_send_message(setup_llm_model) -> None:
     llm, model = setup_llm_model
-    chat_settings = ChatPromptSettings(
-        system_messages=AIAgentConversation(
-            messages=(
-                SystemMessage(content="Test message 1"),
-                HumanMessage(content="Test message 2"),
-                AIMessage(content="Test message 3"),
-            ),
-        ),
-        initial_prompt="Initial test message",
-        temperature=1.0,
-    )
 
     solution_generator = LatestStateSolutionGenerator(
+        scenarios={
+            "base": {
+                "initial": "Initial test message",
+                "system": [
+                    SystemMessage(content="Test message 1"),
+                    HumanMessage(content="Test message 2"),
+                    AIMessage(content="Test message 3"),
+                ],
+            }
+        },
         llm=llm,
         ai_model=model,
-        ai_model_agent=chat_settings,
+    )
+
+    # Create an object that can be edited by reference
+    class Referenced:
+        def __init__(self, value: Any) -> None:
+            self.value: Any = value
+
+    initial_prompt: Referenced = Referenced(
+        solution_generator.scenarios[default_scenario]["initial"]
     )
 
     def send_message_mock(message: Optional[str] = None) -> ChatResponse:
         assert len(solution_generator.messages) == 1
-        assert solution_generator.messages[0] == HumanMessage(
-            content=chat_settings.initial_prompt,
-        )
+        assert solution_generator.messages[0].content == initial_prompt.value
+        assert solution_generator.messages[0].type == HumanMessage(content="").type
 
         return ChatResponse()
 
     # Use the LLM method to check if the code is overwritten
     solution_generator.send_message = send_message_mock
-
+    # Call update state once since `generate_solution` requires it
     solution_generator.update_state("", "")
 
+    # Check now if the message stack is wiped per generate solution call.
     solution_generator.generate_solution()
-    chat_settings.initial_prompt = "aaaaaaa"
+    initial_prompt.value = "aaaaaaa"
+    solution_generator.scenarios[default_scenario]["initial"] = "aaaaaaa"
+
     solution_generator.generate_solution()
-    chat_settings.initial_prompt = "bbbbbbb"
+    initial_prompt.value = "bbbbbbb"
+    solution_generator.scenarios[default_scenario]["initial"] = "bbbbbbb"
+
     solution_generator.generate_solution()
-    chat_settings.initial_prompt = "ccccccc"
+    initial_prompt.value = "ccccccc"
+    solution_generator.scenarios[default_scenario]["initial"] = "ccccccc"
 
 
 def test_message_stack(setup_llm_model) -> None:
     llm, model = setup_llm_model
 
-    chat_settings = ChatPromptSettings(
-        system_messages=AIAgentConversation(
-            messages=(
-                SystemMessage(content="Test message 1"),
-                HumanMessage(content="Test message 2"),
-                AIMessage(content="Test message 3"),
-            ),
-        ),
-        initial_prompt="Initial test message",
-        temperature=1.0,
-    )
-
     solution_generator = LatestStateSolutionGenerator(
         llm=llm,
         ai_model=model,
-        ai_model_agent=chat_settings,
+        scenarios={
+            "base": {
+                "initial": "Initial test message",
+                "system": (
+                    SystemMessage(content="Test message 1"),
+                    HumanMessage(content="Test message 2"),
+                    AIMessage(content="Test message 3"),
+                ),
+            }
+        },
     )
 
     with pytest.raises(AssertionError):
@@ -94,10 +103,10 @@ def test_message_stack(setup_llm_model) -> None:
 
     solution, _ = solution_generator.generate_solution()
     assert solution == llm.responses[0]
-    solution_generator.ai_model_agent.initial_prompt = "Test message 2"
+    solution_generator.scenarios[default_scenario]["initial"] = "Test message 2"
     solution, _ = solution_generator.generate_solution()
     assert solution == llm.responses[1]
-    solution_generator.ai_model_agent.initial_prompt = "Test message 3"
+    solution_generator.scenarios[default_scenario]["initial"] = "Test message 3"
     solution, _ = solution_generator.generate_solution()
     assert solution == llm.responses[2]
 

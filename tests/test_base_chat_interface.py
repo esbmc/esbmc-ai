@@ -7,7 +7,6 @@ from langchain.schema import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from esbmc_ai.ai_models import AIModel
 from esbmc_ai.chats.base_chat_interface import BaseChatInterface
 from esbmc_ai.chat_response import ChatResponse
-from esbmc_ai.config import AIAgentConversation, ChatPromptSettings
 
 
 @pytest.fixture(scope="module")
@@ -28,16 +27,14 @@ def test_push_message_stack(setup) -> None:
     ai_model, system_messages = setup
 
     chat: BaseChatInterface = BaseChatInterface(
-        ai_model_agent=ChatPromptSettings(
-            AIAgentConversation.from_seq(system_messages),
-            initial_prompt="",
-            temperature=1.0,
-        ),
+        system_messages=system_messages,
         ai_model=ai_model,
         llm=llm,
     )
 
-    assert chat.ai_model_agent.system_messages.messages == tuple(system_messages)
+    for msg, chat_msg in zip(system_messages, chat._system_messages):
+        assert msg.type == chat_msg.type
+        assert msg.content == chat_msg.content
 
     messages: list[BaseMessage] = [
         AIMessage(content="Test 1"),
@@ -61,11 +58,7 @@ def test_send_message(setup) -> None:
     ai_model, system_messages = setup
 
     chat: BaseChatInterface = BaseChatInterface(
-        ai_model_agent=ChatPromptSettings(
-            AIAgentConversation.from_seq(system_messages),
-            initial_prompt="",
-            temperature=1.0,
-        ),
+        system_messages=system_messages,
         ai_model=ai_model,
         llm=llm,
     )
@@ -101,11 +94,7 @@ def test_apply_template() -> None:
     llm: FakeListChatModel = FakeListChatModel(responses=responses)
 
     chat: BaseChatInterface = BaseChatInterface(
-        ai_model_agent=ChatPromptSettings(
-            AIAgentConversation.from_seq(system_messages),
-            initial_prompt="{source_code}{esbmc_output}",
-            temperature=1.0,
-        ),
+        system_messages=system_messages,
         ai_model=ai_model,
         llm=llm,
     )

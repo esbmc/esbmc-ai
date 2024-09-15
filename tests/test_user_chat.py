@@ -7,7 +7,6 @@ from langchain.schema import AIMessage, SystemMessage
 
 from esbmc_ai.ai_models import AIModel
 from esbmc_ai.chat_response import ChatResponse, FinishReason
-from esbmc_ai.config import AIAgentConversation, ChatPromptSettings
 from esbmc_ai.chats.user_chat import UserChat
 
 
@@ -18,46 +17,46 @@ def setup():
         AIMessage(content="OK"),
     ]
 
-    set_solution_messages = [
-        SystemMessage(content="Corrected output"),
-    ]
-
     summary_text = "THIS IS A SUMMARY OF THE CONVERSATION"
     chat: UserChat = UserChat(
-        ai_model_agent=ChatPromptSettings(
-            system_messages=AIAgentConversation.from_seq(system_messages),
-            initial_prompt="This is initial prompt",
-            temperature=1.0,
-        ),
+        system_messages=system_messages,
         ai_model=AIModel(name="test", tokens=12),
         llm=FakeListChatModel(responses=[summary_text]),
         source_code="This is source code",
         esbmc_output="This is esbmc output",
-        set_solution_messages=AIAgentConversation.from_seq(set_solution_messages),
+        set_solution_messages=[
+            SystemMessage(content="Corrected output"),
+        ],
     )
 
     return chat, summary_text, system_messages
 
 
-def test_compress_message_stack(setup) -> None:
+@pytest.fixture
+def initial_prompt():
+    return "This is initial prompt"
+
+
+def test_compress_message_stack(setup, initial_prompt) -> None:
     chat, summary_text, system_messages = setup
 
-    chat.messages = [SystemMessage(content=chat.ai_model_agent.initial_prompt)]
+    chat.messages = [SystemMessage(content=initial_prompt)]
 
     chat.compress_message_stack()
 
     # Check system messages
-    assert chat.ai_model_agent.system_messages.messages == tuple(system_messages)
+    for msg, chat_msg in zip(system_messages, chat._system_messages):
+        assert msg.type == chat_msg.type and msg.content == chat_msg.content
 
     # Check normal messages
-    assert chat.messages == [SystemMessage(content=summary_text)]
+    assert chat.messages[0].content == summary_text
 
 
-def test_automatic_compress(setup) -> None:
+def test_automatic_compress(setup, initial_prompt) -> None:
     chat, summary_text, system_messages = setup
 
     # Make the prompt extra large.
-    big_prompt: str = chat.ai_model_agent.initial_prompt * 10
+    big_prompt: str = initial_prompt * 10
 
     response: ChatResponse = chat.send_message(big_prompt)
 
@@ -66,7 +65,8 @@ def test_automatic_compress(setup) -> None:
     chat.compress_message_stack()
 
     # Check system messages
-    assert chat.ai_model_agent.system_messages.messages == tuple(system_messages)
+    for msg, chat_msg in zip(system_messages, chat._system_messages):
+        assert msg.type == chat_msg.type and msg.content == chat_msg.content
 
     # Check normal messages - Should be summarized automatically
-    assert chat.messages == [SystemMessage(content=summary_text)]
+    assert chat.messages[0].content == summary_text

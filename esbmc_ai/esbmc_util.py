@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Optional
 
 from esbmc_ai.solution import SourceFile
+from esbmc_ai.config import default_scenario
 
 
 class ESBMCUtil:
@@ -48,6 +49,10 @@ class ESBMCUtil:
         scenario: str = from_loc_error_msg[scenario_index + 1 :]
         scenario_end_l_index: int = scenario.find("\n")
         scenario = scenario[:scenario_end_l_index].strip()
+
+        if not scenario:
+            return default_scenario
+
         return scenario
 
     @classmethod
