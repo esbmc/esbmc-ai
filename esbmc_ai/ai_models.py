@@ -248,8 +248,9 @@ def is_valid_ai_model(
     name: str = ai_model.name if isinstance(ai_model, AIModel) else ai_model
 
     # Try accessing openai api and checking if there is a model defined.
-    # NOTE: This is not tested as no way to mock API currently.
-    if api_keys and api_keys.openai:
+    # Will only work on models that start with gpt- to avoid spamming API and
+    # getting blocked. NOTE: This is not tested as no way to mock API currently.
+    if name.startswith("gpt-") and api_keys and api_keys.openai:
         try:
             from openai import Client
 
