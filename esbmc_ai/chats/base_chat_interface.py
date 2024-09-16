@@ -10,7 +10,6 @@ from langchain.schema import (
 )
 from langchain_core.language_models import BaseChatModel
 
-from esbmc_ai.config import ChatPromptSettings
 from esbmc_ai.chat_response import ChatResponse, FinishReason
 from esbmc_ai.ai_models import AIModel
 
@@ -21,16 +20,13 @@ class BaseChatInterface(object):
 
     def __init__(
         self,
-        ai_model_agent: ChatPromptSettings,
+        system_messages: list[BaseMessage],
         llm: BaseChatModel,
         ai_model: AIModel,
     ) -> None:
         super().__init__()
         self.ai_model: AIModel = ai_model
-        self.ai_model_agent: ChatPromptSettings = ai_model_agent
-        self._system_messages: list[BaseMessage] = list(
-            ai_model_agent.system_messages.messages
-        )
+        self._system_messages: list[BaseMessage] = system_messages
         self.messages: list[BaseMessage] = []
         self.llm: BaseChatModel = llm
 

@@ -1,5 +1,6 @@
 # Author: Yiannis Charalambous
 
+from typing import Optional
 from typing_extensions import override
 from langchain_core.messages import BaseMessage
 from esbmc_ai.chats.solution_generator import SolutionGenerator
@@ -13,13 +14,15 @@ class LatestStateSolutionGenerator(SolutionGenerator):
     output state."""
 
     @override
-    def generate_solution(self) -> tuple[str, FinishReason]:
+    def generate_solution(
+        self, override_scenario: Optional[str] = None
+    ) -> tuple[str, FinishReason]:
         # Backup message stack and clear before sending base message. We want
         # to keep the message stack intact because we will print it with
         # print_raw_conversation.
         messages: list[BaseMessage] = self.messages
         self.messages: list[BaseMessage] = []
-        solution, finish_reason = super().generate_solution()
+        solution, finish_reason = super().generate_solution(override_scenario)
         # Append last messages to the messages stack
         messages.extend(self.messages)
         # Restore

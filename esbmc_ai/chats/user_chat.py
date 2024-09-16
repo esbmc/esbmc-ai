@@ -8,7 +8,6 @@ from langchain_core.language_models import BaseChatModel
 from langchain_community.chat_message_histories import ChatMessageHistory
 
 
-from esbmc_ai.config import AIAgentConversation, ChatPromptSettings
 from esbmc_ai.ai_models import AIModel
 
 from .base_chat_interface import BaseChatInterface
@@ -19,15 +18,15 @@ class UserChat(BaseChatInterface):
 
     def __init__(
         self,
-        ai_model_agent: ChatPromptSettings,
         ai_model: AIModel,
         llm: BaseChatModel,
         source_code: str,
         esbmc_output: str,
-        set_solution_messages: AIAgentConversation,
+        system_messages: list[BaseMessage],
+        set_solution_messages: list[BaseMessage],
     ) -> None:
         super().__init__(
-            ai_model_agent=ai_model_agent,
+            system_messages=system_messages,
             ai_model=ai_model,
             llm=llm,
         )
@@ -44,7 +43,7 @@ class UserChat(BaseChatInterface):
     def set_solution(self, source_code: str) -> None:
         """Sets the solution to the problem ESBMC reported, this will inform the AI."""
 
-        for msg in self.set_solution_messages.messages:
+        for msg in self.set_solution_messages:
             self.push_to_message_stack(msg)
 
         self.apply_template_value(source_code_solution=source_code)

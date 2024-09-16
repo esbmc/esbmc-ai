@@ -1,23 +1,17 @@
 # Author: Yiannis Charalambous 2023
 
-from re import S
 from typing import Optional
 from langchain_core.language_models import BaseChatModel
 from typing_extensions import override
 from langchain.schema import BaseMessage, HumanMessage
 
 from esbmc_ai.chat_response import ChatResponse, FinishReason
-from esbmc_ai.config import ChatPromptSettings, DynamicAIModelAgent
+from esbmc_ai.config import FixCodeScenarios, default_scenario
 from esbmc_ai.solution import SourceFile
 
 from esbmc_ai.ai_models import AIModel
 from .base_chat_interface import BaseChatInterface
-from esbmc_ai.esbmc_util import (
-    esbmc_get_counter_example,
-    esbmc_get_violated_property,
-    get_source_code_err_line_idx,
-    get_clang_err_line_index,
-)
+from esbmc_ai.esbmc_util import ESBMCUtil
 
 
 class ESBMCTimedOutException(Exception):
@@ -34,12 +28,12 @@ def get_source_code_formatted(
     match source_code_format:
         case "single":
             # Get source code error line from esbmc output
-            line: Optional[int] = get_source_code_err_line_idx(esbmc_output)
+            line: Optional[int] = ESBMCUtil.get_source_code_err_line_idx(esbmc_output)
             if line:
                 return source_code.splitlines(True)[line]
 
             # Check if it parses
-            line = get_clang_err_line_index(esbmc_output)
+            line = ESBMCUtil.get_clang_err_line_index(esbmc_output)
             if line:
                 return source_code.splitlines(True)[line]
 
@@ -64,12 +58,12 @@ def get_esbmc_output_formatted(esbmc_output_type: str, esbmc_output: str) -> str
 
     match esbmc_output_type:
         case "vp":
-            value: Optional[str] = esbmc_get_violated_property(esbmc_output)
+            value: Optional[str] = ESBMCUtil.esbmc_get_violated_property(esbmc_output)
             if not value:
                 raise ValueError("Not found violated property." + esbmc_output)
             return value
         case "ce":
-            value: Optional[str] = esbmc_get_counter_example(esbmc_output)
+            value: Optional[str] = ESBMCUtil.esbmc_get_counter_example(esbmc_output)
             if not value:
                 raise ValueError("Not found counterexample.")
             return value
@@ -82,10 +76,9 @@ def get_esbmc_output_formatted(esbmc_output_type: str, esbmc_output: str) -> str
 class SolutionGenerator(BaseChatInterface):
     def __init__(
         self,
-        ai_model_agent: DynamicAIModelAgent | ChatPromptSettings,
+        scenarios: FixCodeScenarios,
         llm: BaseChatModel,
         ai_model: AIModel,
-        scenario: str = "",
         source_code_format: str = "full",
         esbmc_output_type: str = "full",
     ) -> None:
@@ -93,18 +86,14 @@ class SolutionGenerator(BaseChatInterface):
         Prompting. Will get the correct scenario from the DynamicAIModelAgent
         supplied and create a ChatPrompt."""
 
-        chat_prompt: ChatPromptSettings = ai_model_agent
-        if isinstance(ai_model_agent, DynamicAIModelAgent):
-            # Convert to chat prompt
-            chat_prompt = DynamicAIModelAgent.to_chat_prompt_settings(
-                ai_model_agent=ai_model_agent, scenario=scenario
-            )
-
         super().__init__(
-            ai_model_agent=chat_prompt,
             ai_model=ai_model,
             llm=llm,
+            system_messages=[],  # Empty as it will be updated in the update method.
         )
+
+        self.scenarios: FixCodeScenarios = scenarios
+        self.scenario: Optional[str] = None
 
         self.esbmc_output_type: str = esbmc_output_type
         self.source_code_format: str = source_code_format
@@ -147,8 +136,12 @@ class SolutionGenerator(BaseChatInterface):
         return solution
 
     def update_state(self, source_code: str, esbmc_output: str) -> None:
-        """Updates the latest state of the code and ESBMC output. This should be
+        """Updates the latest state of the code and ESBMC output. It also updates
+        the scenario, which is the type of error that ESBMC has shown. This should be
         called before generate_solution."""
+
+        self.scenario = ESBMCUtil.esbmc_get_error_type(esbmc_output)
+
         self.source_code_raw = source_code
 
         # Format ESBMC output
@@ -169,16 +162,28 @@ class SolutionGenerator(BaseChatInterface):
             esbmc_output=self.esbmc_output,
         )
 
-    def generate_solution(self) -> tuple[str, FinishReason]:
+    def generate_solution(
+        self,
+        override_scenario: Optional[str] = None,
+    ) -> tuple[str, FinishReason]:
+
         assert (
             self.source_code_raw is not None
             and self.source_code_formatted is not None
             and self.esbmc_output is not None
         ), "Call update_state before calling generate_solution."
 
-        self.push_to_message_stack(
-            HumanMessage(content=self.ai_model_agent.initial_prompt)
-        )
+        initial_message: str
+        if override_scenario:
+            initial_message = str(self.scenarios[override_scenario]["initial"])
+        else:
+            assert self.scenario, "Call update or set the scenario"
+            if self.scenario in self.scenarios:
+                initial_message = str(self.scenarios[self.scenario]["initial"])
+            else:
+                initial_message = str(self.scenarios[default_scenario])
+
+        self.push_to_message_stack(HumanMessage(content=initial_message))
 
         # Apply template substitution to message stack
         self.apply_template_value(
@@ -197,10 +202,12 @@ class SolutionGenerator(BaseChatInterface):
         match self.source_code_format:
             case "single":
                 # Get source code error line from esbmc output
-                line: Optional[int] = get_source_code_err_line_idx(self.esbmc_output)
+                line: Optional[int] = ESBMCUtil.get_source_code_err_line_idx(
+                    self.esbmc_output
+                )
                 if not line:
                     # Check if it parses
-                    line = get_clang_err_line_index(self.esbmc_output)
+                    line = ESBMCUtil.get_clang_err_line_index(self.esbmc_output)
 
                 assert (
                     line

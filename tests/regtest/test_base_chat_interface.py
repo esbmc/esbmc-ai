@@ -8,7 +8,6 @@ from langchain.schema import BaseMessage, HumanMessage, AIMessage, SystemMessage
 from esbmc_ai.ai_models import AIModel
 from esbmc_ai.chat_response import ChatResponse
 from esbmc_ai.chats.base_chat_interface import BaseChatInterface
-from esbmc_ai.config import AIAgentConversation, ChatPromptSettings
 
 
 @pytest.fixture
@@ -24,11 +23,7 @@ def setup():
     ]
 
     chat: BaseChatInterface = BaseChatInterface(
-        ai_model_agent=ChatPromptSettings(
-            initial_prompt="",
-            system_messages=AIAgentConversation.from_seq(system_messages),
-            temperature=1.0,
-        ),
+        system_messages=system_messages,
         ai_model=ai_model,
         llm=llm,
     )
@@ -50,8 +45,11 @@ def test_push_message_stack(regtest, setup) -> None:
     chat.push_to_message_stack(messages[2])
 
     with regtest:
-        print(chat.ai_model_agent.system_messages.messages)
-        print(chat.messages)
+        for msg in chat._system_messages:
+            print(f"{msg.type}: {msg.content}")
+
+        for msg in chat.messages:
+            print(f"{msg.type}: {msg.content}")
 
 
 def test_send_message(regtest, setup) -> None:
@@ -65,12 +63,13 @@ def test_send_message(regtest, setup) -> None:
 
     with regtest:
         print("System Messages:")
-        for m in chat.ai_model_agent.system_messages.messages:
+        for m in chat._system_messages:
             print(f"{m.type}: {m.content}")
         print("Chat Messages:")
         for m in chat.messages:
             print(f"{m.type}: {m.content}")
         print("Responses:")
         for m in chat_responses:
-            print(f"{m.message.type}({m.total_tokens} - {m.finish_reason}): {m.message.content}")
-
+            print(
+                f"{m.message.type}({m.total_tokens} - {m.finish_reason}): {m.message.content}"
+            )

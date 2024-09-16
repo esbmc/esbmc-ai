@@ -162,7 +162,7 @@ cython_debug/
 
 esbmc
 temp/
-config_dev.json
+config_dev.toml
 
 # Proprietary source code samples.
 uav_test.sh

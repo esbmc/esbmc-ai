@@ -4,23 +4,21 @@ import sys
 from typing import Any, Optional, Tuple
 from typing_extensions import override
 
+from esbmc_ai.ai_models import AIModel
+from esbmc_ai.api_key_collection import APIKeyCollection
 from esbmc_ai.chat_response import FinishReason
 from esbmc_ai.chats import LatestStateSolutionGenerator, SolutionGenerator
 from esbmc_ai.chats.solution_generator import ESBMCTimedOutException
 from esbmc_ai.commands.command_result import CommandResult
+from esbmc_ai.config import FixCodeScenarios
 from esbmc_ai.reverse_order_solution_generator import ReverseOrderSolutionGenerator
 from esbmc_ai.solution import SourceFile
 
 from .chat_command import ChatCommand
-from .. import config
 from ..msg_bus import Signal
 from ..loading_widget import create_loading_widget
-from ..esbmc_util import (
-    esbmc_get_error_type,
-    esbmc_load_source_code,
-)
+from ..esbmc_util import ESBMCUtil
 from ..logging import print_horizontal_line, printv, printvv
-from subprocess import CalledProcessError
 
 
 class FixCodeCommandResult(CommandResult):
@@ -64,68 +62,78 @@ class FixCodeCommand(ChatCommand):
             print("\n" + "\n\n".join(messages))
             print("ESBMC-AI Notice: End of raw conversation")
 
+        # Handle kwargs
         source_file: SourceFile = kwargs["source_file"]
         assert source_file.file_path
+
         generate_patches: bool = (
             kwargs["generate_patches"] if "generate_patches" in kwargs else False
         )
 
-        # Parse the esbmc output here and determine what "Scenario" to use.
-        scenario: str = esbmc_get_error_type(source_file.initial_verifier_output)
-
-        printv(f"Scenario: {scenario}")
-        printv(
-            f"Using dynamic prompt..."
-            if scenario in config.chat_prompt_generator_mode.scenarios
-            else "Using generic prompt..."
+        message_history: str = (
+            kwargs["message_history"] if "message_history" else "normal"
         )
 
-        match config.fix_code_message_history:
+        api_keys: APIKeyCollection = kwargs["api_keys"]
+        ai_model: AIModel = kwargs["ai_model"]
+        temperature: float = kwargs["temperature"]
+        max_tries: int = kwargs["requests_max_tries"]
+        timeout: int = kwargs["requests_timeout"]
+        source_code_format: str = kwargs["source_code_format"]
+        esbmc_output_format: str = kwargs["esbmc_output_format"]
+        scenarios: FixCodeScenarios = kwargs["scenarios"]
+        max_attempts: int = kwargs["max_attempts"]
+        esbmc_params: list[str] = kwargs["esbmc_params"]
+        verifier_timeout: int = kwargs["verifier_timeout"]
+        temp_auto_clean: bool = kwargs["temp_auto_clean"]
+        raw_conversation: bool = (
+            kwargs["raw_conversation"] if "raw_conversation" in kwargs else False
+        )
+        # End of handle kwargs
+
+        match message_history:
             case "normal":
                 solution_generator = SolutionGenerator(
-                    ai_model_agent=config.chat_prompt_generator_mode,
-                    ai_model=config.ai_model,
-                    llm=config.ai_model.create_llm(
-                        api_keys=config.api_keys,
-                        temperature=config.chat_prompt_generator_mode.temperature,
-                        requests_max_tries=config.requests_max_tries,
-                        requests_timeout=config.requests_timeout,
+                    ai_model=ai_model,
+                    llm=ai_model.create_llm(
+                        api_keys=api_keys,
+                        temperature=temperature,
+                        requests_max_tries=max_tries,
+                        requests_timeout=timeout,
                     ),
-                    scenario=scenario,
-                    source_code_format=config.source_code_format,
-                    esbmc_output_type=config.esbmc_output_type,
+                    scenarios=scenarios,
+                    source_code_format=source_code_format,
+                    esbmc_output_type=esbmc_output_format,
                 )
             case "latest_only":
                 solution_generator = LatestStateSolutionGenerator(
-                    ai_model_agent=config.chat_prompt_generator_mode,
-                    ai_model=config.ai_model,
-                    llm=config.ai_model.create_llm(
-                        api_keys=config.api_keys,
-                        temperature=config.chat_prompt_generator_mode.temperature,
-                        requests_max_tries=config.requests_max_tries,
-                        requests_timeout=config.requests_timeout,
+                    ai_model=ai_model,
+                    llm=ai_model.create_llm(
+                        api_keys=api_keys,
+                        temperature=temperature,
+                        requests_max_tries=max_tries,
+                        requests_timeout=timeout,
                     ),
-                    scenario=scenario,
-                    source_code_format=config.source_code_format,
-                    esbmc_output_type=config.esbmc_output_type,
+                    scenarios=scenarios,
+                    source_code_format=source_code_format,
+                    esbmc_output_type=esbmc_output_format,
                 )
             case "reverse":
                 solution_generator = ReverseOrderSolutionGenerator(
-                    ai_model_agent=config.chat_prompt_generator_mode,
-                    ai_model=config.ai_model,
-                    llm=config.ai_model.create_llm(
-                        api_keys=config.api_keys,
-                        temperature=config.chat_prompt_generator_mode.temperature,
-                        requests_max_tries=config.requests_max_tries,
-                        requests_timeout=config.requests_timeout,
+                    ai_model=ai_model,
+                    llm=ai_model.create_llm(
+                        api_keys=api_keys,
+                        temperature=temperature,
+                        requests_max_tries=max_tries,
+                        requests_timeout=timeout,
                     ),
-                    scenario=scenario,
-                    source_code_format=config.source_code_format,
-                    esbmc_output_type=config.esbmc_output_type,
+                    scenarios=scenarios,
+                    source_code_format=source_code_format,
+                    esbmc_output_type=esbmc_output_format,
                 )
             case _:
                 raise NotImplementedError(
-                    f"error: {config.fix_code_message_history} has not been implemented in the Fix Code Command"
+                    f"error: {message_history} has not been implemented in the Fix Code Command"
                 )
 
         try:
@@ -139,8 +147,7 @@ class FixCodeCommand(ChatCommand):
 
         print()
 
-        attempts: int = config.fix_code_max_attempts
-        for attempt in range(1, attempts + 1):
+        for attempt in range(1, max_attempts + 1):
             # Get a response. Use while loop to account for if the message stack
             # gets full, then need to compress and retry.
             while True:
@@ -164,12 +171,12 @@ class FixCodeCommand(ChatCommand):
             # Pass to ESBMC, a workaround is used where the file is saved
             # to a temporary location since ESBMC needs it in file format.
             self.anim.start("Verifying with ESBMC... Please Wait")
-            exit_code, esbmc_output = esbmc_load_source_code(
+            exit_code, esbmc_output = ESBMCUtil.esbmc_load_source_code(
                 source_file=source_file,
                 source_file_content_index=-1,
-                esbmc_params=config.esbmc_params,
-                auto_clean=config.temp_auto_clean,
-                timeout=config.verifier_timeout,
+                esbmc_params=esbmc_params,
+                auto_clean=temp_auto_clean,
+                timeout=verifier_timeout,
             )
             self.anim.stop()
 
@@ -186,7 +193,7 @@ class FixCodeCommand(ChatCommand):
             if exit_code == 0:
                 self.on_solution_signal.emit(source_file.latest_content)
 
-                if config.raw_conversation:
+                if raw_conversation:
                     print_raw_conversation()
 
                 printv("ESBMC-AI Notice: Successfully verified code")
@@ -205,18 +212,18 @@ class FixCodeCommand(ChatCommand):
                     source_file.latest_content, source_file.latest_verifier_output
                 )
             except ESBMCTimedOutException:
-                if config.raw_conversation:
+                if raw_conversation:
                     print_raw_conversation()
                 print("ESBMC-AI Notice: error: ESBMC has timed out...")
                 sys.exit(1)
 
             # Failure case
-            if attempt != attempts:
-                print(f"ESBMC-AI Notice: Failure {attempt}/{attempts}: Retrying...")
+            if attempt != max_attempts:
+                print(f"ESBMC-AI Notice: Failure {attempt}/{max_attempts}: Retrying...")
             else:
-                print(f"ESBMC-AI Notice: Failure {attempt}/{attempts}")
+                print(f"ESBMC-AI Notice: Failure {attempt}/{max_attempts}")
 
-        if config.raw_conversation:
+        if raw_conversation:
             print_raw_conversation()
 
         return FixCodeCommandResult(False, None)
