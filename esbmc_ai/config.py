@@ -6,7 +6,7 @@ from platform import system as system_name
 from pathlib import Path
 from dotenv import load_dotenv, find_dotenv
 from langchain.schema import HumanMessage
-import toml
+import tomllib as toml
 
 from typing import (
     Any,
