@@ -39,9 +39,9 @@ class SourceFile:
         return "\n".join(lines)
 
     def __init__(
-        self, file_path: Optional[Path], content: str, file_ext: Optional[str] = None
+        self, file_path: Path, content: str, file_ext: Optional[str] = None
     ) -> None:
-        self._file_path: Optional[Path] = file_path
+        self._file_path: Path = file_path
         # Content file shows the file throughout the repair process. Index 0 is
         # the orignial.
         self._content: list[str] = [content]
@@ -50,7 +50,7 @@ class SourceFile:
         self._file_ext: Optional[str] = file_ext
 
     @property
-    def file_path(self) -> Optional[Path]:
+    def file_path(self) -> Path:
         """Returns the file path of this source file."""
         return self._file_path
 
@@ -162,7 +162,7 @@ class SourceFile:
         the saved file in /tmp and use the file_path file name only."""
 
         file_name: Optional[str] = None
-        dir_path: Optional[Path] = None
+        dir_path: Path
         if file_path:
             # If file path is a file, then use the name and directory. If not
             # then use a temporary name and just store the folder.
@@ -172,19 +172,15 @@ class SourceFile:
             else:
                 dir_path = file_path
         else:
-            if not self._file_path:
-                raise ValueError(
-                    "Source code file does not have a name or file_path to save to"
-                )
             # Just store the file and use the temp dir.
             file_name = self._file_path.name
 
-        if temp_dir:
-            dir_path = Path(gettempdir())
+            if not temp_dir:
+                raise ValueError(
+                    "Need to enable temporary directory or provide file path to store to."
+                )
 
-        assert (
-            dir_path
-        ), "dir_path could not be retrieved: file_path or temp_dir need to be set."
+            dir_path = Path(gettempdir())
 
         # Create path if it does not exist.
         if not os.path.exists(dir_path):
@@ -241,29 +237,17 @@ class Solution:
     @property
     def files_mapped(self) -> dict[Path, SourceFile]:
         """Will return the files mapped to their directory. Returns by value."""
-        return {
-            source_file.file_path: source_file
-            for source_file in self._files
-            if source_file.file_path
-        }
+        return {source_file.file_path: source_file for source_file in self._files}
 
-    def add_source_file(
-        self, file_path: Optional[Path], content: Optional[str]
-    ) -> None:
-        """Add a source file to the solution."""
-        if file_path:
-            if content:
-                self._files.append(SourceFile(file_path, content))
-            else:
-                with open(file_path, "r") as file:
-                    self._files.append(SourceFile(file_path, file.read()))
-            return
-
+    def add_source_file(self, file_path: Path, content: Optional[str]) -> None:
+        """Add a source file to the solution. If content is provided then it will
+        not be loaded."""
+        assert file_path
         if content:
             self._files.append(SourceFile(file_path, content))
-            return
-
-        raise RuntimeError("file_path and content cannot be both invalid!")
+        else:
+            with open(file_path, "r") as file:
+                self._files.append(SourceFile(file_path, file.read()))
 
 
 # Define a global solution (is not required to be used)

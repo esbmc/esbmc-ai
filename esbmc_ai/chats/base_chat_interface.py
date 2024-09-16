@@ -2,6 +2,7 @@
 
 from abc import abstractmethod
 from typing import Optional
+import traceback
 
 from langchain.schema import (
     BaseMessage,
@@ -89,6 +90,7 @@ class BaseChatInterface(object):
 
             # Check if token limit has been exceeded.
             all_messages.append(response_message)
+            # FIXME This causes a warning
             new_tokens: int = self.llm.get_num_tokens_from_messages(
                 messages=all_messages,
             )
@@ -106,6 +108,7 @@ class BaseChatInterface(object):
                 )
         except Exception as e:
             print(f"There was an unkown error when generating a response: {e}")
+            traceback.print_exc()
             exit(1)
 
         return response

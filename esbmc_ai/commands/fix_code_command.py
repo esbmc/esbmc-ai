@@ -1,5 +1,6 @@
 # Author: Yiannis Charalambous
 
+from pathlib import Path
 import sys
 from typing import Any, Optional, Tuple
 from typing_extensions import override
@@ -64,7 +65,6 @@ class FixCodeCommand(ChatCommand):
 
         # Handle kwargs
         source_file: SourceFile = kwargs["source_file"]
-        assert source_file.file_path
 
         generate_patches: bool = (
             kwargs["generate_patches"] if "generate_patches" in kwargs else False
@@ -88,6 +88,9 @@ class FixCodeCommand(ChatCommand):
         temp_auto_clean: bool = kwargs["temp_auto_clean"]
         raw_conversation: bool = (
             kwargs["raw_conversation"] if "raw_conversation" in kwargs else False
+        )
+        output_dir: Optional[Path] = (
+            kwargs["output_dir"] if "output_dir" in kwargs else None
         )
         # End of handle kwargs
 
@@ -158,6 +161,7 @@ class FixCodeCommand(ChatCommand):
                 if finish_reason == FinishReason.length:
                     solution_generator.compress_message_stack()
                 else:
+                    # Update the source file state
                     source_file.update_content(llm_solution)
                     break
 
@@ -204,6 +208,12 @@ class FixCodeCommand(ChatCommand):
                 else:
                     returned_source = source_file.latest_content
 
+                if output_dir:
+                    assert (
+                        output_dir.is_dir()
+                    ), "FixCodeCommand: Output directory needs to be valid"
+                    with open(output_dir / source_file.file_path.name, "w") as file:
+                        file.write(source_file.latest_content)
                 return FixCodeCommandResult(True, returned_source)
 
             try:

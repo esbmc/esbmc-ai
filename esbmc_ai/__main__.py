@@ -186,6 +186,7 @@ def _execute_fix_code_command(source_file: SourceFile) -> FixCodeCommandResult:
         source_code_format=Config.get_value("source_code_format"),
         esbmc_output_format=Config.get_value("esbmc.output_type"),
         scenarios=Config.get_fix_code_scenarios(),
+        output_dir=Config.output_dir,
     )
 
 
@@ -310,12 +311,13 @@ def main() -> None:
         help="Generate patch files and place them in the same folder as the source files.",
     )
 
-    # parser.add_argument(
-    #     "--generate-default-config",
-    #     action="store_true",
-    #     default=False,
-    #     help="Will generate and save the default config to the current working directory as 'esbmcai.toml'."
-    # )
+    parser.add_argument(
+        "-o",
+        "--output-dir",
+        default="",
+        help="Store the result at the following dir. Specifying the same directory will "
+        + "overwrite the original file.",
+    )
 
     args: argparse.Namespace = parser.parse_args()
 
@@ -378,7 +380,6 @@ def main() -> None:
     assert len(solution.files) == 1
 
     source_file: SourceFile = solution.files[0]
-    assert source_file.file_path
 
     esbmc_output: str = _run_esbmc(source_file, anim)
 
