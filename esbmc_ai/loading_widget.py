@@ -10,12 +10,36 @@ from sys import stdout as terminal
 from time import sleep
 from itertools import cycle
 from threading import Thread
-from typing import Optional
-
-from esbmc_ai import Config
+from typing import Optional, override
 
 
-class LoadingWidget(object):
+class BaseLoadingWidget:
+    """Base loading widget, will not display any information."""
+
+    def __enter__(self):
+        self.start()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        _ = exc_type
+        _ = exc_val
+        _ = exc_tb
+        self.stop()
+
+    def __call__(self, text: Optional[str] = None):
+        _ = text
+        return self
+
+    def start(self, text: str = "") -> None:
+        _ = text
+
+    def stop(self) -> None:
+        pass
+
+
+class LoadingWidget(BaseLoadingWidget):
+    """Loading widget that can display an animation along with some text."""
+
     done: bool = False
     thread: Optional[Thread]
     loading_text: str
@@ -38,6 +62,12 @@ class LoadingWidget(object):
             if len(frame) > self.anim_clear_length:
                 self.anim_clear_length = len(frame)
 
+    def __call__(self, text: Optional[str] = None):
+        """Allows you to set the text in a with statement easily."""
+        if text:
+            self.loading_text = text
+        return self
+
     def _animate(self) -> None:
         for c in cycle(self.animation):
             if self.done:
@@ -55,36 +85,17 @@ class LoadingWidget(object):
         terminal.write("\r")
         terminal.flush()
 
+    @override
     def start(self, text: str = "Please Wait") -> None:
-        if not Config.get_value("loading_hints"):
-            return
         self.done = False
         self.loading_text = text
         self.thread = Thread(target=self._animate)
         self.thread.daemon = True
         self.thread.start()
 
+    @override
     def stop(self) -> None:
-        if not Config.get_value("loading_hints"):
-            return
         self.done = True
         # Block until end.
         if self.thread:
             self.thread.join()
-
-
-_widgets: list[LoadingWidget] = []
-
-
-def create_loading_widget(
-    anim_speed: float = 0.1,
-    animation: list[str] = ["|", "/", "-", "\\"],
-) -> LoadingWidget:
-    w = LoadingWidget(anim_speed=anim_speed, animation=animation)
-    _widgets.append(w)
-    return w
-
-
-def stop_all() -> None:
-    for w in _widgets:
-        w.stop()

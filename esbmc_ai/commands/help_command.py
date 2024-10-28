@@ -24,6 +24,8 @@ class HelpCommand(ChatCommand):
 
         for command in self.commands:
             print(f"/{command.command_name}: {command.help_message}")
+            if command.authors:
+                print(f"\tAuthors: {command.authors}")
 
         print()
         print("Useful AI Questions:")

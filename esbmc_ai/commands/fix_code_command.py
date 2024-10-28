@@ -2,7 +2,7 @@
 
 from pathlib import Path
 import sys
-from typing import Any, Optional, Tuple
+from typing import Any, Optional
 from typing_extensions import override
 
 from esbmc_ai.ai_models import AIModel
@@ -12,20 +12,28 @@ from esbmc_ai.chats import LatestStateSolutionGenerator, SolutionGenerator
 from esbmc_ai.chats.solution_generator import ESBMCTimedOutException
 from esbmc_ai.commands.command_result import CommandResult
 from esbmc_ai.config import FixCodeScenarios
-from esbmc_ai.reverse_order_solution_generator import ReverseOrderSolutionGenerator
+from esbmc_ai.chats.reverse_order_solution_generator import (
+    ReverseOrderSolutionGenerator,
+)
 from esbmc_ai.solution import SourceFile
 
 from .chat_command import ChatCommand
 from ..msg_bus import Signal
-from ..loading_widget import create_loading_widget
+from ..loading_widget import BaseLoadingWidget
 from ..esbmc_util import ESBMCUtil
 from ..logging import print_horizontal_line, printv, printvv
 
 
 class FixCodeCommandResult(CommandResult):
-    def __init__(self, successful: bool, repaired_source: Optional[str] = None) -> None:
+    def __init__(
+        self,
+        successful: bool,
+        attempts: int,
+        repaired_source: Optional[str] = None,
+    ) -> None:
         super().__init__()
         self._successful: bool = successful
+        self.attempts: int = attempts
         self.repaired_source: Optional[str] = repaired_source
 
     @property
@@ -50,7 +58,6 @@ class FixCodeCommand(ChatCommand):
             command_name="fix-code",
             help_message="Generates a solution for this code, and reevaluates it with ESBMC.",
         )
-        self.anim = create_loading_widget()
 
     @override
     def execute(self, **kwargs: Any) -> FixCodeCommandResult:
@@ -86,11 +93,17 @@ class FixCodeCommand(ChatCommand):
         esbmc_params: list[str] = kwargs["esbmc_params"]
         verifier_timeout: int = kwargs["verifier_timeout"]
         temp_auto_clean: bool = kwargs["temp_auto_clean"]
+        temp_file_dir: Optional[Path] = (
+            kwargs["temp_file_dir"] if "temp_file_dir" in kwargs else None
+        )
         raw_conversation: bool = (
             kwargs["raw_conversation"] if "raw_conversation" in kwargs else False
         )
         output_dir: Optional[Path] = (
             kwargs["output_dir"] if "output_dir" in kwargs else None
+        )
+        anim: BaseLoadingWidget = (
+            kwargs["anim"] if "anim" in kwargs else BaseLoadingWidget()
         )
         # End of handle kwargs
 
@@ -155,9 +168,9 @@ class FixCodeCommand(ChatCommand):
             # gets full, then need to compress and retry.
             while True:
                 # Generate AI solution
-                self.anim.start("Generating Solution... Please Wait")
-                llm_solution, finish_reason = solution_generator.generate_solution()
-                self.anim.stop()
+                with anim("Generating Solution... Please Wait"):
+                    llm_solution, finish_reason = solution_generator.generate_solution()
+
                 if finish_reason == FinishReason.length:
                     solution_generator.compress_message_stack()
                 else:
@@ -174,15 +187,15 @@ class FixCodeCommand(ChatCommand):
 
             # Pass to ESBMC, a workaround is used where the file is saved
             # to a temporary location since ESBMC needs it in file format.
-            self.anim.start("Verifying with ESBMC... Please Wait")
-            exit_code, esbmc_output = ESBMCUtil.esbmc_load_source_code(
-                source_file=source_file,
-                source_file_content_index=-1,
-                esbmc_params=esbmc_params,
-                auto_clean=temp_auto_clean,
-                timeout=verifier_timeout,
-            )
-            self.anim.stop()
+            with anim("Verifying with ESBMC... Please Wait"):
+                exit_code, esbmc_output = ESBMCUtil.esbmc_load_source_code(
+                    source_file=source_file,
+                    source_file_content_index=-1,
+                    esbmc_params=esbmc_params,
+                    auto_clean=temp_auto_clean,
+                    temp_file_dir=temp_file_dir,
+                    timeout=verifier_timeout,
+                )
 
             source_file.assign_verifier_output(esbmc_output)
             del esbmc_output
@@ -214,7 +227,7 @@ class FixCodeCommand(ChatCommand):
                     ), "FixCodeCommand: Output directory needs to be valid"
                     with open(output_dir / source_file.file_path.name, "w") as file:
                         file.write(source_file.latest_content)
-                return FixCodeCommandResult(True, returned_source)
+                return FixCodeCommandResult(True, attempt, returned_source)
 
             try:
                 # Update state
@@ -236,4 +249,4 @@ class FixCodeCommand(ChatCommand):
         if raw_conversation:
             print_raw_conversation()
 
-        return FixCodeCommandResult(False, None)
+        return FixCodeCommandResult(False, max_attempts, None)
