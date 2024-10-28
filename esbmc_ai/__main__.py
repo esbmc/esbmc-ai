@@ -29,7 +29,7 @@ from esbmc_ai.commands import (
 
 from esbmc_ai.loading_widget import BaseLoadingWidget, LoadingWidget
 from esbmc_ai.chats import UserChat
-from esbmc_ai.logging import print_horizontal_line, printv, printvv
+from esbmc_ai.logging import get_verbose_level, print_horizontal_line, printv, printvv
 from esbmc_ai.esbmc_util import ESBMCUtil
 from esbmc_ai.chat_response import FinishReason, ChatResponse
 from esbmc_ai.ai_models import _ai_model_names
