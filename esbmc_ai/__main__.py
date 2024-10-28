@@ -2,23 +2,18 @@
 
 # Author: Yiannis Charalambous 2023
 
-import os
 from pathlib import Path
 import re
 import sys
 
 # Enables arrow key functionality for input(). Do not remove import.
 import readline
-from typing import Optional
-
-from langchain_core.language_models import BaseChatModel
-
-from esbmc_ai.commands.fix_code_command import FixCodeCommandResult
 
 _ = readline
 
-import argparse
+from langchain_core.language_models import BaseChatModel
 
+import argparse
 
 from esbmc_ai import Config
 from esbmc_ai import __author__, __version__
@@ -29,9 +24,10 @@ from esbmc_ai.commands import (
     FixCodeCommand,
     HelpCommand,
     ExitCommand,
+    FixCodeCommandResult,
 )
 
-from esbmc_ai.loading_widget import LoadingWidget, create_loading_widget
+from esbmc_ai.loading_widget import BaseLoadingWidget, LoadingWidget
 from esbmc_ai.chats import UserChat
 from esbmc_ai.logging import print_horizontal_line, printv, printvv
 from esbmc_ai.esbmc_util import ESBMCUtil
@@ -110,7 +106,8 @@ def print_assistant_response(
 
 
 def init_commands_list() -> None:
-    # Setup Help command and commands list.
+    """Setup Help command and commands list."""
+    # Built in commands
     global help_command
     commands.extend(
         [
@@ -129,18 +126,15 @@ def update_solution(source_code: str) -> None:
     get_solution().files[0].update_content(content=source_code, reset_changes=True)
 
 
-def _run_esbmc(source_file: SourceFile, anim: Optional[LoadingWidget] = None) -> str:
+def _run_esbmc(source_file: SourceFile, anim: BaseLoadingWidget) -> str:
     assert source_file.file_path
 
-    if anim:
-        anim.start("ESBMC is processing... Please Wait")
-    exit_code, esbmc_output = ESBMCUtil.esbmc(
-        path=source_file.file_path,
-        esbmc_params=Config.get_value("esbmc.params"),
-        timeout=Config.get_value("esbmc.timeout"),
-    )
-    if anim:
-        anim.stop()
+    with anim("ESBMC is processing... Please Wait"):
+        exit_code, esbmc_output = ESBMCUtil.esbmc(
+            path=source_file.file_path,
+            esbmc_params=Config.get_value("esbmc.params"),
+            timeout=Config.get_value("esbmc.timeout"),
+        )
 
     # ESBMC will output 0 for verification success and 1 for verification
     # failed, if anything else gets thrown, it's an ESBMC error.
@@ -186,12 +180,17 @@ def _execute_fix_code_command(source_file: SourceFile) -> FixCodeCommandResult:
         source_code_format=Config.get_value("source_code_format"),
         esbmc_output_format=Config.get_value("esbmc.output_type"),
         scenarios=Config.get_fix_code_scenarios(),
+        temp_file_dir=Config.get_value("temp_file_dir"),
         output_dir=Config.output_dir,
     )
 
 
 def _run_command_mode(command: ChatCommand, args: argparse.Namespace) -> None:
     path_arg: Path = Path(args.filename)
+
+    anim: BaseLoadingWidget = (
+        LoadingWidget() if Config.get_value("loading_hints") else BaseLoadingWidget()
+    )
 
     solution: Solution = get_solution()
     if path_arg.is_dir():
@@ -205,7 +204,7 @@ def _run_command_mode(command: ChatCommand, args: argparse.Namespace) -> None:
         case fix_code_command.command_name:
             for source_file in solution.files:
                 # Run ESBMC first round
-                esbmc_output: str = _run_esbmc(source_file)
+                esbmc_output: str = _run_esbmc(source_file, anim)
                 source_file.assign_verifier_output(esbmc_output)
 
                 result: FixCodeCommandResult = _execute_fix_code_command(source_file)
@@ -333,7 +332,9 @@ def main() -> None:
     printv(f"Source code format: {Config.get_value('source_code_format')}")
     printv(f"ESBMC output type: {Config.get_value('esbmc.output_type')}")
 
-    anim: LoadingWidget = create_loading_widget()
+    anim: BaseLoadingWidget = (
+        LoadingWidget() if Config.get_value("loading_hints") else BaseLoadingWidget()
+    )
 
     # Read the source code and esbmc output.
     printv("Reading source code...")
@@ -395,8 +396,8 @@ def main() -> None:
     chat_llm: BaseChatModel = Config.get_ai_model().create_llm(
         api_keys=Config.api_keys,
         temperature=Config.get_value("user_chat.temperature"),
-        requests_max_tries=Config.get_value("requests.max_tries"),
-        requests_timeout=Config.get_value("requests.timeout"),
+        requests_max_tries=Config.get_value("llm_requests.max_tries"),
+        requests_timeout=Config.get_value("llm_requests.timeout"),
     )
 
     printv("Creating user chat")
@@ -417,11 +418,10 @@ def main() -> None:
     response: ChatResponse
     if len(str(Config.get_user_chat_initial().content)) > 0:
         printv("Using initial prompt from file...\n")
-        anim.start("Model is parsing ESBMC output... Please Wait")
-        response = chat.send_message(
-            message=str(Config.get_user_chat_initial().content),
-        )
-        anim.stop()
+        with anim("Model is parsing ESBMC output... Please Wait"):
+            response = chat.send_message(
+                message=str(Config.get_user_chat_initial().content),
+            )
 
         if response.finish_reason == FinishReason.length:
             raise RuntimeError(f"The token length is too large: {chat.ai_model.tokens}")
@@ -475,17 +475,16 @@ def main() -> None:
         # User chat mode send and process current message response.
         while True:
             # Send user message to AI model and process.
-            anim.start("Generating response... Please Wait")
-            response = chat.send_message(user_message)
-            anim.stop()
+            with anim("Generating response... Please Wait"):
+                response = chat.send_message(user_message)
+
             if response.finish_reason == FinishReason.stop:
                 break
             elif response.finish_reason == FinishReason.length:
-                anim.start(
+                with anim(
                     "Message stack limit reached. Shortening message stack... Please Wait"
-                )
-                chat.compress_message_stack()
-                anim.stop()
+                ):
+                    chat.compress_message_stack()
                 continue
             else:
                 raise NotImplementedError(
