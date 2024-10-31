@@ -3,7 +3,6 @@
 # Author: Yiannis Charalambous 2023
 
 from pathlib import Path
-import re
 import sys
 
 # Enables arrow key functionality for input(). Do not remove import.
@@ -12,6 +11,10 @@ import readline
 _ = readline
 
 from langchain_core.language_models import BaseChatModel
+
+from esbmc_ai.command_runner import CommandRunner
+from esbmc_ai.commands.fix_code_command import FixCodeCommandResult
+
 
 import argparse
 
@@ -34,12 +37,16 @@ from esbmc_ai.esbmc_util import ESBMCUtil
 from esbmc_ai.chat_response import FinishReason, ChatResponse
 from esbmc_ai.ai_models import _ai_model_names
 
-
-commands: list[ChatCommand] = []
-command_names: list[str]
 help_command: HelpCommand = HelpCommand()
 fix_code_command: FixCodeCommand = FixCodeCommand()
 exit_command: ExitCommand = ExitCommand()
+command_runner: CommandRunner = CommandRunner(
+    [
+        help_command,
+        exit_command,
+        fix_code_command,
+    ]
+)
 
 chat: UserChat
 
@@ -105,21 +112,11 @@ def print_assistant_response(
         )
 
 
-def init_commands_list() -> None:
-    """Setup Help command and commands list."""
-    # Built in commands
-    global help_command
-    commands.extend(
-        [
-            help_command,
-            exit_command,
-            fix_code_command,
-        ]
-    )
-    help_command.set_commands(commands)
-
-    global command_names
-    command_names = [command.command_name for command in commands]
+def init_addons() -> None:
+    command_runner.addon_commands.clear()
+    command_runner.addon_commands.extend(Config.get_value("addon_modules"))
+    if len(command_runner.addon_commands):
+        printv("Addons:\n\t* " + "\t * ".join(command_runner.addon_commands_names))
 
 
 def update_solution(source_code: str) -> None:
@@ -215,23 +212,7 @@ def _run_command_mode(command: ChatCommand, args: argparse.Namespace) -> None:
     sys.exit(0)
 
 
-def parse_command(user_prompt_string: str) -> tuple[str, list[str]]:
-    """Parses a command and returns it based on the command rules outlined in
-    the wiki: https://github.com/Yiannis128/esbmc-ai/wiki/User-Chat-Mode"""
-    regex_pattern: str = (
-        r'\s+(?=(?:[^\\"]*(?:\\.[^\\"]*)*)$)|(?:(?<!\\)".*?(?<!\\)")|(?:\\.)+|\S+'
-    )
-    segments: list[str] = re.findall(regex_pattern, user_prompt_string)
-    parsed_array: list[str] = [segment for segment in segments if segment != " "]
-    # Remove all empty spaces.
-    command: str = parsed_array[0]
-    command_args: list[str] = parsed_array[1:]
-    return command, command_args
-
-
 def main() -> None:
-    init_commands_list()
-
     parser = argparse.ArgumentParser(
         prog="ESBMC-ChatGPT",
         description=HELP_MESSAGE,
@@ -295,11 +276,9 @@ def main() -> None:
     parser.add_argument(
         "-c",
         "--command",
-        choices=command_names,
-        metavar="",
         help="Runs the program in command mode, it will exit after the command ends with an exit code. Options: {"
-        + ", ".join(command_names)
-        + "}",
+        + ", ".join(command_runner.builtin_commands_names)
+        + "}. To see addon commands avaiilable: Run with '-c help'.",
     )
 
     parser.add_argument(
@@ -326,8 +305,8 @@ def main() -> None:
 
     Config.init(args)
     ESBMCUtil.init(Config.get_value("esbmc.path"))
-
     check_health()
+    init_addons()
 
     printv(f"Source code format: {Config.get_value('source_code_format')}")
     printv(f"ESBMC output type: {Config.get_value('esbmc.output_type')}")
@@ -349,12 +328,19 @@ def main() -> None:
     # If not, then continue to user mode.
     if args.command != None:
         command = args.command
+        command_names: list[str] = command_runner.command_names
         if command in command_names:
             print("Running Command:", command)
             for idx, command_name in enumerate(command_names):
                 if command == command_name:
-                    _run_command_mode(command=commands[idx], args=args)
+                    _run_command_mode(command=command_runner.commands[idx], args=args)
             sys.exit(0)
+        else:
+            print(
+                f"Error: Unknown command: {command}. Choose from: "
+                + ", ".join(command_names)
+            )
+            sys.exit(1)
 
     # ===========================================
     # User Mode (Supports only 1 file)
@@ -440,7 +426,7 @@ def main() -> None:
 
         # Check if it is a command, if not, then pass it to the chat interface.
         if user_message.startswith("/"):
-            command, command_args = parse_command(user_message)
+            command, command_args = CommandRunner.parse_command(user_message)
             command = command[1:]  # Remove the /
             if command == fix_code_command.command_name:
                 # Fix Code command
@@ -458,7 +444,7 @@ def main() -> None:
             else:
                 # Commands without parameters or returns are handled automatically.
                 found: bool = False
-                for cmd in commands:
+                for cmd in command_runner.commands:
                     if cmd.command_name == command:
                         found = True
                         cmd.execute()

@@ -1,5 +1,7 @@
 # Author: Yiannis Charalambous 2023
 
+import importlib
+from importlib.machinery import ModuleSpec
 import os
 import sys
 from platform import system as system_name
@@ -7,6 +9,7 @@ from pathlib import Path
 from dotenv import load_dotenv, find_dotenv
 from langchain.schema import HumanMessage
 import tomllib as toml
+from importlib.util import find_spec
 
 from typing import (
     Any,
@@ -19,7 +22,7 @@ from typing import (
 )
 
 from esbmc_ai.chat_response import list_to_base_messages
-from esbmc_ai.logging import set_verbose
+from esbmc_ai.logging import printv, set_verbose
 from .ai_models import *
 from .api_key_collection import APIKeyCollection
 
@@ -34,29 +37,34 @@ default_scenario: str = "base"
 
 
 class ConfigField(NamedTuple):
-    # The name of the config field and also namespace
     name: str
-    # If a default value is supplied, then it can be omitted from the config
+    """The name of the config field and also namespace"""
     default_value: Any
-    # If true, then the default value will be None, so during
-    # validation, if no value is supplied, then None will be the
-    # the default value, instead of failing due to None being the
-    # default value which under normal circumstances means that the
-    # field is not optional.
+    """If a default value is supplied, then it can be omitted from the config.
+    In order to have a "None" default value, default_value_none must be set."""
     default_value_none: bool = False
-
-    # Lambda function to validate if field has a valid value.
-    # Default is identity function which is return true.
+    """If true, then the default value will be None, so during
+    validation, if no value is supplied, then None will be the
+    the default value, instead of failing due to None being the
+    default value which under normal circumstances means that the
+    field is not optional."""
     validate: Callable[[Any], bool] = lambda _: True
-    # Transform the value once loaded, this allows the value to be saved
-    # as a more complex type than that which is represented in the config
-    # file.
+    """Lambda function to validate if field has a valid value.
+    Default is identity function which is return true."""
     on_load: Callable[[Any], Any] = lambda v: v
-    # If defined, will be called and allows to custom load complex types that
-    # may not match 1-1 in the config. The config file passed as a parameter here
-    # is the original, unflattened version. The value returned should be the value
-    # assigned to this field.
+    """Transform the value once loaded, this allows the value to be saved
+    as a more complex type than that which is represented in the config
+    file.
+    
+    Is ignored if on_read is defined."""
     on_read: Optional[Callable[[dict[str, Any]], Any]] = None
+    """If defined, will be called and allows to custom load complex types that
+    may not match 1-1 in the config. The config file passed as a parameter here
+    is the original, unflattened version. The value returned should be the value
+    assigned to this field.
+    
+    This is a more versatile version of on_load. So if this is used, the on_load
+    will be ignored."""
     error_message: Optional[str] = None
 
 
@@ -87,6 +95,38 @@ def _validate_prompt_template(conv: Dict[str, List[Dict]]) -> bool:
     ):
         return False
     return True
+
+
+def _validate_addon_modules(mods: list[str]) -> bool:
+    """Validates that all values are string."""
+    for m in mods:
+        if not isinstance(m, str):
+            return False
+        spec: Optional[ModuleSpec] = find_spec(m)
+        if spec is None:
+            return False
+    return True
+
+
+def _init_addon_modules(mods: list[str]) -> list:
+    """Will import addon modules that exist and iterate through the exposed
+    attributes, will then get all available ChatCommands and store them."""
+    from esbmc_ai.commands.chat_command import ChatCommand
+
+    result: list[ChatCommand] = []
+    for module_name in mods:
+        try:
+            m = importlib.import_module(module_name)
+            for attr_name in getattr(m, "__all__"):
+                attr_class = getattr(m, attr_name)
+                if issubclass(attr_class, ChatCommand):
+                    result.append(attr_class())
+                    printv(f"Loading addon: {attr_name}")
+        except ModuleNotFoundError as e:
+            print(f"Addon Loader: Could not import module: {module_name}: {e}")
+            sys.exit(1)
+
+    return result
 
 
 class Config:
@@ -133,6 +173,14 @@ class Config:
             default_value="full",
             validate=lambda v: isinstance(v, str) and v in ["full", "single"],
             error_message="source_code_format can only be 'full' or 'single'",
+        ),
+        # Store as a list of commands
+        ConfigField(
+            name="addon_modules",
+            default_value=[],
+            validate=_validate_addon_modules,
+            on_load=_init_addon_modules,
+            error_message="addon_modules must be a list of Python modules to load",
         ),
         ConfigField(
             name="esbmc.path",
@@ -351,7 +399,7 @@ class Config:
         3. esbmc-ai.env file in the current directory, moving upwards in the directory tree.
         4. esbmc-ai.env file in $HOME/.config/ for Linux/macOS and %userprofile% for Windows.
 
-        Note: ESBMC_AI_CFG_PATH undergoes tilde user expansion and also environment
+        Note: ESBMCAI_CONFIG_PATH undergoes tilde user expansion and also environment
         variable expansion.
         """
 
@@ -362,7 +410,7 @@ class Config:
                 if value != None:
                     values[k] = value
 
-        keys: list[str] = ["OPENAI_API_KEY", "ESBMC_AI_CFG_PATH"]
+        keys: list[str] = ["OPENAI_API_KEY", "ESBMCAI_CONFIG_PATH"]
         values: dict[str, str] = {}
 
         # Load from system env
@@ -405,7 +453,9 @@ class Config:
         )
 
         cls.cfg_path = Path(
-            os.path.expanduser(os.path.expandvars(str(os.getenv("ESBMC_AI_CFG_PATH"))))
+            os.path.expanduser(
+                os.path.expandvars(str(os.getenv("ESBMCAI_CONFIG_PATH")))
+            )
         )
 
     @classmethod

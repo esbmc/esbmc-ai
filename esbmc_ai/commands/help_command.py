@@ -14,9 +14,6 @@ class HelpCommand(ChatCommand):
             help_message="Print this help message.",
         )
 
-    def set_commands(self, commands: list[ChatCommand]) -> None:
-        self.commands = commands
-
     @override
     def execute(self, **_: Optional[Any]) -> Optional[Any]:
         print()
