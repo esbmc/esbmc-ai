@@ -9,6 +9,7 @@ from langchain_community.chat_message_histories import ChatMessageHistory
 
 
 from esbmc_ai.ai_models import AIModel
+from esbmc_ai.esbmc_util import ESBMCUtil
 
 from .base_chat_interface import BaseChatInterface
 
@@ -37,8 +38,12 @@ class UserChat(BaseChatInterface):
         # The messsages for setting a new solution to the source code.
         self.set_solution_messages = set_solution_messages
 
-        self.apply_template_value(source_code=self.source_code)
-        self.apply_template_value(esbmc_output=self.esbmc_output)
+        self.apply_template_value(
+            source_code=self.source_code,
+            esbmc_output=self.esbmc_output,
+            error_line=str(ESBMCUtil.get_source_code_err_line(self.esbmc_output)),
+            error_type=ESBMCUtil.esbmc_get_error_type(self.esbmc_output),
+        )
 
     def set_solution(self, source_code: str) -> None:
         """Sets the solution to the problem ESBMC reported, this will inform the AI."""

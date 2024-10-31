@@ -32,11 +32,6 @@ def get_source_code_formatted(
             if line:
                 return source_code.splitlines(True)[line]
 
-            # Check if it parses
-            line = ESBMCUtil.get_clang_err_line_index(esbmc_output)
-            if line:
-                return source_code.splitlines(True)[line]
-
             raise AssertionError(
                 f"error line not found in esbmc output:\n{esbmc_output}"
             )
@@ -173,6 +168,7 @@ class SolutionGenerator(BaseChatInterface):
             and self.esbmc_output is not None
         ), "Call update_state before calling generate_solution."
 
+        # Get scenario initial message and push it to message stack
         initial_message: str
         if override_scenario:
             initial_message = str(self.scenarios[override_scenario]["initial"])
@@ -189,6 +185,8 @@ class SolutionGenerator(BaseChatInterface):
         self.apply_template_value(
             source_code=self.source_code_formatted,
             esbmc_output=self.esbmc_output,
+            error_line=str(ESBMCUtil.get_source_code_err_line(self.esbmc_output)),
+            error_type=ESBMCUtil.esbmc_get_error_type(self.esbmc_output),
         )
 
         # Generate the solution
@@ -197,6 +195,7 @@ class SolutionGenerator(BaseChatInterface):
 
         solution = SolutionGenerator.get_code_from_solution(solution)
 
+        # Post process source code
         # If source code passed to LLM is formatted then we need to recombine to
         # full source code before giving to ESBMC
         match self.source_code_format:
@@ -205,9 +204,6 @@ class SolutionGenerator(BaseChatInterface):
                 line: Optional[int] = ESBMCUtil.get_source_code_err_line_idx(
                     self.esbmc_output
                 )
-                if not line:
-                    # Check if it parses
-                    line = ESBMCUtil.get_clang_err_line_index(self.esbmc_output)
 
                 assert (
                     line
