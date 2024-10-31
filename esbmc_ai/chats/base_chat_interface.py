@@ -42,7 +42,8 @@ class BaseChatInterface(object):
 
     def apply_template_value(self, **kwargs: str) -> None:
         """Will substitute an f-string in the message stack and system messages to
-        the provided value."""
+        the provided value. The new substituted messages will become the new
+        message stack, so the substitution is permanent."""
 
         system_message_prompts: PromptValue = self.ai_model.apply_chat_template(
             messages=self._system_messages,
