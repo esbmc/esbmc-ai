@@ -243,6 +243,7 @@ def is_valid_ai_model(
     """Accepts both the AIModel object and the name as parameter. It checks the
     openai servers to see if a model is defined on their servers, if not, then
     it checks the internally defined AI models list."""
+    from openai import Client
 
     # Get the name of the model
     name: str = ai_model.name if isinstance(ai_model, AIModel) else ai_model
@@ -251,8 +252,6 @@ def is_valid_ai_model(
     # NOTE: This is not tested as no way to mock API currently.
     if api_keys and api_keys.openai:
         try:
-            from openai import Client
-
             for model in Client(api_key=api_keys.openai).models.list().data:
                 if model.id == name:
                     return True
