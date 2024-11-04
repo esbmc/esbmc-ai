@@ -284,10 +284,8 @@ class Config:
             default_value=None,
             validate=lambda v: default_scenario in v
             and all(
-                [
-                    _validate_prompt_template(prompt_template)
-                    for prompt_template in v.values()
-                ]
+                _validate_prompt_template(prompt_template)
+                for prompt_template in v.values()
             ),
             on_read=lambda config_file: {
                 scenario: {
