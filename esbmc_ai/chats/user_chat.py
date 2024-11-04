@@ -1,5 +1,7 @@
 # Author: Yiannis Charalambous 2023
 
+"""Contains class that handles the UserChat of ESBMC-AI"""
+
 from typing_extensions import override
 
 from langchain.memory import ConversationSummaryMemory
@@ -14,6 +16,9 @@ from .base_chat_interface import BaseChatInterface
 
 
 class UserChat(BaseChatInterface):
+    """Simple interface that talks to the LLM and stores the result. The class
+    also stores the fixed results from fix code command."""
+
     solution: str = ""
 
     def __init__(
@@ -50,8 +55,9 @@ class UserChat(BaseChatInterface):
 
     @override
     def compress_message_stack(self) -> None:
-        """Uses ConversationSummaryMemory from Langchain to summarize the conversation of all the non-protected
-        messages into one summary message which is added into the conversation as a SystemMessage.
+        """Uses ConversationSummaryMemory from Langchain to summarize the
+        conversation of all the non-protected messages into one summary message
+        which is added into the conversation as a SystemMessage.
         """
 
         memory: ConversationSummaryMemory = ConversationSummaryMemory.from_messages(
