@@ -1,5 +1,7 @@
 # Author: Yiannis Charalambous 2023
 
+"""Contains code for automatically repairing code using ESBMC."""
+
 from typing import Optional
 from langchain_core.language_models import BaseChatModel
 from typing_extensions import override
@@ -10,21 +12,25 @@ from esbmc_ai.config import FixCodeScenarios, default_scenario
 from esbmc_ai.solution import SourceFile
 
 from esbmc_ai.ai_models import AIModel
-from .base_chat_interface import BaseChatInterface
 from esbmc_ai.esbmc_util import ESBMCUtil
+from .base_chat_interface import BaseChatInterface
 
 
 class ESBMCTimedOutException(Exception):
-    pass
+    """Error that means that ESBMC timed out and so the error could not be
+    determined."""
 
 
 class SourceCodeParseError(Exception):
-    pass
+    """Error that means that SolutionGenerator could not parse the source code
+    to return the right format."""
 
 
 def get_source_code_formatted(
     source_code_format: str, source_code: str, esbmc_output: str
 ) -> str:
+    """Gets the formatted output source code, based on the source_code_format
+    passed."""
     match source_code_format:
         case "single":
             # Get source code error line from esbmc output
@@ -49,11 +55,14 @@ def get_source_code_formatted(
 
 
 def get_esbmc_output_formatted(esbmc_output_type: str, esbmc_output: str) -> str:
+    """Gets the formatted output ESBMC output, based on the esbmc_output_type
+    passed."""
     # Check for parsing error
     if "ERROR: PARSING ERROR" in esbmc_output:
         # Parsing errors are usually small in nature.
         raise SourceCodeParseError()
-    elif "ERROR: Timed out" in esbmc_output:
+
+    if "ERROR: Timed out" in esbmc_output:
         raise ESBMCTimedOutException()
 
     match esbmc_output_type:
@@ -74,6 +83,9 @@ def get_esbmc_output_formatted(esbmc_output_type: str, esbmc_output: str) -> str
 
 
 class SolutionGenerator(BaseChatInterface):
+    """Class that generates a solution using verifier output and source code
+    that contains a bug."""
+
     def __init__(
         self,
         scenarios: FixCodeScenarios,
@@ -166,6 +178,8 @@ class SolutionGenerator(BaseChatInterface):
         self,
         override_scenario: Optional[str] = None,
     ) -> tuple[str, FinishReason]:
+        """Queries the AI model to get a solution. Accepts an override scenario
+        parameter, in which case the scenario won't be resolved automatically."""
 
         assert (
             self.source_code_raw is not None
@@ -209,9 +223,10 @@ class SolutionGenerator(BaseChatInterface):
                     # Check if it parses
                     line = ESBMCUtil.get_clang_err_line_index(self.esbmc_output)
 
-                assert (
-                    line
-                ), "fix code command: error line could not be found to apply brutal patch replacement"
+                assert line, (
+                    "fix code command: error line could not be found to apply "
+                    "brutal patch replacement"
+                )
                 solution = SourceFile.apply_line_patch(
                     self.source_code_raw, solution, line, line
                 )

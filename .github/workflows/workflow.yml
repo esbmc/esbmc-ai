@@ -2,6 +2,34 @@ name: Checking
 on: push
 
 jobs:
+  setup-requirements:
+    name: Get Requirements
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      # Setup Python (faster than using Python container)
+      - name: Setup Python
+        uses: actions/setup-python@v5.3.0
+        with:
+          python-version: "3.11"
+
+      - name: Check out repository code
+        uses: actions/checkout@v4.2.2
+      
+      - name: Install Hatch
+        run: python -m pip install --upgrade hatch
+
+      - name: Generate Requirements
+        run: python -m hatch dep show requirements > requirements.txt
+        
+      - name: Upload Requirements
+        uses: actions/upload-artifact@v4.4.3
+        with:
+          name: requirements
+          path: requirements.txt
+
+
   pylint:
     name: PyLint
     runs-on: ubuntu-latest
@@ -9,11 +37,11 @@ jobs:
 
     steps:
       - name: Check out repository code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4.2.2
 
       # Setup Python (faster than using Python container)
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5.3.0
         with:
           python-version: "3.11"
 
@@ -31,24 +59,32 @@ jobs:
 
   test:
     name: PyTest
+    needs: setup-requirements
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
     steps:
       - name: Check out repository code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4.2.2
 
       # Setup Python (faster than using Python container)
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5.3.0
         with:
           python-version: "3.11"
 
-      - name: Install pipenv
-        run: |
-          python -m pip install --upgrade pipenv wheel
-      - id: cache-pipenv
-        uses: actions/cache@v1.2.1
+      - name: Download Requirements
+        uses: actions/download-artifact@v4.1.8
+        with:
+          name: requirements
+          path: .
+
+      - name: Install Environment
+        run: python -m pip install --upgrade pipenv wheel
+
+      - name: Cache Pipenv
+        id: cache-pipenv
+        uses: actions/cache@v4.1.2
         with:
           path: ~/.local/share/virtualenvs
           key: ${{ runner.os }}-pipenv-${{ hashFiles('**/Pipfile.lock') }}
@@ -56,8 +92,8 @@ jobs:
       - name: Install dependencies
         if: steps.cache-pipenv.outputs.cache-hit != 'true'
         run: |
-          pipenv install --deploy --dev
+          pipenv install -r requirements.txt
+          pipenv lock
 
       - name: Run test suite
-        run: |
-          pipenv run pytest -v
+        run: pipenv run pytest -v

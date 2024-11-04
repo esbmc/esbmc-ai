@@ -51,6 +51,8 @@ class FixCodeCommandResult(CommandResult):
 
 
 class FixCodeCommand(ChatCommand):
+    """Command for automatically fixing code using a verifier."""
+
     on_solution_signal: Signal = Signal()
 
     def __init__(self) -> None:
@@ -78,7 +80,7 @@ class FixCodeCommand(ChatCommand):
         )
 
         message_history: str = (
-            kwargs["message_history"] if "message_history" else "normal"
+            kwargs["message_history"] if "message_history" in kwargs else "normal"
         )
 
         api_keys: APIKeyCollection = kwargs["api_keys"]

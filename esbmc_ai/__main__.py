@@ -405,9 +405,13 @@ def main() -> None:
     if len(str(Config.get_user_chat_initial().content)) > 0:
         printv("Using initial prompt from file...\n")
         with anim("Model is parsing ESBMC output... Please Wait"):
-            response = chat.send_message(
-                message=str(Config.get_user_chat_initial().content),
-            )
+            try:
+                response = chat.send_message(
+                    message=str(Config.get_user_chat_initial().content),
+                )
+            except Exception as e:
+                print("There was an error while generating a response: {e}")
+                sys.exit(1)
 
         if response.finish_reason == FinishReason.length:
             raise RuntimeError(f"The token length is too large: {chat.ai_model.tokens}")

@@ -1,5 +1,8 @@
 # Author: Yiannis Charalambous
 
+"""Contains code that extends the default solution generator to only use the
+latest state of the code only (removes history)"""
+
 from typing import Optional
 from typing_extensions import override
 from langchain_core.messages import BaseMessage

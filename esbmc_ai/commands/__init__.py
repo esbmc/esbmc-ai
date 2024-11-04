@@ -4,6 +4,8 @@ from .fix_code_command import FixCodeCommand, FixCodeCommandResult
 from .help_command import HelpCommand
 from .command_result import CommandResult
 
+"""This module contains built-in commands that can be executed by ESBMC-AI."""
+
 __all__ = [
     "ChatCommand",
     "ExitCommand",
