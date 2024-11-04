@@ -49,9 +49,10 @@ class AIModel(object):
     def convert_messages_to_tuples(
         cls, messages: Iterable[BaseMessage]
     ) -> list[tuple[str, str]]:
-        """Converts messages into a format understood by the ChatPromptTemplate - since it won't format
-        BaseMessage derived classes for some reason, but will for tuples, because they get converted into
-        Templates in function `_convert_to_message`."""
+        """Converts messages into a format understood by the ChatPromptTemplate,
+        since it won't format BaseMessage derived classes for some reason, but
+        will for tuples, because they get converted into Templates in function
+        `_convert_to_message`."""
         return [(message.type, str(message.content)) for message in messages]
 
     @classmethod

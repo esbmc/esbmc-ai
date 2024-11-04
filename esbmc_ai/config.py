@@ -1,16 +1,13 @@
 # Author: Yiannis Charalambous 2023
 
 import importlib
+from importlib.util import find_spec
 from importlib.machinery import ModuleSpec
 import os
 import sys
 from platform import system as system_name
 from pathlib import Path
-from dotenv import load_dotenv, find_dotenv
-from langchain.schema import HumanMessage
 import tomllib as toml
-from importlib.util import find_spec
-
 from typing import (
     Any,
     Callable,
@@ -21,9 +18,19 @@ from typing import (
     Sequence,
 )
 
+from dotenv import load_dotenv, find_dotenv
+from langchain.schema import HumanMessage
+
 from esbmc_ai.chat_response import list_to_base_messages
 from esbmc_ai.logging import printv, set_verbose
-from .ai_models import *
+from .ai_models import (
+    BaseMessage,
+    is_valid_ai_model,
+    get_ai_model_by_name,
+    add_custom_ai_model,
+    AIModel,
+    OllamaAIModel,
+)
 from .api_key_collection import APIKeyCollection
 
 
@@ -299,34 +306,43 @@ class Config:
 
     @classmethod
     def get_ai_model(cls) -> AIModel:
+        """Value of field: ai_model"""
         return cls.get_value("ai_model")
 
     @classmethod
     def get_llm_requests_max_tries(cls) -> int:
+        """Value of field: llm_requests.max_tries"""
         return cls.get_value("llm_requests.max_tries")
 
     @classmethod
     def get_llm_requests_timeout(cls) -> float:
+        """"""
         return cls.get_value("llm_requests.timeout")
 
     @classmethod
     def get_user_chat_initial(cls) -> BaseMessage:
+        """Value of field: prompt_templates.user_chat.initial"""
         return cls.get_value("prompt_templates.user_chat.initial")
 
     @classmethod
     def get_user_chat_system_messages(cls) -> list[BaseMessage]:
+        """Value of field: prompt_templates.user_chat.system"""
         return cls.get_value("prompt_templates.user_chat.system")
 
     @classmethod
     def get_user_chat_set_solution(cls) -> list[BaseMessage]:
+        """Value of field: prompt_templates.user_chat.set_solution"""
         return cls.get_value("prompt_templates.user_chat.set_solution")
 
     @classmethod
     def get_fix_code_scenarios(cls) -> FixCodeScenarios:
+        """Value of field: prompt_templates.fix_code"""
         return cls.get_value("prompt_templates.fix_code")
 
     @classmethod
     def init(cls, args: Any) -> None:
+        """Static init method for the static class. Will load the config from
+        the args, the env file and then from config file."""
         cls._load_envs()
 
         if not Config.cfg_path.exists() and Config.cfg_path.is_file():
@@ -358,9 +374,9 @@ class Config:
             if field.name in config_file:
                 # Check if None and not allowed!
                 if (
-                    field.default_value == None
+                    field.default_value is None
                     and not field.default_value_none
-                    and config_file[field.name] == None
+                    and config_file[field.name] is None
                 ):
                     raise ValueError(
                         f"The config entry {field.name} has a None value when it can't be"
@@ -375,7 +391,7 @@ class Config:
 
                 # Assign field from config file
                 cls._values[field.name] = field.on_load(config_file[field.name])
-            elif field.default_value == None and not field.default_value_none:
+            elif field.default_value is None and not field.default_value_none:
                 raise KeyError(f"{field.name} is missing from config file")
             else:
                 # Use default value
@@ -385,10 +401,13 @@ class Config:
 
     @classmethod
     def get_value(cls, name: str) -> Any:
+        """Gets the value of key name"""
         return cls._values[name]
 
     @classmethod
     def set_value(cls, name: str, value: Any) -> None:
+        """Sets a value in the config, if it does not exist, it will create one.
+        This uses toml notation dot notation to namespace the elements."""
         cls._values[name] = value
 
     @classmethod
@@ -409,7 +428,7 @@ class Config:
             """Gets all the system environment variables that are currently loaded."""
             for k in keys:
                 value: Optional[str] = os.getenv(k)
-                if value != None:
+                if value is not None:
                     values[k] = value
 
         keys: list[str] = ["OPENAI_API_KEY", "ESBMCAI_CONFIG_PATH"]
@@ -517,11 +536,9 @@ def _load_custom_ai(config: dict) -> None:
     ) -> tuple[Any, bool]:
         if name in config_file:
             return config_file[name], True
-        else:
-            print(
-                f"Warning: {name} not found in config... Using default value: {default}"
-            )
-            return default, False
+
+        print(f"Warning: {name} not found in config... Using default value: {default}")
+        return default, False
 
     for name, ai_data in config.items():
         # Load the max tokens

@@ -1,3 +1,5 @@
+"""Contains code for managing and running built-in and addon commands."""
+
 import re
 from esbmc_ai.commands.chat_command import ChatCommand
 from esbmc_ai.commands.help_command import HelpCommand
@@ -18,22 +20,29 @@ class CommandRunner:
 
     @property
     def commands(self) -> list[ChatCommand]:
+        """Returns all commands. The list is copied."""
         return self._builtin_commands + self._addon_commands
 
     @property
     def command_names(self) -> list[str]:
+        """Returns a list of built-in commands. This is a reference to the
+        internal list."""
         return [cmd.command_name for cmd in self.commands]
 
     @property
     def builtin_commands_names(self) -> list[str]:
+        """Returns a list of built-in command names."""
         return [cmd.command_name for cmd in self._builtin_commands]
 
     @property
     def addon_commands_names(self) -> list[str]:
+        """Returns a list of the addon command names."""
         return [cmd.command_name for cmd in self._addon_commands]
 
     @property
     def addon_commands(self) -> list[ChatCommand]:
+        """Returns a list of the addon commands. This is a reference to the
+        internal list."""
         return self._addon_commands
 
     @staticmethod
