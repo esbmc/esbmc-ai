@@ -10,7 +10,7 @@ from sys import stdout as terminal
 from time import sleep
 from itertools import cycle
 from threading import Thread
-from typing import Optional, override
+from typing_extensions import Optional, override
 
 
 class BaseLoadingWidget:
