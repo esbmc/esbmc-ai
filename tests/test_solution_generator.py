@@ -6,7 +6,6 @@ import pytest
 
 from esbmc_ai.ai_models import AIModel
 from esbmc_ai.chats.solution_generator import SolutionGenerator
-from esbmc_ai.config import FixCodeScenarios
 
 
 @pytest.fixture(scope="function")
