@@ -1,5 +1,8 @@
 # Author: Yiannis Charalambous
 
+"""Contains code for the base class for interacting with the LLMs in a 
+conversation-based way."""
+
 from abc import abstractmethod
 from typing import Optional
 
@@ -14,7 +17,7 @@ from esbmc_ai.chat_response import ChatResponse, FinishReason
 from esbmc_ai.ai_models import AIModel
 
 
-class BaseChatInterface(object):
+class BaseChatInterface:
     """Base class for interacting with an LLM. It allows for interactions with
     text generation LLMs and also chat LLMs."""
 
@@ -32,12 +35,14 @@ class BaseChatInterface(object):
 
     @abstractmethod
     def compress_message_stack(self) -> None:
+        """Compress the message stack, is abstract and needs to be implemented."""
         raise NotImplementedError()
 
     def push_to_message_stack(
         self,
         message: BaseMessage | tuple[BaseMessage, ...] | list[BaseMessage],
     ) -> None:
+        """Pushes a message(s) to the message stack without querying the LLM."""
         if isinstance(message, list) or isinstance(message, tuple):
             self.messages.extend(list(message))
         else:
@@ -85,31 +90,28 @@ class BaseChatInterface(object):
         all_messages = self._system_messages.copy()
         all_messages.extend(self.messages.copy())
 
+        response_message: BaseMessage = self.llm.invoke(input=all_messages)
+
+        self.push_to_message_stack(message=response_message)
+
+        # Check if token limit has been exceeded.
+        all_messages.append(response_message)
+        new_tokens: int = self.llm.get_num_tokens_from_messages(
+            messages=all_messages,
+        )
+
         response: ChatResponse
-        try:
-            response_message: BaseMessage = self.llm.invoke(input=all_messages)
-
-            self.push_to_message_stack(message=response_message)
-
-            # Check if token limit has been exceeded.
-            all_messages.append(response_message)
-            new_tokens: int = self.llm.get_num_tokens_from_messages(
-                messages=all_messages,
+        if new_tokens > self.ai_model.tokens:
+            response = ChatResponse(
+                finish_reason=FinishReason.length,
+                message=response_message,
+                total_tokens=self.ai_model.tokens,
             )
-            if new_tokens > self.ai_model.tokens:
-                response = ChatResponse(
-                    finish_reason=FinishReason.length,
-                    message=response_message,
-                    total_tokens=self.ai_model.tokens,
-                )
-            else:
-                response = ChatResponse(
-                    finish_reason=FinishReason.stop,
-                    message=response_message,
-                    total_tokens=new_tokens,
-                )
-        except Exception as e:
-            print(f"There was an unkown error when generating a response: {e}")
-            exit(1)
+        else:
+            response = ChatResponse(
+                finish_reason=FinishReason.stop,
+                message=response_message,
+                total_tokens=new_tokens,
+            )
 
         return response
