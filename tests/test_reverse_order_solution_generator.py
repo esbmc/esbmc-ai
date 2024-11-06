@@ -11,7 +11,9 @@ from langchain.schema import (
 
 from esbmc_ai.config import default_scenario
 from esbmc_ai.ai_models import AIModel
-from esbmc_ai.reverse_order_solution_generator import ReverseOrderSolutionGenerator
+from esbmc_ai.chats.reverse_order_solution_generator import (
+    ReverseOrderSolutionGenerator,
+)
 
 
 @pytest.fixture(scope="function")

@@ -223,6 +223,7 @@ class FixCodeCommand(ChatCommand):
                 else:
                     returned_source = source_file.latest_content
 
+                # Check if an output directory is specified and save to it
                 if output_dir:
                     assert (
                         output_dir.is_dir()
