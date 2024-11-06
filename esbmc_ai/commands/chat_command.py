@@ -1,5 +1,7 @@
 # Author: Yiannis Charalambous
 
+"""Contains things related to chat commands."""
+
 from abc import ABC, abstractmethod
 from typing import Any, Optional
 
@@ -7,6 +9,8 @@ from esbmc_ai.commands.command_result import CommandResult
 
 
 class ChatCommand(ABC):
+    """Abstract Base Class for implementing chat commands."""
+
     def __init__(
         self,
         command_name: str = "",
@@ -20,4 +24,6 @@ class ChatCommand(ABC):
 
     @abstractmethod
     def execute(self, **kwargs: Optional[Any]) -> Optional[CommandResult]:
+        """The main entrypoint of the command. This is abstract and will need to
+        be implemented."""
         raise NotImplementedError(f"Command {self.command_name} is not implemented.")

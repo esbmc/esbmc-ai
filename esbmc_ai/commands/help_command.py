@@ -1,11 +1,16 @@
 # Author: Yiannis Charalambous
 
+"""Contains the help command."""
+
 from typing import Any, Optional
 from typing_extensions import override
 from .chat_command import ChatCommand
 
 
 class HelpCommand(ChatCommand):
+    """Command that prints helpful information about other commands. Including
+    addon commands."""
+
     commands: list[ChatCommand] = []
 
     def __init__(self) -> None:
@@ -13,9 +18,6 @@ class HelpCommand(ChatCommand):
             command_name="help",
             help_message="Print this help message.",
         )
-
-    def set_commands(self, commands: list[ChatCommand]) -> None:
-        self.commands = commands
 
     @override
     def execute(self, **_: Optional[Any]) -> Optional[Any]:
