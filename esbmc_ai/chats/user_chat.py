@@ -1,5 +1,7 @@
 # Author: Yiannis Charalambous 2023
 
+"""Contains class that handles the UserChat of ESBMC-AI"""
+
 from typing_extensions import override
 
 from langchain.memory import ConversationSummaryMemory
@@ -9,11 +11,15 @@ from langchain_community.chat_message_histories import ChatMessageHistory
 
 
 from esbmc_ai.ai_models import AIModel
+from esbmc_ai.esbmc_util import ESBMCUtil
 
 from .base_chat_interface import BaseChatInterface
 
 
 class UserChat(BaseChatInterface):
+    """Simple interface that talks to the LLM and stores the result. The class
+    also stores the fixed results from fix code command."""
+
     solution: str = ""
 
     def __init__(
@@ -37,8 +43,12 @@ class UserChat(BaseChatInterface):
         # The messsages for setting a new solution to the source code.
         self.set_solution_messages = set_solution_messages
 
-        self.apply_template_value(source_code=self.source_code)
-        self.apply_template_value(esbmc_output=self.esbmc_output)
+        self.apply_template_value(
+            source_code=self.source_code,
+            esbmc_output=self.esbmc_output,
+            error_line=str(ESBMCUtil.get_source_code_err_line(self.esbmc_output)),
+            error_type=ESBMCUtil.esbmc_get_error_type(self.esbmc_output),
+        )
 
     def set_solution(self, source_code: str) -> None:
         """Sets the solution to the problem ESBMC reported, this will inform the AI."""
@@ -50,8 +60,9 @@ class UserChat(BaseChatInterface):
 
     @override
     def compress_message_stack(self) -> None:
-        """Uses ConversationSummaryMemory from Langchain to summarize the conversation of all the non-protected
-        messages into one summary message which is added into the conversation as a SystemMessage.
+        """Uses ConversationSummaryMemory from Langchain to summarize the
+        conversation of all the non-protected messages into one summary message
+        which is added into the conversation as a SystemMessage.
         """
 
         memory: ConversationSummaryMemory = ConversationSummaryMemory.from_messages(

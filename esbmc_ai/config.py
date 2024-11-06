@@ -15,7 +15,6 @@ from typing import (
     List,
     NamedTuple,
     Optional,
-    Sequence,
 )
 
 from esbmc_ai.chat_response import list_to_base_messages
@@ -23,12 +22,13 @@ from esbmc_ai.logging import set_verbose
 from .ai_models import *
 from .api_key_collection import APIKeyCollection
 
-
-FixCodeScenarios = dict[str, dict[str, str | Sequence[BaseMessage]]]
+FixCodeScenarios = dict[str, dict[str, str | tuple[BaseMessage, ...]]]
 """Type for scenarios. A single scenario contains initial and system components.
 
 * Initial message can be accessed like so: `x["base"]["initial"]`
-* System message can be accessed like so: `x["base"]["system"]`"""
+* System messages can be accessed like so: `x["base"]["system"]`
+
+The config loader ensures they conform to the specifications."""
 
 default_scenario: str = "base"
 
@@ -90,6 +90,8 @@ def _validate_prompt_template(conv: Dict[str, List[Dict]]) -> bool:
 
 
 class Config:
+    """Config loader for ESBMC-AI"""
+
     api_keys: APIKeyCollection
     raw_conversation: bool = False
     cfg_path: Path
@@ -115,7 +117,7 @@ class Config:
             name="temp_file_dir",
             default_value=None,
             validate=lambda v: isinstance(v, str) and Path(v).is_file(),
-            on_load=lambda v: Path(v),
+            on_load=Path,
             default_value_none=True,
         ),
         ConfigField(
@@ -182,13 +184,13 @@ class Config:
         ConfigField(
             name="user_chat.temperature",
             default_value=1.0,
-            validate=lambda v: isinstance(v, float) and v >= 0 and v <= 2.0,
+            validate=lambda v: isinstance(v, float) and 0 <= v <= 2.0,
             error_message="Temperature needs to be a value between 0 and 2.0",
         ),
         ConfigField(
             name="fix_code.temperature",
             default_value=1.0,
-            validate=lambda v: isinstance(v, float) and v >= 0 and v <= 2.0,
+            validate=lambda v: isinstance(v, float) and 0 <= v <= 2,
             error_message="Temperature needs to be a value between 0 and 2.0",
         ),
         ConfigField(
@@ -211,14 +213,14 @@ class Config:
         ConfigField(
             name="prompt_templates.user_chat.system",
             default_value=None,
-            validate=lambda v: _validate_prompt_template_conversation(v),
-            on_load=lambda v: list_to_base_messages(v),
+            validate=_validate_prompt_template_conversation,
+            on_load=list_to_base_messages,
         ),
         ConfigField(
             name="prompt_templates.user_chat.set_solution",
             default_value=None,
-            validate=lambda v: _validate_prompt_template_conversation(v),
-            on_load=lambda v: list_to_base_messages(v),
+            validate=_validate_prompt_template_conversation,
+            on_load=list_to_base_messages,
         ),
         # Here we have a list of prompt templates that are for each scenario.
         # The base scenario prompt template is required.
