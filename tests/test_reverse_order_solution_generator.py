@@ -56,13 +56,13 @@ def test_message_stack(setup_llm_model) -> None:
 
     solution_generator.update_state("", "")
 
-    solution, _ = solution_generator.generate_solution()
+    solution, _ = solution_generator.generate_solution(ignore_system_message=True)
     assert solution == llm.responses[0]
     solution_generator.scenarios[default_scenario]["initial"] = "Test message 2"
-    solution, _ = solution_generator.generate_solution()
+    solution, _ = solution_generator.generate_solution(ignore_system_message=True)
     assert solution == llm.responses[1]
     solution_generator.scenarios[default_scenario]["initial"] = "Test message 3"
-    solution, _ = solution_generator.generate_solution()
+    solution, _ = solution_generator.generate_solution(ignore_system_message=True)
     assert solution == llm.responses[2]
 
     # Test history is intact

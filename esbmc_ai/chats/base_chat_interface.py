@@ -36,9 +36,12 @@ class BaseChatInterface(object):
 
     def push_to_message_stack(
         self,
-        message: BaseMessage,
+        message: BaseMessage | tuple[BaseMessage, ...] | list[BaseMessage],
     ) -> None:
-        self.messages.append(message)
+        if isinstance(message, list) or isinstance(message, tuple):
+            self.messages.extend(list(message))
+        else:
+            self.messages.append(message)
 
     def apply_template_value(self, **kwargs: str) -> None:
         """Will substitute an f-string in the message stack and system messages to

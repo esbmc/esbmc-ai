@@ -57,25 +57,25 @@ class ESBMCUtil:
 
     @classmethod
     def get_source_code_err_line(cls, esbmc_output: str) -> Optional[int]:
-        """Gets the error line of the esbmc_output, by first using the counterexample
-        strategy, if that fails, then use clang."""
-        line: Optional[int] = ESBMCUtil.get_esbmc_err_line_idx(esbmc_output)
+        """Gets the error line of the esbmc_output, regardless if it is a
+        counterexample or clang output."""
+        line: Optional[int] = cls.get_esbmc_err_line(esbmc_output)
         if not line:
-            # Check if it parses
-            line = ESBMCUtil.get_clang_err_line_idx(esbmc_output)
+            line = ESBMCUtil.get_clang_err_line(esbmc_output)
         return line
 
     @classmethod
     def get_source_code_err_line_idx(cls, esbmc_output: str) -> Optional[int]:
-        line: Optional[int] = cls.get_source_code_err_line(esbmc_output)
-        if line:
-            return line - 1
-        else:
-            return None
+        """Gets the error line index of the esbmc_output regardless if it is a
+        counterexample or clang output."""
+        line: Optional[int] = cls.get_source_code_err_line_idx(esbmc_output)
+        if not line:
+            return ESBMCUtil.get_clang_err_line_idx(esbmc_output)
+        return line - 1
 
     @classmethod
     def get_esbmc_err_line(cls, esbmc_output: str) -> Optional[int]:
-        """Find "Violated property:" string in ESBMC output"""
+        """Return from the counterexample the line where the error occurs."""
         violated_property: Optional[str] = cls.esbmc_get_violated_property(esbmc_output)
         if violated_property:
             # Get the line of the violated property.
@@ -89,8 +89,7 @@ class ESBMCUtil:
 
     @classmethod
     def get_esbmc_err_line_idx(cls, esbmc_output: str) -> Optional[int]:
-        """Find "Violated property:" string in ESBMC output and return the line
-        as a 0-based index number."""
+        """Return from the counterexample the line index where the error occurs."""
         line: Optional[int] = cls.get_esbmc_err_line(esbmc_output)
         if line:
             return line - 1

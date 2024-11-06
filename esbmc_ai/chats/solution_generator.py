@@ -69,6 +69,12 @@ def get_esbmc_output_formatted(esbmc_output_type: str, esbmc_output: str) -> str
 
 
 class SolutionGenerator(BaseChatInterface):
+    """SolutionGenerator is a simple conversation-based automated program repair
+    class. The class works in a cycle, by first calling update_state with the
+    new source_code and esbmc_output, then by calling generate_solution. The
+    class supports scenarios to customize the system message and initial prompt
+    based on the"""
+
     def __init__(
         self,
         scenarios: FixCodeScenarios,
@@ -77,9 +83,7 @@ class SolutionGenerator(BaseChatInterface):
         source_code_format: str = "full",
         esbmc_output_type: str = "full",
     ) -> None:
-        """Initializes the solution generator. This ModelChat provides Dynamic
-        Prompting. Will get the correct scenario from the DynamicAIModelAgent
-        supplied and create a ChatPrompt."""
+        """Initializes the solution generator."""
 
         super().__init__(
             ai_model=ai_model,
@@ -96,6 +100,7 @@ class SolutionGenerator(BaseChatInterface):
         self.source_code_raw: Optional[str] = None
         self.source_code_formatted: Optional[str] = None
         self.esbmc_output: Optional[str] = None
+        self.invokations: int = 0
 
     @override
     def compress_message_stack(self) -> None:
@@ -103,6 +108,7 @@ class SolutionGenerator(BaseChatInterface):
         # If generate_solution is called after this point, it will start new
         # with the currently set state.
         self.messages: list[BaseMessage] = []
+        self.invokations = 0
 
     @classmethod
     def get_code_from_solution(cls, solution: str) -> str:
@@ -157,10 +163,48 @@ class SolutionGenerator(BaseChatInterface):
             esbmc_output=self.esbmc_output,
         )
 
+    def _get_system_messages(
+        self, override_scenario: Optional[str] = None
+    ) -> tuple[BaseMessage, ...]:
+        if override_scenario:
+            system_messages = self.scenarios[override_scenario]["system"]
+        else:
+            assert self.scenario, "Call update or set the scenario"
+            if self.scenario in self.scenarios:
+                system_messages = self.scenarios[self.scenario]["system"]
+            else:
+                system_messages = self.scenarios[default_scenario]["system"]
+
+        assert isinstance(system_messages, tuple)
+        assert all(isinstance(msg, BaseMessage) for msg in system_messages)
+        return system_messages
+
+    def _get_initial_message(self, override_scenario: Optional[str] = None) -> str:
+        if override_scenario:
+            return str(self.scenarios[override_scenario]["initial"])
+        else:
+            assert self.scenario, "Call update or set the scenario"
+            if self.scenario in self.scenarios:
+                return str(self.scenarios[self.scenario]["initial"])
+            else:
+                return str(self.scenarios[default_scenario]["initial"])
+
     def generate_solution(
         self,
         override_scenario: Optional[str] = None,
+        ignore_system_message: bool = False,
     ) -> tuple[str, FinishReason]:
+        """Prompts the LLM to repair the source code using the verifier output.
+        If this is the first time the method is called, the system message will
+        be sent to the LLM, unless ignore_system_message is True, in which case
+        the initial prompt will be used.
+
+        In subsequent invokations of generate_solution, the initial prompt will
+        be used.
+
+        So the system messages and initial message should each include at least
+        {source_code} and {esbmc_output} so that they are substituted into the
+        message."""
 
         assert (
             self.source_code_raw is not None
@@ -168,18 +212,18 @@ class SolutionGenerator(BaseChatInterface):
             and self.esbmc_output is not None
         ), "Call update_state before calling generate_solution."
 
-        # Get scenario initial message and push it to message stack
-        initial_message: str
-        if override_scenario:
-            initial_message = str(self.scenarios[override_scenario]["initial"])
+        if ignore_system_message or self.invokations > 0:
+            # Get scenario initial message and push it to message stack
+            self.push_to_message_stack(
+                HumanMessage(content=self._get_initial_message(override_scenario))
+            )
         else:
-            assert self.scenario, "Call update or set the scenario"
-            if self.scenario in self.scenarios:
-                initial_message = str(self.scenarios[self.scenario]["initial"])
-            else:
-                initial_message = str(self.scenarios[default_scenario])
+            # Get scenario system messages and push it to message stack. Don't
+            # push to system message stack because we want to regenerate from
+            # the beginning at every reset.
+            self.push_to_message_stack(self._get_system_messages(override_scenario))
 
-        self.push_to_message_stack(HumanMessage(content=initial_message))
+        self.invokations += 1
 
         # Apply template substitution to message stack
         self.apply_template_value(

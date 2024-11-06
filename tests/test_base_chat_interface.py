@@ -40,6 +40,9 @@ def test_push_message_stack(setup) -> None:
         AIMessage(content="Test 1"),
         HumanMessage(content="Test 2"),
         SystemMessage(content="Test 3"),
+        SystemMessage(content="Test 4"),
+        SystemMessage(content="Test 5"),
+        SystemMessage(content="Test 6"),
     ]
 
     chat.push_to_message_stack(message=messages[0])
@@ -49,6 +52,12 @@ def test_push_message_stack(setup) -> None:
     assert chat.messages[0] == messages[0]
     assert chat.messages[1] == messages[1]
     assert chat.messages[2] == messages[2]
+
+    chat.push_to_message_stack(message=messages[3:])
+
+    assert chat.messages[3] == messages[3]
+    assert chat.messages[4] == messages[4]
+    assert chat.messages[5] == messages[5]
 
 
 def test_send_message(setup) -> None:
