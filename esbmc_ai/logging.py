@@ -17,22 +17,22 @@ def set_verbose(level: int) -> None:
     _verbose = level
 
 
-def printv(m) -> None:
+def printv(*m: object) -> None:
     """Level 1 verbose printing."""
     if _verbose > 0:
-        print(m)
+        print(*m)
 
 
-def printvv(m) -> None:
+def printvv(*m: object) -> None:
     """Level 2 verbose printing."""
     if _verbose > 1:
-        print(m)
+        print(*m)
 
 
-def printvvv(m) -> None:
+def printvvv(*m: object) -> None:
     """Level 3 verbose printing."""
     if _verbose > 2:
-        print(m)
+        print(*m)
 
 
 def print_horizontal_line(verbosity: int) -> None:

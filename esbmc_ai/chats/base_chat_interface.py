@@ -5,6 +5,7 @@ conversation-based way."""
 
 from abc import abstractmethod
 from typing import Optional
+import traceback
 
 from langchain.schema import (
     BaseMessage,

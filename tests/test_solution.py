@@ -14,24 +14,34 @@ def solution() -> Solution:
 
 
 def test_add_source_file(solution) -> None:
-    src: str = "int main(int argc, char** argv) {return 0;}"
-    solution.add_source_file(None, src)
-    assert (
-        len(solution.files) == 1
-        and solution.files[0].file_path == None
-        and solution.files[0].latest_content == src
-    )
     src = '#include <stdio.h> int main(int argc, char** argv) { printf("hello world\n"); return 0;}'
     solution.add_source_file("Testfile1", src)
+    solution.add_source_file("Testfile2", src)
+    solution.add_source_file("Testfile3", src)
+
+    assert len(solution.files) == 3
+
     assert (
-        len(solution.files) == 2
-        and solution.files[1].file_path == "Testfile1"
+        solution.files[0].file_path == "Testfile1"
+        and solution.files[0].latest_content == src
+    )
+    assert (
+        solution.files[1].file_path == "Testfile2"
         and solution.files[1].latest_content == src
     )
     assert (
-        len(solution.files_mapped) == 1
+        solution.files[2].file_path == "Testfile3"
+        and solution.files[2].latest_content == src
+    )
+
+    assert (
+        len(solution.files_mapped) == 3
         and solution.files_mapped["Testfile1"].file_path == "Testfile1"
         and solution.files_mapped["Testfile1"].initial_content == src
+        and solution.files_mapped["Testfile2"].file_path == "Testfile2"
+        and solution.files_mapped["Testfile2"].initial_content == src
+        and solution.files_mapped["Testfile3"].file_path == "Testfile3"
+        and solution.files_mapped["Testfile3"].initial_content == src
     )
 
 

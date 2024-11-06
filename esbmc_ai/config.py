@@ -96,6 +96,7 @@ class Config:
     raw_conversation: bool = False
     cfg_path: Path
     generate_patches: bool
+    output_dir: Optional[Path] = None
 
     _fields: List[ConfigField] = [
         ConfigField(
@@ -432,6 +433,17 @@ class Config:
 
         Config.raw_conversation = args.raw_conversation
         Config.generate_patches = args.generate_patches
+
+        if args.output_dir:
+            path: Path = Path(args.output_dir).expanduser()
+            if path.is_dir():
+                Config.output_dir = path
+            else:
+                print(
+                    "Error while parsing arguments: output_dir: dir does not exist:",
+                    Config.output_dir,
+                )
+                sys.exit(1)
 
     @classmethod
     def _flatten_dict(cls, d, parent_key="", sep="."):
