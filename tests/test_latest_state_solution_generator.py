@@ -32,50 +32,47 @@ def test_send_message(setup_llm_model) -> None:
         scenarios={
             "base": {
                 "initial": "Initial test message",
-                "system": [
+                "system": (
                     SystemMessage(content="Test message 1"),
                     HumanMessage(content="Test message 2"),
                     AIMessage(content="Test message 3"),
-                ],
+                ),
             }
         },
         llm=llm,
         ai_model=model,
     )
 
-    # Create an object that can be edited by reference
-    class Referenced:
-        def __init__(self, value: Any) -> None:
-            self.value: Any = value
-
-    initial_prompt: Referenced = Referenced(
-        solution_generator.scenarios[default_scenario]["initial"]
-    )
+    initial_prompt = solution_generator.scenarios[default_scenario]["initial"]
 
     def send_message_mock(message: Optional[str] = None) -> ChatResponse:
         assert len(solution_generator.messages) == 1
-        assert solution_generator.messages[0].content == initial_prompt.value
+        assert solution_generator.messages[0].content == initial_prompt
         assert solution_generator.messages[0].type == HumanMessage(content="").type
 
         return ChatResponse()
 
     # Use the LLM method to check if the code is overwritten
     solution_generator.send_message = send_message_mock
+
     # Call update state once since `generate_solution` requires it
     solution_generator.update_state("", "")
 
     # Check now if the message stack is wiped per generate solution call.
-    solution_generator.generate_solution()
-    initial_prompt.value = "aaaaaaa"
-    solution_generator.scenarios[default_scenario]["initial"] = "aaaaaaa"
+    solution_generator.generate_solution(ignore_system_message=True)
+    solution_generator.scenarios[default_scenario]["initial"] = initial_prompt = (
+        "aaaaaaa"
+    )
 
-    solution_generator.generate_solution()
-    initial_prompt.value = "bbbbbbb"
-    solution_generator.scenarios[default_scenario]["initial"] = "bbbbbbb"
+    solution_generator.generate_solution(ignore_system_message=True)
+    solution_generator.scenarios[default_scenario]["initial"] = initial_prompt = (
+        "bbbbbbb"
+    )
 
-    solution_generator.generate_solution()
-    initial_prompt.value = "ccccccc"
-    solution_generator.scenarios[default_scenario]["initial"] = "ccccccc"
+    solution_generator.generate_solution(ignore_system_message=True)
+    solution_generator.scenarios[default_scenario]["initial"] = initial_prompt = (
+        "ccccccc"
+    )
 
 
 def test_message_stack(setup_llm_model) -> None:
@@ -101,13 +98,13 @@ def test_message_stack(setup_llm_model) -> None:
 
     solution_generator.update_state("", "")
 
-    solution, _ = solution_generator.generate_solution()
+    solution, _ = solution_generator.generate_solution(ignore_system_message=True)
     assert solution == llm.responses[0]
     solution_generator.scenarios[default_scenario]["initial"] = "Test message 2"
-    solution, _ = solution_generator.generate_solution()
+    solution, _ = solution_generator.generate_solution(ignore_system_message=True)
     assert solution == llm.responses[1]
     solution_generator.scenarios[default_scenario]["initial"] = "Test message 3"
-    solution, _ = solution_generator.generate_solution()
+    solution, _ = solution_generator.generate_solution(ignore_system_message=True)
     assert solution == llm.responses[2]
 
     # Test history is intact

@@ -15,7 +15,6 @@ from typing import (
     List,
     NamedTuple,
     Optional,
-    Sequence,
 )
 
 from dotenv import load_dotenv, find_dotenv
@@ -33,12 +32,13 @@ from .ai_models import (
 )
 from .api_key_collection import APIKeyCollection
 
-
-FixCodeScenarios = dict[str, dict[str, str | Sequence[BaseMessage]]]
+FixCodeScenarios = dict[str, dict[str, str | tuple[BaseMessage, ...]]]
 """Type for scenarios. A single scenario contains initial and system components.
 
 * Initial message can be accessed like so: `x["base"]["initial"]`
-* System message can be accessed like so: `x["base"]["system"]`"""
+* System messages can be accessed like so: `x["base"]["system"]`
+
+The config loader ensures they conform to the specifications."""
 
 default_scenario: str = "base"
 

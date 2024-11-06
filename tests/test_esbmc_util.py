@@ -22,22 +22,22 @@ def test_get_source_code_err_line(setup_get_data):
     data_esbmc_output: dict[str, str] = setup_get_data
 
     esbmc_output: str = data_esbmc_output["cartpole_48_safe.c-amalgamation-6.c"]
-    assert ESBMCUtil.get_source_code_err_line(esbmc_output) == 323
+    assert ESBMCUtil.get_esbmc_err_line(esbmc_output) == 323
 
     esbmc_output = data_esbmc_output["cartpole_92_safe.c-amalgamation-14.c"]
-    assert ESBMCUtil.get_source_code_err_line(esbmc_output) == 221
+    assert ESBMCUtil.get_esbmc_err_line(esbmc_output) == 221
 
     esbmc_output = data_esbmc_output["cartpole_95_safe.c-amalgamation-80.c"]
-    assert ESBMCUtil.get_source_code_err_line(esbmc_output) == 285
+    assert ESBMCUtil.get_esbmc_err_line(esbmc_output) == 285
 
     esbmc_output = data_esbmc_output["cartpole_26_safe.c-amalgamation-74.c"]
-    assert ESBMCUtil.get_source_code_err_line(esbmc_output) == 299
+    assert ESBMCUtil.get_esbmc_err_line(esbmc_output) == 299
 
     esbmc_output = data_esbmc_output["robot_5_safe.c-amalgamation-13.c"]
-    assert ESBMCUtil.get_source_code_err_line(esbmc_output) == 350
+    assert ESBMCUtil.get_esbmc_err_line(esbmc_output) == 350
 
     esbmc_output = data_esbmc_output["vdp_1_safe.c-amalgamation-28.c"]
-    assert ESBMCUtil.get_source_code_err_line(esbmc_output) == 247
+    assert ESBMCUtil.get_esbmc_err_line(esbmc_output) == 247
 
 
 def test_esbmc_get_counter_example(setup_get_data) -> None:

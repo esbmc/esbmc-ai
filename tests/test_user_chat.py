@@ -3,7 +3,7 @@
 from langchain_core.language_models import FakeListChatModel
 import pytest
 
-from langchain.schema import AIMessage, SystemMessage
+from langchain.schema import AIMessage, HumanMessage, SystemMessage
 
 from esbmc_ai.ai_models import AIModel
 from esbmc_ai.chat_response import ChatResponse, FinishReason
@@ -70,3 +70,29 @@ def test_automatic_compress(setup, initial_prompt) -> None:
 
     # Check normal messages - Should be summarized automatically
     assert chat.messages[0].content == summary_text
+
+
+def test_substitution() -> None:
+    with open(
+        "tests/samples/esbmc_output/line_test/cartpole_95_safe.c-amalgamation-80.c", "r"
+    ) as file:
+        esbmc_output: str = file.read()
+
+    chat = UserChat(
+        source_code="11111",
+        esbmc_output=esbmc_output,
+        ai_model=AIModel("test", 1000),
+        system_messages=[
+            SystemMessage(content="{source_code}{esbmc_output}{error_line}{error_type}")
+        ],
+        llm=FakeListChatModel(responses=["THIS IS A SUMMARY OF THE CONVERSATION"]),
+        set_solution_messages=[HumanMessage(content="")],
+    )
+
+    assert (
+        chat._system_messages[0].content
+        == "11111"
+        + esbmc_output
+        + str(285)
+        + "dereference failure: Access to object out of bounds"
+    )
