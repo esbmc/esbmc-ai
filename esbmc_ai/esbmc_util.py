@@ -57,7 +57,25 @@ class ESBMCUtil:
 
     @classmethod
     def get_source_code_err_line(cls, esbmc_output: str) -> Optional[int]:
-        # Find "Violated property:" string in ESBMC output
+        """Gets the error line of the esbmc_output, regardless if it is a
+        counterexample or clang output."""
+        line: Optional[int] = cls.get_esbmc_err_line(esbmc_output)
+        if not line:
+            line = ESBMCUtil.get_clang_err_line(esbmc_output)
+        return line
+
+    @classmethod
+    def get_source_code_err_line_idx(cls, esbmc_output: str) -> Optional[int]:
+        """Gets the error line index of the esbmc_output regardless if it is a
+        counterexample or clang output."""
+        line: Optional[int] = cls.get_source_code_err_line_idx(esbmc_output)
+        if not line:
+            return ESBMCUtil.get_clang_err_line_idx(esbmc_output)
+        return line - 1
+
+    @classmethod
+    def get_esbmc_err_line(cls, esbmc_output: str) -> Optional[int]:
+        """Return from the counterexample the line where the error occurs."""
         violated_property: Optional[str] = cls.esbmc_get_violated_property(esbmc_output)
         if violated_property:
             # Get the line of the violated property.
@@ -70,8 +88,9 @@ class ESBMCUtil:
         return None
 
     @classmethod
-    def get_source_code_err_line_idx(cls, esbmc_output: str) -> Optional[int]:
-        line: Optional[int] = cls.get_source_code_err_line(esbmc_output)
+    def get_esbmc_err_line_idx(cls, esbmc_output: str) -> Optional[int]:
+        """Return from the counterexample the line index where the error occurs."""
+        line: Optional[int] = cls.get_esbmc_err_line(esbmc_output)
         if line:
             return line - 1
         else:
@@ -94,7 +113,8 @@ class ESBMCUtil:
         return None
 
     @classmethod
-    def get_clang_err_line_index(cls, clang_output: str) -> Optional[int]:
+    def get_clang_err_line_idx(cls, clang_output: str) -> Optional[int]:
+        """Returns the clang error line as a 0-based index."""
         line: Optional[int] = cls.get_clang_err_line(clang_output)
         if line:
             return line - 1

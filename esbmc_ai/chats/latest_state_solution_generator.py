@@ -18,14 +18,19 @@ class LatestStateSolutionGenerator(SolutionGenerator):
 
     @override
     def generate_solution(
-        self, override_scenario: Optional[str] = None
+        self,
+        override_scenario: Optional[str] = None,
+        ignore_system_message: bool = False,
     ) -> tuple[str, FinishReason]:
         # Backup message stack and clear before sending base message. We want
         # to keep the message stack intact because we will print it with
         # print_raw_conversation.
         messages: list[BaseMessage] = self.messages
         self.messages: list[BaseMessage] = []
-        solution, finish_reason = super().generate_solution(override_scenario)
+        solution, finish_reason = super().generate_solution(
+            override_scenario=override_scenario,
+            ignore_system_message=ignore_system_message,
+        )
         # Append last messages to the messages stack
         messages.extend(self.messages)
         # Restore

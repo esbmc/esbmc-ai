@@ -40,14 +40,18 @@ class BaseChatInterface:
 
     def push_to_message_stack(
         self,
-        message: BaseMessage,
+        message: BaseMessage | tuple[BaseMessage, ...] | list[BaseMessage],
     ) -> None:
-        """Pushes a message to the message stack without querying the LLM."""
-        self.messages.append(message)
+        """Pushes a message(s) to the message stack without querying the LLM."""
+        if isinstance(message, list) or isinstance(message, tuple):
+            self.messages.extend(list(message))
+        else:
+            self.messages.append(message)
 
     def apply_template_value(self, **kwargs: str) -> None:
         """Will substitute an f-string in the message stack and system messages to
-        the provided value."""
+        the provided value. The new substituted messages will become the new
+        message stack, so the substitution is permanent."""
 
         system_message_prompts: PromptValue = self.ai_model.apply_chat_template(
             messages=self._system_messages,
