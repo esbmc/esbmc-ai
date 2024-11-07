@@ -6,9 +6,14 @@ from esbmc_ai.commands.help_command import HelpCommand
 
 
 class CommandRunner:
-    """Command runner manages running and storing commands."""
+    """Command runner manages running and storing commands. Singleton class."""
 
-    def __init__(self, builtin_commands: list[ChatCommand]) -> None:
+    def __new__(cls):
+        if not hasattr(cls, "instance"):
+            cls.instance = super(CommandRunner, cls).__new__(cls)
+        return cls.instance
+
+    def init(self, builtin_commands: list[ChatCommand]) -> None:
         self._builtin_commands: list[ChatCommand] = builtin_commands.copy()
         self._addon_commands: list[ChatCommand] = []
 

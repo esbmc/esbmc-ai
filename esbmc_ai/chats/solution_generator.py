@@ -12,29 +12,25 @@ from esbmc_ai.config import FixCodeScenarios, default_scenario
 from esbmc_ai.solution import SourceFile
 
 from esbmc_ai.ai_models import AIModel
-from esbmc_ai.esbmc_util import ESBMCUtil
+from esbmc_ai.verifiers.base_source_verifier import (
+    BaseSourceVerifier,
+    SourceCodeParseError,
+)
 from .base_chat_interface import BaseChatInterface
 
 
-class ESBMCTimedOutException(Exception):
-    """Error that means that ESBMC timed out and so the error could not be
-    determined."""
-
-
-class SourceCodeParseError(Exception):
-    """Error that means that SolutionGenerator could not parse the source code
-    to return the right format."""
-
-
 def get_source_code_formatted(
-    source_code_format: str, source_code: str, esbmc_output: str
+    verifier: BaseSourceVerifier,
+    source_code_format: str,
+    source_code: str,
+    esbmc_output: str,
 ) -> str:
     """Gets the formatted output source code, based on the source_code_format
     passed."""
     match source_code_format:
         case "single":
             # Get source code error line from esbmc output
-            line: Optional[int] = ESBMCUtil.get_source_code_err_line_idx(esbmc_output)
+            line: Optional[int] = verifier.get_error_line_idx(esbmc_output)
             if line:
                 return source_code.splitlines(True)[line]
 
@@ -49,34 +45,6 @@ def get_source_code_formatted(
             )
 
 
-def get_esbmc_output_formatted(esbmc_output_type: str, esbmc_output: str) -> str:
-    """Gets the formatted output ESBMC output, based on the esbmc_output_type
-    passed."""
-    # Check for parsing error
-    if "ERROR: PARSING ERROR" in esbmc_output:
-        # Parsing errors are usually small in nature.
-        raise SourceCodeParseError()
-
-    if "ERROR: Timed out" in esbmc_output:
-        raise ESBMCTimedOutException()
-
-    match esbmc_output_type:
-        case "vp":
-            value: Optional[str] = ESBMCUtil.esbmc_get_violated_property(esbmc_output)
-            if not value:
-                raise ValueError("Not found violated property." + esbmc_output)
-            return value
-        case "ce":
-            value: Optional[str] = ESBMCUtil.esbmc_get_counter_example(esbmc_output)
-            if not value:
-                raise ValueError("Not found counterexample.")
-            return value
-        case "full":
-            return esbmc_output
-        case _:
-            raise ValueError(f"Not a valid ESBMC output type: {esbmc_output_type}")
-
-
 class SolutionGenerator(BaseChatInterface):
     """SolutionGenerator is a simple conversation-based automated program repair
     class. The class works in a cycle, by first calling update_state with the
@@ -89,6 +57,7 @@ class SolutionGenerator(BaseChatInterface):
         scenarios: FixCodeScenarios,
         llm: BaseChatModel,
         ai_model: AIModel,
+        verifier: BaseSourceVerifier,
         source_code_format: str = "full",
         esbmc_output_type: str = "full",
     ) -> None:
@@ -102,6 +71,8 @@ class SolutionGenerator(BaseChatInterface):
 
         self.scenarios: FixCodeScenarios = scenarios
         self.scenario: Optional[str] = None
+
+        self.verifier: BaseSourceVerifier = verifier
 
         self.esbmc_output_type: str = esbmc_output_type
         self.source_code_format: str = source_code_format
@@ -150,15 +121,14 @@ class SolutionGenerator(BaseChatInterface):
         the scenario, which is the type of error that ESBMC has shown. This should be
         called before generate_solution."""
 
-        self.scenario = ESBMCUtil.esbmc_get_error_type(esbmc_output)
-
+        self.scenario = self.verifier.get_error_scenario(esbmc_output)
         self.source_code_raw = source_code
 
         # Format ESBMC output
         try:
-            self.esbmc_output = get_esbmc_output_formatted(
-                esbmc_output_type=self.esbmc_output_type,
-                esbmc_output=esbmc_output,
+            self.esbmc_output = self.verifier.apply_formatting(
+                verifier_output=esbmc_output,
+                format=self.esbmc_output_type,
             )
         except SourceCodeParseError:
             # When clang output is displayed, show it entirely as it doesn't get very
@@ -167,6 +137,7 @@ class SolutionGenerator(BaseChatInterface):
 
         # Format source code
         self.source_code_formatted = get_source_code_formatted(
+            verifier=self.verifier,
             source_code_format=self.source_code_format,
             source_code=source_code,
             esbmc_output=self.esbmc_output,
@@ -237,12 +208,14 @@ class SolutionGenerator(BaseChatInterface):
 
         self.invokations += 1
 
+        error_type: Optional[str] = self.verifier.get_error_type(self.esbmc_output)
+
         # Apply template substitution to message stack
         self.apply_template_value(
             source_code=self.source_code_formatted,
             esbmc_output=self.esbmc_output,
-            error_line=str(ESBMCUtil.get_source_code_err_line(self.esbmc_output)),
-            error_type=ESBMCUtil.esbmc_get_error_type(self.esbmc_output),
+            error_line=str(self.verifier.get_error_line(self.esbmc_output)),
+            error_type=error_type if error_type else "unknown error",
         )
 
         # Generate the solution
@@ -257,7 +230,7 @@ class SolutionGenerator(BaseChatInterface):
         match self.source_code_format:
             case "single":
                 # Get source code error line from esbmc output
-                line: Optional[int] = ESBMCUtil.get_source_code_err_line_idx(
+                line: Optional[int] = self.verifier.get_error_line_idx(
                     self.esbmc_output
                 )
 

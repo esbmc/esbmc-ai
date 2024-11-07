@@ -10,6 +10,7 @@ from esbmc_ai.config import default_scenario
 from esbmc_ai.ai_models import AIModel
 from esbmc_ai.chat_response import ChatResponse
 from esbmc_ai.chats.latest_state_solution_generator import LatestStateSolutionGenerator
+from esbmc_ai.verifiers import ESBMCUtil
 
 
 @pytest.fixture(scope="function")
@@ -29,6 +30,7 @@ def test_send_message(setup_llm_model) -> None:
     llm, model = setup_llm_model
 
     solution_generator = LatestStateSolutionGenerator(
+        verifier=ESBMCUtil(),
         scenarios={
             "base": {
                 "initial": "Initial test message",
@@ -81,6 +83,7 @@ def test_message_stack(setup_llm_model) -> None:
     solution_generator = LatestStateSolutionGenerator(
         llm=llm,
         ai_model=model,
+        verifier=ESBMCUtil(),
         scenarios={
             "base": {
                 "initial": "Initial test message",

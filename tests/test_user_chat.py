@@ -8,6 +8,7 @@ from langchain.schema import AIMessage, HumanMessage, SystemMessage
 from esbmc_ai.ai_models import AIModel
 from esbmc_ai.chat_response import ChatResponse, FinishReason
 from esbmc_ai.chats.user_chat import UserChat
+from esbmc_ai.verifiers import ESBMCUtil
 
 
 @pytest.fixture
@@ -22,6 +23,7 @@ def setup():
         system_messages=system_messages,
         ai_model=AIModel(name="test", tokens=12),
         llm=FakeListChatModel(responses=[summary_text]),
+        verifier=ESBMCUtil(),
         source_code="This is source code",
         esbmc_output="This is esbmc output",
         set_solution_messages=[
@@ -85,6 +87,7 @@ def test_substitution() -> None:
         system_messages=[
             SystemMessage(content="{source_code}{esbmc_output}{error_line}{error_type}")
         ],
+        verifier=ESBMCUtil(),
         llm=FakeListChatModel(responses=["THIS IS A SUMMARY OF THE CONVERSATION"]),
         set_solution_messages=[HumanMessage(content="")],
     )

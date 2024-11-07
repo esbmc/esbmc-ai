@@ -14,6 +14,7 @@ from esbmc_ai.ai_models import AIModel
 from esbmc_ai.chats.reverse_order_solution_generator import (
     ReverseOrderSolutionGenerator,
 )
+from esbmc_ai.verifiers import ESBMCUtil
 
 
 @pytest.fixture(scope="function")
@@ -41,6 +42,7 @@ def test_message_stack(setup_llm_model) -> None:
     solution_generator = ReverseOrderSolutionGenerator(
         llm=llm,
         ai_model=model,
+        verifier=ESBMCUtil(),
         scenarios={
             "base": {
                 "initial": "Initial test message",
