@@ -84,6 +84,7 @@ class BaseSourceVerifier(ABC):
         abilitiy to override values that would be loaded from the config by
         specifying them in the kwargs."""
         _ = source_file
+        _ = source_file_iteration
         _ = kwargs
         raise NotImplementedError()
 

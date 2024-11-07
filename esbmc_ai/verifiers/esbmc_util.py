@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Optional, override
 
 from esbmc_ai.solution import SourceFile
+
 from esbmc_ai.config import default_scenario
 from esbmc_ai.verifiers.base_source_verifier import (
     BaseSourceVerifier,
@@ -39,8 +40,7 @@ class ESBMCUtil(BaseSourceVerifier):
         idx: int = esbmc_output.find("[Counterexample]\n")
         if idx == -1:
             return None
-        else:
-            return esbmc_output[idx:]
+        return esbmc_output[idx:]
 
     @classmethod
     def get_esbmc_err_line(cls, esbmc_output: str) -> Optional[int]:
@@ -62,8 +62,7 @@ class ESBMCUtil(BaseSourceVerifier):
         line: Optional[int] = cls.get_esbmc_err_line(esbmc_output)
         if line:
             return line - 1
-        else:
-            return None
+        return None
 
     @classmethod
     def get_clang_err_line(cls, clang_output: str) -> Optional[int]:
@@ -87,8 +86,7 @@ class ESBMCUtil(BaseSourceVerifier):
         line: Optional[int] = cls.get_clang_err_line(clang_output)
         if line:
             return line - 1
-        else:
-            return None
+        return None
 
     def __init__(self) -> None:
         super().__init__("esbmc")
@@ -102,7 +100,7 @@ class ESBMCUtil(BaseSourceVerifier):
         self,
         source_file: SourceFile,
         source_file_iteration: int = -1,
-        esbmc_params: list = [],
+        esbmc_params: tuple = (),
         auto_clean: bool = False,
         temp_file_dir: Optional[Path] = None,
         timeout: Optional[int] = None,
@@ -216,7 +214,7 @@ class ESBMCUtil(BaseSourceVerifier):
     def _esbmc(
         self,
         path: Path,
-        esbmc_params: list,
+        esbmc_params: tuple,
         timeout: Optional[int] = None,
     ):
         """Exit code will be 0 if verification successful, 1 if verification
@@ -244,6 +242,7 @@ class ESBMCUtil(BaseSourceVerifier):
             stdout=PIPE,
             stderr=STDOUT,
             timeout=process_timeout,
+            check=False,
         )
 
         output: str = process.stdout.decode("utf-8")
