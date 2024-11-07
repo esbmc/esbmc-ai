@@ -4,7 +4,7 @@ import os
 import sys
 from subprocess import PIPE, STDOUT, run, CompletedProcess
 from pathlib import Path
-from typing import Any, Optional, override
+from typing_extensions import Any, Optional, override
 
 from esbmc_ai.solution import SourceFile
 
