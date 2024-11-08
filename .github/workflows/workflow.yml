@@ -74,10 +74,11 @@ jobs:
       - name: Pylint on esbmc_ai
         run: hatch run pylint esbmc_ai || true
       
+      # Check if pass, the test command only takes integers so truncate decimals
       - name: Check If Pass (90%)
         run: |
           SCORE="$(sed -n '$s/[^0-9]*\([0-9.]*\).*/\1/p' <<< "$(hatch run pylint esbmc_ai)")"
-          test "$SCORE" -gt 9
+          test "${SCORE%.*}" -ge 9
 
   test:
     name: PyTest
