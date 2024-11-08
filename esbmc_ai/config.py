@@ -10,16 +10,15 @@ from pathlib import Path
 import tomllib as toml
 from typing import (
     Any,
-    Callable,
     Dict,
     List,
-    NamedTuple,
     Optional,
 )
 
 from dotenv import load_dotenv, find_dotenv
 from langchain.schema import HumanMessage
 
+from esbmc_ai.config_field import ConfigField
 from esbmc_ai.chat_response import list_to_base_messages
 from esbmc_ai.logging import printv, set_verbose
 from .ai_models import (
@@ -41,38 +40,6 @@ FixCodeScenarios = dict[str, dict[str, str | tuple[BaseMessage, ...]]]
 The config loader ensures they conform to the specifications."""
 
 default_scenario: str = "base"
-
-
-class ConfigField(NamedTuple):
-    name: str
-    """The name of the config field and also namespace"""
-    default_value: Any
-    """If a default value is supplied, then it can be omitted from the config.
-    In order to have a "None" default value, default_value_none must be set."""
-    default_value_none: bool = False
-    """If true, then the default value will be None, so during
-    validation, if no value is supplied, then None will be the
-    the default value, instead of failing due to None being the
-    default value which under normal circumstances means that the
-    field is not optional."""
-    validate: Callable[[Any], bool] = lambda _: True
-    """Lambda function to validate if field has a valid value.
-    Default is identity function which is return true."""
-    on_load: Callable[[Any], Any] = lambda v: v
-    """Transform the value once loaded, this allows the value to be saved
-    as a more complex type than that which is represented in the config
-    file.
-    
-    Is ignored if on_read is defined."""
-    on_read: Optional[Callable[[dict[str, Any]], Any]] = None
-    """If defined, will be called and allows to custom load complex types that
-    may not match 1-1 in the config. The config file passed as a parameter here
-    is the original, unflattened version. The value returned should be the value
-    assigned to this field.
-    
-    This is a more versatile version of on_load. So if this is used, the on_load
-    will be ignored."""
-    error_message: Optional[str] = None
 
 
 def _validate_prompt_template_conversation(prompt_template: List[Dict]) -> bool:
@@ -117,16 +84,25 @@ def _validate_addon_modules(mods: list[str]) -> bool:
 
 def _init_addon_modules(mods: list[str]) -> list:
     """Will import addon modules that exist and iterate through the exposed
-    attributes, will then get all available ChatCommands and store them."""
-    from esbmc_ai.commands.chat_command import ChatCommand
+    attributes, will then get all available exposed classes and store them.
 
-    result: list[ChatCommand] = []
+    This method will load:
+    * ChatCommands
+    * BaseSourceVerifier classes"""
+    from esbmc_ai.commands.chat_command import ChatCommand
+    from esbmc_ai.verifiers import BaseSourceVerifier
+
+    allowed_types = ChatCommand | BaseSourceVerifier
+
+    result: list = []
     for module_name in mods:
         try:
             m = importlib.import_module(module_name)
             for attr_name in getattr(m, "__all__"):
+                # Get the class
                 attr_class = getattr(m, attr_name)
-                if issubclass(attr_class, ChatCommand):
+                # Check if valid addon type and import
+                if issubclass(attr_class, allowed_types):
                     result.append(attr_class())
                     printv(f"Loading addon: {attr_name}")
         except ModuleNotFoundError as e:
@@ -214,7 +190,7 @@ class Config:
                 "--context-bound",
                 "2",
             ],
-            validate=lambda v: isinstance(v, List),
+            validate=lambda v: isinstance(v, list),
         ),
         ConfigField(
             name="esbmc.output_type",
@@ -348,54 +324,60 @@ class Config:
             sys.exit(1)
 
         with open(Config.cfg_path, "r") as file:
-            original_config_file: dict[str, Any] = toml.loads(file.read())
+            cls.original_config_file: dict[str, Any] = toml.loads(file.read())
 
         # Load custom AIs
-        if "ai_custom" in original_config_file:
-            _load_custom_ai(original_config_file["ai_custom"])
+        if "ai_custom" in cls.original_config_file:
+            _load_custom_ai(cls.original_config_file["ai_custom"])
 
         # Flatten dict as the _fields are defined in a flattened format for
         # convenience.
-        config_file: dict[str, Any] = cls._flatten_dict(original_config_file)
+        cls.config_file: dict[str, Any] = cls._flatten_dict(cls.original_config_file)
 
         # Load all the config file field entries
         for field in cls._fields:
-            # If on_read is overwritten, then the reading process is manually
-            # defined so fallback to that.
-            if field.on_read:
-                cls._values[field.name] = field.on_read(original_config_file)
-                continue
-
-            # Proceed to default read
-
-            # Is field entry found in config?
-            if field.name in config_file:
-                # Check if None and not allowed!
-                if (
-                    field.default_value is None
-                    and not field.default_value_none
-                    and config_file[field.name] is None
-                ):
-                    raise ValueError(
-                        f"The config entry {field.name} has a None value when it can't be"
-                    )
-
-                # Validate field
-                assert field.validate(config_file[field.name]), (
-                    field.error_message
-                    if field.error_message
-                    else f"Field: {field.name} is invalid: {config_file[field.name]}"
-                )
-
-                # Assign field from config file
-                cls._values[field.name] = field.on_load(config_file[field.name])
-            elif field.default_value is None and not field.default_value_none:
-                raise KeyError(f"{field.name} is missing from config file")
-            else:
-                # Use default value
-                cls._values[field.name] = field.default_value
+            cls.add_config_field(field)
 
         cls._load_args(args)
+
+    @classmethod
+    def add_config_field(cls, field: ConfigField) -> None:
+        """Loads a new field from the config. Init needs to be called before
+        calling this to initialize the base config."""
+        # If on_read is overwritten, then the reading process is manually
+        # defined so fallback to that.
+        if field.on_read:
+            cls._values[field.name] = field.on_read(cls.original_config_file)
+            return
+
+        # Proceed to default read
+
+        # Is field entry found in config?
+        if field.name in cls.config_file:
+            # Check if None and not allowed!
+            if (
+                field.default_value is None
+                and not field.default_value_none
+                and cls.config_file[field.name] is None
+            ):
+                raise ValueError(
+                    f"The config entry {field.name} has a None value when it can't be"
+                )
+
+            # Validate field
+            assert field.validate(cls.config_file[field.name]), (
+                field.error_message
+                if field.error_message
+                else f"Field: {field.name} is invalid: {cls.config_file[field.name]}"
+            )
+
+            # Assign field from config file
+            cls._values[field.name] = field.on_load(cls.config_file[field.name])
+        elif field.default_value is None and not field.default_value_none:
+            raise KeyError(f"{field.name} is missing from config file")
+        else:
+            # Use default value
+            cls._values[field.name] = field.default_value
 
     @classmethod
     def get_value(cls, name: str) -> Any:

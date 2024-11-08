@@ -8,6 +8,10 @@ import sys
 # Enables arrow key functionality for input(). Do not remove import.
 import readline
 
+from esbmc_ai.config import ConfigField
+from esbmc_ai.verifier_runner import VerifierRunner
+from esbmc_ai.verifiers.base_source_verifier import BaseSourceVerifier, VerifierOutput
+
 _ = readline
 
 from langchain_core.language_models import BaseChatModel
@@ -33,20 +37,16 @@ from esbmc_ai.commands import (
 from esbmc_ai.loading_widget import BaseLoadingWidget, LoadingWidget
 from esbmc_ai.chats import UserChat
 from esbmc_ai.logging import print_horizontal_line, printv, printvv
-from esbmc_ai.esbmc_util import ESBMCUtil
+from esbmc_ai.verifiers import ESBMCUtil
 from esbmc_ai.chat_response import FinishReason, ChatResponse
 from esbmc_ai.ai_models import _ai_model_names
 
 help_command: HelpCommand = HelpCommand()
 fix_code_command: FixCodeCommand = FixCodeCommand()
 exit_command: ExitCommand = ExitCommand()
-command_runner: CommandRunner = CommandRunner(
-    [
-        help_command,
-        exit_command,
-        fix_code_command,
-    ]
-)
+command_runner: CommandRunner = CommandRunner()
+
+verifier_runner: VerifierRunner = VerifierRunner()
 
 chat: UserChat
 
@@ -112,11 +112,49 @@ def print_assistant_response(
         )
 
 
-def init_addons() -> None:
+def _load_addons() -> None:
+    """Manages loading addons"""
+    command_runner.init(
+        builtin_commands=[
+            help_command,
+            exit_command,
+            fix_code_command,
+        ]
+    )
+
+    # Load all the addon commands
     command_runner.addon_commands.clear()
-    command_runner.addon_commands.extend(Config.get_value("addon_modules"))
+    command_runner.addon_commands.extend(
+        [m for m in Config.get_value("addon_modules") if isinstance(m, ChatCommand)]
+    )
     if len(command_runner.addon_commands):
-        printv("Addons:\n\t* " + "\t * ".join(command_runner.addon_commands_names))
+        printv(
+            "ChatCommand Addons:\n\t* "
+            + "\t * ".join(command_runner.addon_commands_names)
+        )
+
+    # Load all the addon verifiers
+    verifier_runner.init([ESBMCUtil()])
+    for m in Config.get_value("addon_modules"):
+        if isinstance(m, BaseSourceVerifier):
+            verifier_runner.addon_verifiers[m.verifier_name] = m
+
+    # Init config fields
+    for field in verifier_runner.init_configs():
+        Config.add_config_field(field)
+
+    Config.add_config_field(
+        ConfigField(
+            name="verifier",
+            default_value="esbmc",
+            validate=lambda v: isinstance(v, str) and v in verifier_runner.verifiers,
+            on_load=lambda v: verifier_runner.verifiers[v],
+            error_message="Invalid verifier name specified.",
+        )
+    )
+    printv(
+        "Verifier Addons:\n\t* " + "\t * ".join(verifier_runner.addon_verifier_names)
+    )
 
 
 def update_solution(source_code: str) -> None:
@@ -127,24 +165,24 @@ def _run_esbmc(source_file: SourceFile, anim: BaseLoadingWidget) -> str:
     assert source_file.file_path
 
     with anim("ESBMC is processing... Please Wait"):
-        exit_code, esbmc_output = ESBMCUtil.esbmc(
-            path=source_file.file_path,
+        verifier_result: VerifierOutput = verifier_runner.verifier.verify_source(
+            source_file=source_file,
             esbmc_params=Config.get_value("esbmc.params"),
             timeout=Config.get_value("esbmc.timeout"),
         )
 
     # ESBMC will output 0 for verification success and 1 for verification
     # failed, if anything else gets thrown, it's an ESBMC error.
-    if not Config.get_value("allow_successful") and exit_code == 0:
+    if not Config.get_value("allow_successful") and verifier_result.successful():
         printv("Success!")
-        print(esbmc_output)
+        print(verifier_result.output)
         sys.exit(0)
-    elif exit_code != 0 and exit_code != 1:
-        printv(f"ESBMC exit code: {exit_code}")
-        printv(f"ESBMC Output:\n\n{esbmc_output}")
+    elif verifier_result.return_code != 0 and verifier_result.return_code != 1:
+        printv(f"ESBMC exit code: {verifier_result.return_code}")
+        printv(f"ESBMC Output:\n\n{verifier_result.output}")
         sys.exit(1)
 
-    return esbmc_output
+    return verifier_result.output
 
 
 def init_commands() -> None:
@@ -304,9 +342,8 @@ def main() -> None:
     print()
 
     Config.init(args)
-    ESBMCUtil.init(Config.get_value("esbmc.path"))
     check_health()
-    init_addons()
+    _load_addons()
 
     printv(f"Source code format: {Config.get_value('source_code_format')}")
     printv(f"ESBMC output type: {Config.get_value('esbmc.output_type')}")
@@ -391,6 +428,7 @@ def main() -> None:
     chat = UserChat(
         ai_model=Config.get_ai_model(),
         llm=chat_llm,
+        verifier=verifier_runner.verifier,
         source_code=source_file.latest_content,
         esbmc_output=source_file.latest_verifier_output,
         system_messages=Config.get_user_chat_system_messages(),

@@ -2,6 +2,7 @@
 
 """Contains class that handles the UserChat of ESBMC-AI"""
 
+from typing import Optional
 from typing_extensions import override
 
 from langchain.memory import ConversationSummaryMemory
@@ -11,7 +12,7 @@ from langchain_community.chat_message_histories import ChatMessageHistory
 
 
 from esbmc_ai.ai_models import AIModel
-from esbmc_ai.esbmc_util import ESBMCUtil
+from esbmc_ai.verifiers.base_source_verifier import BaseSourceVerifier
 
 from .base_chat_interface import BaseChatInterface
 
@@ -26,6 +27,7 @@ class UserChat(BaseChatInterface):
         self,
         ai_model: AIModel,
         llm: BaseChatModel,
+        verifier: BaseSourceVerifier,
         source_code: str,
         esbmc_output: str,
         system_messages: list[BaseMessage],
@@ -43,11 +45,13 @@ class UserChat(BaseChatInterface):
         # The messsages for setting a new solution to the source code.
         self.set_solution_messages = set_solution_messages
 
+        error_type: Optional[str] = verifier.get_error_type(self.esbmc_output)
+
         self.apply_template_value(
             source_code=self.source_code,
             esbmc_output=self.esbmc_output,
-            error_line=str(ESBMCUtil.get_source_code_err_line(self.esbmc_output)),
-            error_type=ESBMCUtil.esbmc_get_error_type(self.esbmc_output),
+            error_line=str(verifier.get_error_line(self.esbmc_output)),
+            error_type=error_type if error_type else "unknown error",
         )
 
     def set_solution(self, source_code: str) -> None:

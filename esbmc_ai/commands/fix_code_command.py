@@ -9,18 +9,19 @@ from esbmc_ai.ai_models import AIModel
 from esbmc_ai.api_key_collection import APIKeyCollection
 from esbmc_ai.chat_response import FinishReason
 from esbmc_ai.chats import LatestStateSolutionGenerator, SolutionGenerator
-from esbmc_ai.chats.solution_generator import ESBMCTimedOutException
+from esbmc_ai.verifiers.base_source_verifier import VerifierTimedOutException
 from esbmc_ai.commands.command_result import CommandResult
 from esbmc_ai.config import FixCodeScenarios
 from esbmc_ai.chats.reverse_order_solution_generator import (
     ReverseOrderSolutionGenerator,
 )
 from esbmc_ai.solution import SourceFile
+from esbmc_ai.verifier_runner import VerifierRunner
+from esbmc_ai.verifiers.base_source_verifier import BaseSourceVerifier, VerifierOutput
 
 from .chat_command import ChatCommand
 from ..msg_bus import Signal
 from ..loading_widget import BaseLoadingWidget
-from ..esbmc_util import ESBMCUtil
 from ..logging import print_horizontal_line, printv, printvv
 
 
@@ -92,12 +93,6 @@ class FixCodeCommand(ChatCommand):
         esbmc_output_format: str = kwargs["esbmc_output_format"]
         scenarios: FixCodeScenarios = kwargs["scenarios"]
         max_attempts: int = kwargs["max_attempts"]
-        esbmc_params: list[str] = kwargs["esbmc_params"]
-        verifier_timeout: int = kwargs["verifier_timeout"]
-        temp_auto_clean: bool = kwargs["temp_auto_clean"]
-        temp_file_dir: Optional[Path] = (
-            kwargs["temp_file_dir"] if "temp_file_dir" in kwargs else None
-        )
         raw_conversation: bool = (
             kwargs["raw_conversation"] if "raw_conversation" in kwargs else False
         )
@@ -109,6 +104,8 @@ class FixCodeCommand(ChatCommand):
         )
         # End of handle kwargs
 
+        verifier: BaseSourceVerifier = VerifierRunner().verifier
+
         match message_history:
             case "normal":
                 solution_generator = SolutionGenerator(
@@ -119,6 +116,7 @@ class FixCodeCommand(ChatCommand):
                         requests_max_tries=max_tries,
                         requests_timeout=timeout,
                     ),
+                    verifier=verifier,
                     scenarios=scenarios,
                     source_code_format=source_code_format,
                     esbmc_output_type=esbmc_output_format,
@@ -132,6 +130,7 @@ class FixCodeCommand(ChatCommand):
                         requests_max_tries=max_tries,
                         requests_timeout=timeout,
                     ),
+                    verifier=verifier,
                     scenarios=scenarios,
                     source_code_format=source_code_format,
                     esbmc_output_type=esbmc_output_format,
@@ -145,6 +144,7 @@ class FixCodeCommand(ChatCommand):
                         requests_max_tries=max_tries,
                         requests_timeout=timeout,
                     ),
+                    verifier=verifier,
                     scenarios=scenarios,
                     source_code_format=source_code_format,
                     esbmc_output_type=esbmc_output_format,
@@ -159,7 +159,7 @@ class FixCodeCommand(ChatCommand):
                 source_code=source_file.latest_content,
                 esbmc_output=source_file.latest_verifier_output,
             )
-        except ESBMCTimedOutException:
+        except VerifierTimedOutException:
             print("error: ESBMC has timed out...")
             sys.exit(1)
 
@@ -190,17 +190,12 @@ class FixCodeCommand(ChatCommand):
             # Pass to ESBMC, a workaround is used where the file is saved
             # to a temporary location since ESBMC needs it in file format.
             with anim("Verifying with ESBMC... Please Wait"):
-                exit_code, esbmc_output = ESBMCUtil.esbmc_load_source_code(
+                verifier_result: VerifierOutput = verifier.verify_source(
                     source_file=source_file,
-                    source_file_content_index=-1,
-                    esbmc_params=esbmc_params,
-                    auto_clean=temp_auto_clean,
-                    temp_file_dir=temp_file_dir,
-                    timeout=verifier_timeout,
+                    **kwargs,
                 )
 
-            source_file.assign_verifier_output(esbmc_output)
-            del esbmc_output
+            source_file.assign_verifier_output(verifier_result.output)
 
             # Print verbose lvl 2
             printvv("\nESBMC-AI Notice: ESBMC Output:")
@@ -209,7 +204,7 @@ class FixCodeCommand(ChatCommand):
             print_horizontal_line(2)
 
             # Solution found
-            if exit_code == 0:
+            if verifier_result.return_code == 0:
                 self.on_solution_signal.emit(source_file.latest_content)
 
                 if raw_conversation:
@@ -237,7 +232,7 @@ class FixCodeCommand(ChatCommand):
                 solution_generator.update_state(
                     source_file.latest_content, source_file.latest_verifier_output
                 )
-            except ESBMCTimedOutException:
+            except VerifierTimedOutException:
                 if raw_conversation:
                     print_raw_conversation()
                 print("ESBMC-AI Notice: error: ESBMC has timed out...")
