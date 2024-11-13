@@ -44,9 +44,15 @@ from esbmc_ai.ai_models import _ai_model_names
 help_command: HelpCommand = HelpCommand()
 fix_code_command: FixCodeCommand = FixCodeCommand()
 exit_command: ExitCommand = ExitCommand()
-command_runner: CommandRunner = CommandRunner()
 
 verifier_runner: VerifierRunner = VerifierRunner()
+command_runner: CommandRunner = CommandRunner().init(
+    builtin_commands=[
+        help_command,
+        exit_command,
+        fix_code_command,
+    ]
+)
 
 chat: UserChat
 
@@ -114,14 +120,6 @@ def print_assistant_response(
 
 def _load_addons() -> None:
     """Manages loading addons"""
-    command_runner.init(
-        builtin_commands=[
-            help_command,
-            exit_command,
-            fix_code_command,
-        ]
-    )
-
     # Load all the addon commands
     command_runner.addon_commands.clear()
     command_runner.addon_commands.extend(

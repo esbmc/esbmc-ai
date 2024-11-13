@@ -13,7 +13,7 @@ class CommandRunner:
             cls.instance = super(CommandRunner, cls).__new__(cls)
         return cls.instance
 
-    def init(self, builtin_commands: list[ChatCommand]) -> None:
+    def init(self, builtin_commands: list[ChatCommand]) -> "CommandRunner":
         self._builtin_commands: list[ChatCommand] = builtin_commands.copy()
         self._addon_commands: list[ChatCommand] = []
 
@@ -22,6 +22,8 @@ class CommandRunner:
             if cmd.command_name == "help":
                 assert isinstance(cmd, HelpCommand)
                 cmd.commands = self.commands
+
+        return self
 
     @property
     def commands(self) -> list[ChatCommand]:
