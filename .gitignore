@@ -166,3 +166,5 @@ config_dev.toml
 
 # Proprietary source code samples.
 uav_test.sh
+
+addons/
