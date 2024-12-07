@@ -8,7 +8,7 @@ from langchain.schema import AIMessage, HumanMessage, SystemMessage
 from esbmc_ai.ai_models import AIModel
 from esbmc_ai.chat_response import ChatResponse, FinishReason
 from esbmc_ai.chats.user_chat import UserChat
-from esbmc_ai.verifiers import ESBMCUtil
+from esbmc_ai.verifiers import ESBMC as ESBMCUtil
 
 
 @pytest.fixture

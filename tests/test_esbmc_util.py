@@ -3,7 +3,7 @@
 import pytest
 from os import listdir
 
-from esbmc_ai.verifiers import ESBMCUtil
+from esbmc_ai.verifiers import ESBMC as ESBMCUtil
 
 
 @pytest.fixture(scope="module")

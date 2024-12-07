@@ -6,9 +6,10 @@ from subprocess import PIPE, STDOUT, run, CompletedProcess
 from pathlib import Path
 from typing_extensions import Any, Optional, override
 
+from esbmc_ai.config import Config
 from esbmc_ai.solution import SourceFile
 
-from esbmc_ai.config import default_scenario
+from esbmc_ai.base_config import BaseConfig, default_scenario
 from esbmc_ai.verifiers.base_source_verifier import (
     BaseSourceVerifier,
     SourceCodeParseError,
@@ -23,7 +24,7 @@ class ESBMCOutput(VerifierOutput):
         return self.return_code == 0
 
 
-class ESBMCUtil(BaseSourceVerifier):
+class ESBMC(BaseSourceVerifier):
     @classmethod
     def esbmc_get_violated_property(cls, esbmc_output: str) -> Optional[str]:
         """Gets the violated property line of the ESBMC output."""
@@ -90,10 +91,11 @@ class ESBMCUtil(BaseSourceVerifier):
 
     def __init__(self) -> None:
         super().__init__("esbmc")
+        self.config = Config()
 
     @property
     def esbmc_path(self) -> Path:
-        return self.get_config_value("path")
+        return self.get_config_value("verifier.esbmc.path")
 
     @override
     def verify_source(
@@ -231,7 +233,8 @@ class ESBMCUtil(BaseSourceVerifier):
             )
             sys.exit(1)
 
-        esbmc_cmd.extend(["--timeout", str(timeout)])
+        # Add timeout suffix for parameter.
+        esbmc_cmd.extend(["--timeout", str(timeout) + "s"])
 
         # Add slack time to process to allow verifier to timeout and end gracefully.
         process_timeout: Optional[float] = timeout + 10 if timeout else None

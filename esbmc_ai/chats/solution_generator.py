@@ -8,7 +8,7 @@ from typing_extensions import override
 from langchain.schema import BaseMessage, HumanMessage
 
 from esbmc_ai.chat_response import ChatResponse, FinishReason
-from esbmc_ai.config import FixCodeScenarios, default_scenario
+from esbmc_ai.config import FixCodeScenario, default_scenario
 from esbmc_ai.solution import SourceFile
 
 from esbmc_ai.ai_models import AIModel
@@ -54,7 +54,7 @@ class SolutionGenerator(BaseChatInterface):
 
     def __init__(
         self,
-        scenarios: FixCodeScenarios,
+        scenarios: dict[str, FixCodeScenario],
         llm: BaseChatModel,
         ai_model: AIModel,
         verifier: BaseSourceVerifier,
@@ -69,7 +69,7 @@ class SolutionGenerator(BaseChatInterface):
             system_messages=[],  # Empty as it will be updated in the update method.
         )
 
-        self.scenarios: FixCodeScenarios = scenarios
+        self.scenarios: dict[str, FixCodeScenario] = scenarios
         self.scenario: Optional[str] = None
 
         self.verifier: BaseSourceVerifier = verifier
@@ -147,27 +147,29 @@ class SolutionGenerator(BaseChatInterface):
         self, override_scenario: Optional[str] = None
     ) -> tuple[BaseMessage, ...]:
         if override_scenario:
-            system_messages = self.scenarios[override_scenario]["system"]
+            system_messages = self.scenarios[override_scenario].system
         else:
             assert self.scenario, "Call update or set the scenario"
             if self.scenario in self.scenarios:
-                system_messages = self.scenarios[self.scenario]["system"]
+                system_messages = self.scenarios[self.scenario].system
             else:
-                system_messages = self.scenarios[default_scenario]["system"]
+                system_messages = self.scenarios[default_scenario].system
 
         assert isinstance(system_messages, tuple)
         assert all(isinstance(msg, BaseMessage) for msg in system_messages)
         return system_messages
 
-    def _get_initial_message(self, override_scenario: Optional[str] = None) -> str:
+    def _get_initial_message(
+        self, override_scenario: Optional[str] = None
+    ) -> BaseMessage:
         if override_scenario:
-            return str(self.scenarios[override_scenario]["initial"])
+            return self.scenarios[override_scenario].initial
         else:
             assert self.scenario, "Call update or set the scenario"
             if self.scenario in self.scenarios:
-                return str(self.scenarios[self.scenario]["initial"])
+                return self.scenarios[self.scenario].initial
             else:
-                return str(self.scenarios[default_scenario]["initial"])
+                return self.scenarios[default_scenario].initial
 
     def generate_solution(
         self,
@@ -176,11 +178,11 @@ class SolutionGenerator(BaseChatInterface):
     ) -> tuple[str, FinishReason]:
         """Prompts the LLM to repair the source code using the verifier output.
         If this is the first time the method is called, the system message will
-        be sent to the LLM, unless ignore_system_message is True, in which case
-        the initial prompt will be used.
+        be sent to the LLM, unless ignore_system_message is True. Then the
+        initial prompt will be sent.
 
         In subsequent invokations of generate_solution, the initial prompt will
-        be used.
+        be used only.
 
         So the system messages and initial message should each include at least
         {source_code} and {esbmc_output} so that they are substituted into the
@@ -193,18 +195,24 @@ class SolutionGenerator(BaseChatInterface):
             self.source_code_raw is not None
             and self.source_code_formatted is not None
             and self.esbmc_output is not None
+            and self.scenario is not None
         ), "Call update_state before calling generate_solution."
 
-        if ignore_system_message or self.invokations > 0:
-            # Get scenario initial message and push it to message stack
-            self.push_to_message_stack(
-                HumanMessage(content=self._get_initial_message(override_scenario))
-            )
-        else:
+        # Show system message
+        if not ignore_system_message and self.invokations <= 0:
             # Get scenario system messages and push it to message stack. Don't
             # push to system message stack because we want to regenerate from
             # the beginning at every reset.
-            self.push_to_message_stack(self._get_system_messages(override_scenario))
+            system_messages: tuple[BaseMessage, ...] = self._get_system_messages(
+                override_scenario=override_scenario
+            )
+            if len(system_messages) > 0:
+                self.push_to_message_stack(system_messages)
+
+        # Get scenario initial message and push it to message stack
+        self.push_to_message_stack(
+            self._get_initial_message(override_scenario=override_scenario)
+        )
 
         self.invokations += 1
 
@@ -233,7 +241,6 @@ class SolutionGenerator(BaseChatInterface):
                 line: Optional[int] = self.verifier.get_error_line_idx(
                     self.esbmc_output
                 )
-
                 assert line, (
                     "fix code command: error line could not be found to apply "
                     "brutal patch replacement"

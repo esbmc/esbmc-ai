@@ -3,54 +3,55 @@ from esbmc_ai.config import ConfigField
 
 
 class VerifierRunner:
-
     def __new__(cls):
         if not hasattr(cls, "instance"):
             cls.instance = super(VerifierRunner, cls).__new__(cls)
         return cls.instance
 
-    def init(self, builtin_verifiers: list[BaseSourceVerifier]) -> None:
+    def init(self, builtin_verifiers: list[BaseSourceVerifier]) -> "VerifierRunner":
         self._builtin_verifiers: dict[str, BaseSourceVerifier] = {
             v.verifier_name: v for v in builtin_verifiers
         }
         """Builtin loaded verifiers"""
-        self.addon_verifiers: dict[str, BaseSourceVerifier] = {}
+        self._addon_verifiers: dict[str, BaseSourceVerifier] = {}
         """Additional loaded verifiers"""
-        self.verifier: BaseSourceVerifier = builtin_verifiers[0]
+        self._verifier: BaseSourceVerifier = builtin_verifiers[0]
         """Default verifier"""
+        return self
+
+    @property
+    def verfifier(self) -> BaseSourceVerifier:
+        return self._verifier
+
+    @verfifier.setter
+    def verifier(self, value: BaseSourceVerifier) -> None:
+        assert (
+            value not in self.verifiers
+        ), f"Unregistered verifier set: {value.verifier_name}"
+        self._verifier = value
+
+    @property
+    def builtin_verifier_names(self) -> list[str]:
+        """Gets the names of the builtin verifiers"""
+        return list(self._builtin_verifiers.keys())
 
     @property
     def verifiers(self) -> dict[str, BaseSourceVerifier]:
         """Gets all verifiers"""
-        return self._builtin_verifiers | self.addon_verifiers
+        return self._builtin_verifiers | self._addon_verifiers
+
+    @property
+    def addon_verifiers(self) -> dict[str, BaseSourceVerifier]:
+        return self._addon_verifiers
+
+    @addon_verifiers.setter
+    def addon_verifiers(self, vers: dict[str, BaseSourceVerifier]) -> None:
+        self._addon_verifiers = vers
 
     @property
     def addon_verifier_names(self) -> list[str]:
         """Gets all addon verifier names"""
-        return list(self.addon_verifiers.keys())
+        return list(self._addon_verifiers.keys())
 
-    def init_configs(self) -> list[ConfigField]:
-        """Adds each verifier's config fields to the config. After resolving
-        each verifier's config fields to their namespace. Also, will raise an
-        assertion error if there's duplicate fields."""
-        fields_resolved: list[ConfigField] = []
-        added_fields: list[str] = []
-        for verifier in self.verifiers.values():
-            fields: list[ConfigField] = verifier.get_config_fields()
-            for field in fields:
-                resolved_name: str = f"{verifier.verifier_name}.{field.name}"
-                assert (
-                    resolved_name not in added_fields
-                ), f"Field {resolved_name} is redefined..."
-                new_field = ConfigField(
-                    name=resolved_name,
-                    default_value=field.default_value,
-                    default_value_none=field.default_value_none,
-                    validate=field.validate,
-                    on_load=field.on_load,
-                    on_read=field.on_read,
-                    error_message=field.error_message,
-                )
-                fields_resolved.append(new_field)
-                added_fields.append(resolved_name)
-        return fields_resolved
+    def set_verifier_by_name(self, value: str) -> None:
+        self.verifier = self.verifiers[value]

@@ -14,7 +14,7 @@ from esbmc_ai.ai_models import AIModel
 from esbmc_ai.chats.reverse_order_solution_generator import (
     ReverseOrderSolutionGenerator,
 )
-from esbmc_ai.verifiers import ESBMCUtil
+from esbmc_ai.verifiers import ESBMC as ESBMCUtil
 
 
 @pytest.fixture(scope="function")

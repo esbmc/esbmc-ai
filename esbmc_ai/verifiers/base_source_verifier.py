@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Optional
 
 from esbmc_ai.solution import SourceFile
-from esbmc_ai.config import Config, ConfigField, default_scenario
+from esbmc_ai.base_config import BaseConfig, ConfigField, default_scenario
 
 
 class SourceCodeParseError(Exception):
@@ -58,20 +58,27 @@ class BaseSourceVerifier(ABC):
         ), f"Invalid toml-friendly verifier name: {verifier_name}"
 
         self.verifier_name: str = verifier_name
+        self._config: BaseConfig
+
+    @property
+    def config(self) -> BaseConfig:
+        return self._config
+
+    @config.setter
+    def config(self, value: BaseConfig) -> None:
+        self._config: BaseConfig = value
 
     def get_config_fields(self) -> list[ConfigField]:
         """Called during initialization, this is meant to return all config
-        fields that are going to be loaded from the config."""
+        fields that are going to be loaded from the config. The name that each
+        field has will automatically be prefixed with {verifier name}."""
         return []
 
     def get_config_value(self, key: str) -> Any:
-        """Loads a value from the config that is declared from this verfier."""
-        return Config.get_value(f"{self.verifier_name}.{key}")
-
-    def get_global_config_value(self, key: str) -> Any:
-        """Loads a value from the config that is global. Local values can be
-        accessed from the verifier_name namespace here."""
-        return Config.get_value(key)
+        """Loads a value from the config. If the value is defined in the namespace
+        of the verifier name then that value will be returned.
+        """
+        return self._config.get_value(key)
 
     def verify_source(
         self,

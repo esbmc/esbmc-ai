@@ -8,9 +8,10 @@ import sys
 # Enables arrow key functionality for input(). Do not remove import.
 import readline
 
-from esbmc_ai.config import ConfigField
+from esbmc_ai.addon_loader import AddonLoader
 from esbmc_ai.verifier_runner import VerifierRunner
-from esbmc_ai.verifiers.base_source_verifier import BaseSourceVerifier, VerifierOutput
+from esbmc_ai.verifiers.base_source_verifier import VerifierOutput
+from esbmc_ai.verifiers.esbmc import ESBMC
 
 _ = readline
 
@@ -37,7 +38,6 @@ from esbmc_ai.commands import (
 from esbmc_ai.loading_widget import BaseLoadingWidget, LoadingWidget
 from esbmc_ai.chats import UserChat
 from esbmc_ai.logging import print_horizontal_line, printv, printvv
-from esbmc_ai.verifiers import ESBMCUtil
 from esbmc_ai.chat_response import FinishReason, ChatResponse
 from esbmc_ai.ai_models import _ai_model_names
 
@@ -45,7 +45,7 @@ help_command: HelpCommand = HelpCommand()
 fix_code_command: FixCodeCommand = FixCodeCommand()
 exit_command: ExitCommand = ExitCommand()
 
-verifier_runner: VerifierRunner = VerifierRunner()
+verifier_runner: VerifierRunner = VerifierRunner().init([ESBMC()])
 command_runner: CommandRunner = CommandRunner().init(
     builtin_commands=[
         help_command,
@@ -94,7 +94,7 @@ For all the options, run ESBMC with -h as a parameter:
 def check_health() -> None:
     printv("Performing health check...")
     # Check that ESBMC exists.
-    esbmc_path: Path = Config.get_value("esbmc.path")
+    esbmc_path: Path = Config().get_value("verifier.esbmc.path")
     if esbmc_path.exists():
         printv("ESBMC has been located")
     else:
@@ -118,43 +118,6 @@ def print_assistant_response(
         )
 
 
-def _load_addons() -> None:
-    """Manages loading addons"""
-    # Load all the addon commands
-    command_runner.addon_commands.clear()
-    command_runner.addon_commands.extend(
-        [m for m in Config.get_value("addon_modules") if isinstance(m, ChatCommand)]
-    )
-    if len(command_runner.addon_commands):
-        printv(
-            "ChatCommand Addons:\n\t* "
-            + "\t * ".join(command_runner.addon_commands_names)
-        )
-
-    # Load all the addon verifiers
-    verifier_runner.init([ESBMCUtil()])
-    for m in Config.get_value("addon_modules"):
-        if isinstance(m, BaseSourceVerifier):
-            verifier_runner.addon_verifiers[m.verifier_name] = m
-
-    # Init config fields
-    for field in verifier_runner.init_configs():
-        Config.add_config_field(field)
-
-    Config.add_config_field(
-        ConfigField(
-            name="verifier",
-            default_value="esbmc",
-            validate=lambda v: isinstance(v, str) and v in verifier_runner.verifiers,
-            on_load=lambda v: verifier_runner.verifiers[v],
-            error_message="Invalid verifier name specified.",
-        )
-    )
-    printv(
-        "Verifier Addons:\n\t* " + "\t * ".join(verifier_runner.addon_verifier_names)
-    )
-
-
 def update_solution(source_code: str) -> None:
     get_solution().files[0].update_content(content=source_code, reset_changes=True)
 
@@ -162,16 +125,16 @@ def update_solution(source_code: str) -> None:
 def _run_esbmc(source_file: SourceFile, anim: BaseLoadingWidget) -> str:
     assert source_file.file_path
 
-    with anim("ESBMC is processing... Please Wait"):
+    with anim("Verifier is processing... Please Wait"):
         verifier_result: VerifierOutput = verifier_runner.verifier.verify_source(
             source_file=source_file,
-            esbmc_params=Config.get_value("esbmc.params"),
-            timeout=Config.get_value("esbmc.timeout"),
+            esbmc_params=Config().get_value("verifier.esbmc.params"),
+            timeout=Config().get_value("verifier.esbmc.timeout"),
         )
 
     # ESBMC will output 0 for verification success and 1 for verification
     # failed, if anything else gets thrown, it's an ESBMC error.
-    if not Config.get_value("allow_successful") and verifier_result.successful():
+    if not Config().get_value("allow_successful") and verifier_result.successful():
         printv("Success!")
         print(verifier_result.output)
         sys.exit(0)
@@ -197,24 +160,24 @@ def init_commands() -> None:
 def _execute_fix_code_command(source_file: SourceFile) -> FixCodeCommandResult:
     """Shortcut method to execute fix code command."""
     return fix_code_command.execute(
-        ai_model=Config.get_ai_model(),
+        ai_model=Config().get_ai_model(),
         source_file=source_file,
-        generate_patches=Config.generate_patches,
-        message_history=Config.get_value("fix_code.message_history"),
-        api_keys=Config.api_keys,
-        temperature=Config.get_value("fix_code.temperature"),
-        max_attempts=Config.get_value("fix_code.max_attempts"),
-        requests_max_tries=Config.get_llm_requests_max_tries(),
-        requests_timeout=Config.get_llm_requests_timeout(),
-        esbmc_params=Config.get_value("esbmc.params"),
-        raw_conversation=Config.raw_conversation,
-        temp_auto_clean=Config.get_value("temp_auto_clean"),
-        verifier_timeout=Config.get_value("esbmc.timeout"),
-        source_code_format=Config.get_value("source_code_format"),
-        esbmc_output_format=Config.get_value("esbmc.output_type"),
-        scenarios=Config.get_fix_code_scenarios(),
-        temp_file_dir=Config.get_value("temp_file_dir"),
-        output_dir=Config.output_dir,
+        generate_patches=Config().generate_patches,
+        message_history=Config().get_value("fix_code.message_history"),
+        api_keys=Config().api_keys,
+        temperature=Config().get_value("fix_code.temperature"),
+        max_attempts=Config().get_value("fix_code.max_attempts"),
+        requests_max_tries=Config().get_llm_requests_max_tries(),
+        requests_timeout=Config().get_llm_requests_timeout(),
+        esbmc_params=Config().get_value("verifier.esbmc.params"),
+        raw_conversation=Config().raw_conversation,
+        temp_auto_clean=Config().get_value("temp_auto_clean"),
+        verifier_timeout=Config().get_value("verifier.esbmc.timeout"),
+        source_code_format=Config().get_value("source_code_format"),
+        esbmc_output_format=Config().get_value("verifier.esbmc.output_type"),
+        scenarios=Config().get_fix_code_scenarios(),
+        temp_file_dir=Config().get_value("temp_file_dir"),
+        output_dir=Config().output_dir,
     )
 
 
@@ -222,7 +185,7 @@ def _run_command_mode(command: ChatCommand, args: argparse.Namespace) -> None:
     path_arg: Path = Path(args.filename)
 
     anim: BaseLoadingWidget = (
-        LoadingWidget() if Config.get_value("loading_hints") else BaseLoadingWidget()
+        LoadingWidget() if Config().get_value("loading_hints") else BaseLoadingWidget()
     )
 
     solution: Solution = get_solution()
@@ -339,20 +302,29 @@ def main() -> None:
     print(f"Made by {__author__}")
     print()
 
-    Config.init(args)
+    printvv("Loading main config")
+    Config().init(args)
     check_health()
-    _load_addons()
+    # Load addons
+    printvv("Loading addons")
+    AddonLoader().init(Config(), verifier_runner.builtin_verifier_names)
+    # Bind addons to command runner and verifier runner.
+    command_runner.addon_commands = AddonLoader().chat_command_addons
+    verifier_runner.addon_verifiers = AddonLoader().verifier_addons
+    # Set verifier to use
+    printvv(f"Verifier: {verifier_runner.verfifier.verifier_name}")
+    verifier_runner.set_verifier_by_name(Config().get_value("verifier.name"))
 
-    printv(f"Source code format: {Config.get_value('source_code_format')}")
-    printv(f"ESBMC output type: {Config.get_value('esbmc.output_type')}")
+    printv(f"Source code format: {Config().get_value('source_code_format')}")
+    printv(f"ESBMC output type: {Config().get_value('verifier.esbmc.output_type')}")
 
     anim: BaseLoadingWidget = (
-        LoadingWidget() if Config.get_value("loading_hints") else BaseLoadingWidget()
+        LoadingWidget() if Config().get_value("loading_hints") else BaseLoadingWidget()
     )
 
     # Read the source code and esbmc output.
-    printv("Reading source code...")
-    print(f"Running ESBMC with {Config.get_value('esbmc.params')}\n")
+    printvv("Reading source code...")
+    printv(f"Running ESBMC with {Config().get_value('verifier.esbmc.params')}\n")
 
     assert isinstance(args.filename, str)
 
@@ -366,9 +338,8 @@ def main() -> None:
         command_names: list[str] = command_runner.command_names
         if command in command_names:
             print("Running Command:", command)
-            for idx, command_name in enumerate(command_names):
-                if command == command_name:
-                    _run_command_mode(command=command_runner.commands[idx], args=args)
+            if command in command_names:
+                _run_command_mode(command=command_runner.commands[command], args=args)
             sys.exit(0)
         else:
             print(
@@ -413,24 +384,28 @@ def main() -> None:
     source_file.assign_verifier_output(esbmc_output)
     del esbmc_output
 
-    printv(f"Initializing the LLM: {Config.get_ai_model().name}\n")
-    chat_llm: BaseChatModel = Config.get_ai_model().create_llm(
-        api_keys=Config.api_keys,
-        temperature=Config.get_value("user_chat.temperature"),
-        requests_max_tries=Config.get_value("llm_requests.max_tries"),
-        requests_timeout=Config.get_value("llm_requests.timeout"),
+    printv(f"Initializing the LLM: {Config().get_ai_model().name}\n")
+    chat_llm: BaseChatModel = (
+        Config()
+        .get_ai_model()
+        .create_llm(
+            api_keys=Config().api_keys,
+            temperature=Config().get_value("user_chat.temperature"),
+            requests_max_tries=Config().get_value("llm_requests.max_tries"),
+            requests_timeout=Config().get_value("llm_requests.timeout"),
+        )
     )
 
     printv("Creating user chat")
     global chat
     chat = UserChat(
-        ai_model=Config.get_ai_model(),
+        ai_model=Config().get_ai_model(),
         llm=chat_llm,
         verifier=verifier_runner.verifier,
         source_code=source_file.latest_content,
         esbmc_output=source_file.latest_verifier_output,
-        system_messages=Config.get_user_chat_system_messages(),
-        set_solution_messages=Config.get_user_chat_set_solution(),
+        system_messages=Config().get_user_chat_system_messages(),
+        set_solution_messages=Config().get_user_chat_set_solution(),
     )
 
     printv("Initializing commands...")
@@ -438,12 +413,12 @@ def main() -> None:
 
     # Show the initial output.
     response: ChatResponse
-    if len(str(Config.get_user_chat_initial().content)) > 0:
+    if len(str(Config().get_user_chat_initial().content)) > 0:
         printv("Using initial prompt from file...\n")
         with anim("Model is parsing ESBMC output... Please Wait"):
             try:
                 response = chat.send_message(
-                    message=str(Config.get_user_chat_initial().content),
+                    message=str(Config().get_user_chat_initial().content),
                 )
             except Exception as e:
                 print("There was an error while generating a response: {e}")
@@ -483,14 +458,10 @@ def main() -> None:
                 continue
             else:
                 # Commands without parameters or returns are handled automatically.
-                found: bool = False
-                for cmd in command_runner.commands:
-                    if cmd.command_name == command:
-                        found = True
-                        cmd.execute()
-                        break
-
-                if not found:
+                if command in command_runner.commands:
+                    command_runner.commands[command].execute()
+                    break
+                else:
                     print("Error: Unknown command...")
                 continue
         elif user_message == "":

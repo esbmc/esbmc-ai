@@ -6,7 +6,7 @@ import pytest
 
 from esbmc_ai.ai_models import AIModel
 from esbmc_ai.chats.solution_generator import SolutionGenerator
-from esbmc_ai.verifiers import ESBMCUtil
+from esbmc_ai.verifiers import ESBMC as ESBMCUtil
 
 
 @pytest.fixture(scope="function")
