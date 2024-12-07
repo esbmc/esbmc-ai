@@ -5,7 +5,10 @@ allow_successful = false
 loading_hints = true
 source_code_format = "full"
 
-[esbmc]
+[verifier]
+name = "esbmc"
+
+[verifier.esbmc]
 path = "~/.local/bin/esbmc"
 params = [
     "--interval-analysis",
