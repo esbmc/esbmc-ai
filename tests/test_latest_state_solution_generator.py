@@ -4,7 +4,7 @@ from typing import Optional
 from langchain_core.language_models import FakeListChatModel
 import pytest
 
-from langchain.schema import HumanMessage, AIMessage, SystemMessage
+from langchain.schema import BaseMessage, HumanMessage, AIMessage, SystemMessage
 
 from esbmc_ai.config import FixCodeScenario, default_scenario
 from esbmc_ai.ai_models import AIModel
@@ -45,11 +45,11 @@ def test_send_message(setup_llm_model) -> None:
         ai_model=model,
     )
 
-    initial_prompt = solution_generator.scenarios[default_scenario].initial
+    initial_prompt: BaseMessage = solution_generator.scenarios[default_scenario].initial
 
     def send_message_mock(message: Optional[str] = None) -> ChatResponse:
         assert len(solution_generator.messages) == 1
-        assert solution_generator.messages[0].content == initial_prompt
+        assert solution_generator.messages[0].content == initial_prompt.content
         assert solution_generator.messages[0].type == HumanMessage(content="").type
 
         return ChatResponse()
@@ -62,21 +62,18 @@ def test_send_message(setup_llm_model) -> None:
 
     # Check now if the message stack is wiped per generate solution call.
     solution_generator.generate_solution(ignore_system_message=True)
-    initial_prompt = "aaaaaaa"
-    solution_generator.scenarios[default_scenario].initial = HumanMessage(
-        initial_prompt
+    solution_generator.scenarios[default_scenario].initial = initial_prompt = (
+        HumanMessage("aaaaaaa")
     )
 
     solution_generator.generate_solution(ignore_system_message=True)
-    initial_prompt = "bbbbbbb"
-    solution_generator.scenarios[default_scenario].initial = HumanMessage(
-        initial_prompt
+    solution_generator.scenarios[default_scenario].initial = initial_prompt = (
+        HumanMessage("bbbbbbb")
     )
 
     solution_generator.generate_solution(ignore_system_message=True)
-    initial_prompt = "ccccccc"
-    solution_generator.scenarios[default_scenario].initial = HumanMessage(
-        initial_prompt
+    solution_generator.scenarios[default_scenario].initial = initial_prompt = (
+        HumanMessage("ccccccc")
     )
 
 

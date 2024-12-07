@@ -9,12 +9,12 @@ from langchain.schema import (
     SystemMessage,
 )
 
-from esbmc_ai.config import default_scenario
+from esbmc_ai.config import FixCodeScenario, default_scenario
 from esbmc_ai.ai_models import AIModel
 from esbmc_ai.chats.reverse_order_solution_generator import (
     ReverseOrderSolutionGenerator,
 )
-from esbmc_ai.verifiers import ESBMC as ESBMCUtil
+from esbmc_ai.verifiers import ESBMC
 
 
 @pytest.fixture(scope="function")
@@ -42,16 +42,16 @@ def test_message_stack(setup_llm_model) -> None:
     solution_generator = ReverseOrderSolutionGenerator(
         llm=llm,
         ai_model=model,
-        verifier=ESBMCUtil(),
+        verifier=ESBMC(),
         scenarios={
-            "base": {
-                "initial": "Initial test message",
-                "system": (
+            "base": FixCodeScenario(
+                initial=HumanMessage("Initial test message"),
+                system=(
                     SystemMessage(content="Test message 1"),
                     HumanMessage(content="Test message 2"),
                     AIMessage(content="Test message 3"),
                 ),
-            }
+            )
         },
     )
 
@@ -62,10 +62,14 @@ def test_message_stack(setup_llm_model) -> None:
 
     solution, _ = solution_generator.generate_solution(ignore_system_message=True)
     assert solution == llm.responses[0]
-    solution_generator.scenarios[default_scenario]["initial"] = "Test message 2"
+    solution_generator.scenarios[default_scenario].initial = HumanMessage(
+        "Test message 2"
+    )
     solution, _ = solution_generator.generate_solution(ignore_system_message=True)
     assert solution == llm.responses[1]
-    solution_generator.scenarios[default_scenario]["initial"] = "Test message 3"
+    solution_generator.scenarios[default_scenario].initial = HumanMessage(
+        "Test message 3"
+    )
     solution, _ = solution_generator.generate_solution(ignore_system_message=True)
     assert solution == llm.responses[2]
 
