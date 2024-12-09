@@ -22,7 +22,7 @@ from esbmc_ai.verifiers.base_source_verifier import BaseSourceVerifier, Verifier
 from .chat_command import ChatCommand
 from ..msg_bus import Signal
 from ..loading_widget import BaseLoadingWidget
-from ..logging import print_horizontal_line, printv, printvv
+from ..logging import print_horizontal_line, printv, printvvv
 
 
 class FixCodeCommandResult(CommandResult):
@@ -105,6 +105,8 @@ class FixCodeCommand(ChatCommand):
         )
         # End of handle kwargs
 
+        printv(f"Temperature: {temperature}")
+
         verifier: BaseSourceVerifier = VerifierRunner().verifier
 
         match message_history:
@@ -182,11 +184,11 @@ class FixCodeCommand(ChatCommand):
                     break
 
             # Print verbose lvl 2
-            printvv("\nESBMC-AI Notice: Source Code Generation:")
-            print_horizontal_line(2)
-            printvv(source_file.latest_content)
-            print_horizontal_line(2)
-            printvv("")
+            printvvv("\nESBMC-AI Notice: Source Code Generation:")
+            print_horizontal_line(3)
+            printvvv(source_file.latest_content)
+            print_horizontal_line(3)
+            printvvv("")
 
             # Pass to ESBMC, a workaround is used where the file is saved
             # to a temporary location since ESBMC needs it in file format.
@@ -196,10 +198,10 @@ class FixCodeCommand(ChatCommand):
             source_file.assign_verifier_output(verifier_result.output)
 
             # Print verbose lvl 2
-            printvv("\nESBMC-AI Notice: ESBMC Output:")
-            print_horizontal_line(2)
-            printvv(source_file.latest_verifier_output)
-            print_horizontal_line(2)
+            printvvv("\nESBMC-AI Notice: ESBMC Output:")
+            print_horizontal_line(3)
+            printvvv(source_file.latest_verifier_output)
+            print_horizontal_line(3)
 
             # Solution found
             if verifier_result.return_code == 0:

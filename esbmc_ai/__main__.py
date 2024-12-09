@@ -135,13 +135,10 @@ def _run_esbmc(source_file: SourceFile, anim: BaseLoadingWidget) -> str:
     # ESBMC will output 0 for verification success and 1 for verification
     # failed, if anything else gets thrown, it's an ESBMC error.
     if not Config().get_value("allow_successful") and verifier_result.successful():
-        printv("Success!")
-        print(verifier_result.output)
-        sys.exit(0)
-    elif verifier_result.return_code != 0 and verifier_result.return_code != 1:
         printv(f"ESBMC exit code: {verifier_result.return_code}")
         printv(f"ESBMC Output:\n\n{verifier_result.output}")
-        sys.exit(1)
+        print("Sample successfuly verified. Exiting...")
+        sys.exit(0)
 
     return verifier_result.output
 
@@ -304,6 +301,7 @@ def main() -> None:
 
     printvv("Loading main config")
     Config().init(args)
+    printv(f"Config File: {Config().cfg_path}")
     check_health()
     # Load addons
     printvv("Loading addons")

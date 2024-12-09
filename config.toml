@@ -12,6 +12,7 @@ name = "esbmc"
 path = "~/.local/bin/esbmc"
 params = [
     "--interval-analysis",
+    "--memory-leak-check",
     "--goto-unwind",
     "--unlimited-goto-unwind",
     "--k-induction",
@@ -21,7 +22,6 @@ params = [
     "2",
     "--floatbv",
     "--unlimited-k-steps",
-    "--compact-trace",
     "--context-bound",
     "2",
 ]
