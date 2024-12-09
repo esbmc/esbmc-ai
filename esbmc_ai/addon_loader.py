@@ -162,6 +162,7 @@ class AddonLoader(BaseConfig):
                     attr_class = getattr(m, attr_name)
                     # Check if valid addon type and import
                     if issubclass(attr_class, allowed_types):
+                        # Initialize class.
                         result.append(attr_class())
                         printv(f"Loading addon: {attr_name}")
             except ModuleNotFoundError as e:
