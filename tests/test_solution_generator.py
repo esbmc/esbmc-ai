@@ -6,6 +6,7 @@ import pytest
 
 from esbmc_ai.ai_models import AIModel
 from esbmc_ai.chats.solution_generator import SolutionGenerator
+from esbmc_ai.verifiers import ESBMCUtil
 
 
 @pytest.fixture(scope="function")
@@ -27,6 +28,7 @@ def test_call_update_state_first(setup_llm_model) -> None:
     solution_generator = SolutionGenerator(
         llm=llm,
         ai_model=model,
+        verifier=ESBMCUtil(),
         scenarios={
             "base": {
                 "initial": "Initial test message",
@@ -87,6 +89,7 @@ def test_substitution() -> None:
                 ),
             }
         },
+        verifier=ESBMCUtil(),
         ai_model=AIModel("test", 10000000),
         llm=FakeListChatModel(responses=["22222", "33333"]),
         source_code_format="full",

@@ -49,6 +49,6 @@ def dict_to_base_message(json_string: dict) -> BaseMessage:
         raise Exception()
 
 
-def list_to_base_messages(json_messages: list[dict]) -> list[BaseMessage]:
+def list_to_base_messages(json_messages: list[dict]) -> tuple[BaseMessage, ...]:
     """Converts a list of messages from JSON format to a list of BaseMessage."""
-    return [dict_to_base_message(msg) for msg in json_messages]
+    return tuple(dict_to_base_message(msg) for msg in json_messages)
