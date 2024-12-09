@@ -39,6 +39,12 @@ class ChatCommand(ABC):
         field has will automatically be prefixed with {verifier name}."""
         return []
 
+    def get_config_value(self, key: str) -> Any:
+        """Loads a value from the config. If the value is defined in the namespace
+        of the verifier name then that value will be returned.
+        """
+        return self._config.get_value(key)
+
     @abstractmethod
     def execute(self, **kwargs: Optional[Any]) -> Optional[CommandResult]:
         """The main entrypoint of the command. This is abstract and will need to

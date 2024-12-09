@@ -29,7 +29,7 @@ class AddonLoader(BaseConfig):
     main config object.
     """
 
-    addon_prefix: str = "addons."
+    addon_prefix: str = "addons"
 
     def __new__(cls):
         if not hasattr(cls, "instance"):
@@ -213,6 +213,10 @@ class AddonLoader(BaseConfig):
     def _get_chat_command_addon_fields(self) -> list[ConfigField]:
         """Adds each chat command's config fields to the config. After resolving
         each chat command's config fields to their namespace."""
+        # If an addon prefix is defined, then add a .
+        addons_prefix: str = (
+            AddonLoader.addon_prefix + "." if AddonLoader.addon_prefix else ""
+        )
         fields_resolved: list[ConfigField] = []
         # Loop through verifier addons
         for cmd in self.chat_command_addons.values():
@@ -220,7 +224,7 @@ class AddonLoader(BaseConfig):
             fields: list[ConfigField] = cmd.get_config_fields()
             for field in fields:
                 new_field: ConfigField = self._resolve_config_field(
-                    field, f"{AddonLoader.addon_prefix}{cmd.command_name}"
+                    field, f"{addons_prefix}{cmd.command_name}"
                 )
                 fields_resolved.append(new_field)
         return fields_resolved
@@ -228,6 +232,10 @@ class AddonLoader(BaseConfig):
     def _get_verifier_addon_fields(self) -> list[ConfigField]:
         """Adds each verifier's config fields to the config. After resolving
         each verifier's config fields to their namespace."""
+        # If an addon prefix is defined, then add a .
+        addons_prefix: str = (
+            AddonLoader.addon_prefix + "." if AddonLoader.addon_prefix else ""
+        )
         fields_resolved: list[ConfigField] = []
         # Loop through verifier addons
         for verifier in self.verifier_addons.values():
@@ -235,7 +243,7 @@ class AddonLoader(BaseConfig):
             fields: list[ConfigField] = verifier.get_config_fields()
             for field in fields:
                 new_field: ConfigField = self._resolve_config_field(
-                    field, f"{AddonLoader.addon_prefix}{verifier.verifier_name}"
+                    field, f"{addons_prefix}{verifier.verifier_name}"
                 )
                 fields_resolved.append(new_field)
         return fields_resolved
