@@ -1,6 +1,7 @@
 # Author: Yiannis Charalambous 2023
 
 
+import argparse
 from dataclasses import dataclass
 import os
 import sys
@@ -106,9 +107,20 @@ class Config(BaseConfig):
         """Value of field: prompt_templates.fix_code"""
         return self.get_value("prompt_templates.fix_code")
 
+    @property
+    def filenames(self) -> list[Path]:
+        """Gets the filanames that are to be loaded"""
+        return self.get_value("solution.filenames")
+
     def init(self, args: Any) -> None:
         """Will load the config from the args, the env file and then from config file.
         Call once to initialize."""
+
+        self._args: argparse.Namespace = args
+        self.api_keys: APIKeyCollection
+        self.raw_conversation: bool = False
+        self.generate_patches: bool
+        self.output_dir: Optional[Path] = None
 
         fields: list[ConfigField] = [
             ConfigField(
@@ -154,6 +166,33 @@ class Config(BaseConfig):
                 default_value="full",
                 validate=lambda v: isinstance(v, str) and v in ["full", "single"],
                 error_message="source_code_format can only be 'full' or 'single'",
+            ),
+            ConfigField(
+                name="solution.filenames",
+                default_value=[],
+                validate=lambda v: isinstance(v, list)
+                # Validate config values
+                and all(isinstance(f, str) and Path(f).exists() for f in v)
+                # Validate arg values
+                and all(Path(f).exists() for f in self._args.filenames),
+                on_load=self._filenames_load,
+                get_error_message=self._filenames_error_msg,
+            ),
+            # If argument is passed, then the config value is ignored.
+            ConfigField(
+                name="solution.entry_function",
+                default_value=None,
+                validate=lambda v: isinstance(v, str)
+                and (
+                    # This impliments logical implication A => B
+                    # So if entry_function arg is set then it must be a string
+                    not self._args.entry_function
+                    or isinstance(self._args.entry_function, str)
+                ),
+                on_load=lambda v: (
+                    self._args.entry_function if self._args.entry_function else v
+                ),
+                error_message="The entry function name needs to be a string",
             ),
             ConfigField(
                 name="verifier.esbmc.path",
@@ -268,16 +307,11 @@ class Config(BaseConfig):
             ),
         ]
 
-        self.api_keys: APIKeyCollection
-        self.raw_conversation: bool = False
-        self.generate_patches: bool
-        self.output_dir: Optional[Path] = None
-
         self._load_envs()
 
         # Base init needs to be called last (only before load args)
         super().base_init(self.cfg_path, fields)
-        self._load_args(args)
+        self._load_args()
 
     def _load_envs(self) -> None:
         """Environment variables are loaded in the following order:
@@ -347,7 +381,9 @@ class Config(BaseConfig):
             )
         )
 
-    def _load_args(self, args) -> None:
+    def _load_args(self) -> None:
+        args: argparse.Namespace = self._args
+
         set_verbose(args.verbose)
 
         # AI Model -m
@@ -358,15 +394,6 @@ class Config(BaseConfig):
             else:
                 print(f"Error: invalid --ai-model parameter {args.ai_model}")
                 sys.exit(4)
-
-        # If append flag is set, then append.
-        # FIXME Currently this will only work with esbmc not other verifiers
-        if args.append:
-            esbmc_params: List[str] = self.get_value("verifier.esbmc")
-            esbmc_params.extend(args.remaining)
-            self.set_value("verifier.esbmc", esbmc_params)
-        elif len(args.remaining) != 0:
-            self.set_value("verifier.esbmc", args.remaining)
 
         self.raw_conversation = args.raw_conversation
         self.generate_patches = args.generate_patches
@@ -448,3 +475,29 @@ class Config(BaseConfig):
             add_custom_ai_model(llm)
 
         return custom_ai
+
+    def _filenames_load(self, file_names: list[str]) -> list[Path]:
+        """Loads the filenames from the command line first then from the config."""
+
+        results: list[Path] = []
+
+        if len(self._args.filenames):
+            results.extend(Path(f) for f in self._args.filenames)
+
+        for file in file_names:
+            results.append(Path(file))
+        return results
+
+    @staticmethod
+    def _filenames_error_msg(file_names: list) -> str:
+        """Gets the error message for an invalid list of file_names specified in
+        the config."""
+
+        wrong: list[str] = []
+        for file_name in file_names:
+            if not isinstance(file_name, str) or not (
+                Path(file_name).is_file() and Path(file_name).is_dir()
+            ):
+                wrong.append(file_name)
+
+        return "The following files cannot be found: " + ", ".join(wrong)

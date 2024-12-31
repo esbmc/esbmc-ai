@@ -5,6 +5,7 @@ import sys
 from typing import Any, Optional
 from typing_extensions import override
 
+from esbmc_ai.solution import Solution, SourceFile
 from esbmc_ai.ai_models import AIModel
 from esbmc_ai.api_key_collection import APIKeyCollection
 from esbmc_ai.chat_response import FinishReason
@@ -15,7 +16,6 @@ from esbmc_ai.config import FixCodeScenario
 from esbmc_ai.chats.reverse_order_solution_generator import (
     ReverseOrderSolutionGenerator,
 )
-from esbmc_ai.solution import SourceFile
 from esbmc_ai.verifier_runner import VerifierRunner
 from esbmc_ai.verifiers.base_source_verifier import BaseSourceVerifier, VerifierOutput
 
@@ -103,11 +103,27 @@ class FixCodeCommand(ChatCommand):
         anim: BaseLoadingWidget = (
             kwargs["anim"] if "anim" in kwargs else BaseLoadingWidget()
         )
+        entry_function: str = (
+            kwargs["entry_function"] if "entry_function" in kwargs else "main"
+        )
         # End of handle kwargs
 
         printv(f"Temperature: {temperature}")
+        printv(f"Verifying function: {entry_function}")
 
         verifier: BaseSourceVerifier = VerifierRunner().verifier
+        printv(f"Running verifier: {verifier.verifier_name}")
+        verifier_result: VerifierOutput = verifier.verify_source(**kwargs)
+        source_file.assign_verifier_output(verifier_result.output)
+
+        if verifier_result.successful():
+            print("File verified successfully")
+            returned_source: str
+            if generate_patches:
+                returned_source = source_file.get_patch(0, -1)
+            else:
+                returned_source = source_file.latest_content
+            return FixCodeCommandResult(True, 0, returned_source)
 
         match message_history:
             case "normal":

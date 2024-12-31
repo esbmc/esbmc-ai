@@ -104,11 +104,24 @@ class ESBMC(BaseSourceVerifier):
         source_file_iteration: int = -1,
         esbmc_params: tuple = (),
         auto_clean: bool = False,
+        entry_function: str = "main",
         temp_file_dir: Optional[Path] = None,
         timeout: Optional[int] = None,
         **kwargs: Any,
     ) -> ESBMCOutput:
         _ = kwargs
+
+        if "--timeout" in esbmc_params:
+            print(
+                "Do not add --timeout to ESBMC parameters, instead specify it in its own field."
+            )
+            sys.exit(1)
+        if "--function" in esbmc_params:
+            print(
+                "Don't add --function to ESBMC parameters, instead specify it in its own field."
+            )
+            sys.exit(1)
+
         file_path: Path
         if temp_file_dir:
             file_path = source_file.save_file(
@@ -127,6 +140,7 @@ class ESBMC(BaseSourceVerifier):
         results = self._esbmc(
             path=file_path,
             esbmc_params=esbmc_params,
+            entry_function=entry_function,
             timeout=timeout,
         )
 
@@ -217,6 +231,7 @@ class ESBMC(BaseSourceVerifier):
         self,
         path: Path,
         esbmc_params: tuple,
+        entry_function: str,
         timeout: Optional[int] = None,
     ):
         """Exit code will be 0 if verification successful, 1 if verification
@@ -227,14 +242,10 @@ class ESBMC(BaseSourceVerifier):
         esbmc_cmd.extend(esbmc_params)
         esbmc_cmd.append(str(path))
 
-        if "--timeout" in esbmc_cmd:
-            print(
-                'Do not add --timeout to ESBMC parameters, instead specify it in "verifier_timeout".'
-            )
-            sys.exit(1)
-
         # Add timeout suffix for parameter.
         esbmc_cmd.extend(["--timeout", str(timeout) + "s"])
+        # Add entry function for parameter.
+        esbmc_cmd.extend(["--function", entry_function])
 
         # Add slack time to process to allow verifier to timeout and end gracefully.
         process_timeout: Optional[float] = timeout + 10 if timeout else None

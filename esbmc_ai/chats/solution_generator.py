@@ -91,7 +91,7 @@ class SolutionGenerator(BaseChatInterface):
         self.invokations = 0
 
     @classmethod
-    def get_code_from_solution(cls, solution: str) -> str:
+    def extract_code_from_solution(cls, solution: str) -> str:
         """Strip the source code of any leftover text as sometimes the AI model
         will generate text and formatting despite being told not to."""
         try:
@@ -230,7 +230,7 @@ class SolutionGenerator(BaseChatInterface):
         response: ChatResponse = self.send_message()
         solution: str = str(response.message.content)
 
-        solution = SolutionGenerator.get_code_from_solution(solution)
+        solution = SolutionGenerator.extract_code_from_solution(solution)
 
         # Post process source code
         # If source code passed to LLM is formatted then we need to recombine to

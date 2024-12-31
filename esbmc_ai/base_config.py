@@ -67,11 +67,13 @@ class BaseConfig(ABC):
                 )
 
             # Validate field
-            assert field.validate(self.config_file[field.name]), (
-                f"{field.error_message}: {self.config_file[field.name]}"
-                if field.error_message
-                else f"Field: {field.name} is invalid: {self.config_file[field.name]}"
-            )
+            if not field.validate(self.config_file[field.name]):
+                msg = f"Field: {field.name} is invalid: {self.config_file[field.name]}"
+                if field.get_error_message is not None:
+                    msg += ": " + field.get_error_message(self.config_file[field.name])
+                elif field.error_message:
+                    msg += ": " + field.error_message
+                raise ValueError(f"Config loading error: {msg}")
 
             # Assign field from config file
             self._values[field.name] = field.on_load(self.config_file[field.name])

@@ -2,6 +2,7 @@
 
 """This module contains code regarding configuring and loading addon modules."""
 
+import inspect
 from typing import Any
 from typing_extensions import Optional, override
 import importlib
@@ -196,19 +197,24 @@ class AddonLoader(BaseConfig):
         return self._config.get_value(name)
 
     def _resolve_config_field(self, field: ConfigField, prefix: str):
-        # Resolve the name of each field by prefixing it with the verifier name.
-        # Create a new config field with the new name.
-        new_field = ConfigField(
-            name=f"{prefix}.{field.name}",
-            default_value=field.default_value,
-            default_value_none=field.default_value_none,
-            validate=field.validate,
-            on_load=field.on_load,
-            on_read=field.on_read,
-            error_message=field.error_message,
-        )
+        """Resolve the name of each field by prefixing it with the verifier name.
+        Returns a new config field with the name resolved to the prefix
+        supplied. Using inspection all the other fields are copied. The returning
+        field is exactly the same as the original, aside from the resolved name."""
 
-        return new_field
+        # Inspect the signature of the ConfigField which is a named tuple.
+        signature = inspect.signature(ConfigField)
+        params: dict[str, Any] = {}
+        # Iterate and capture all parameters
+        for param_name, param in signature.parameters.items():
+            _ = param
+            match param_name:
+                case "name":
+                    params[param_name] = f"{prefix}.{getattr(field, param_name)}"
+                case _:
+                    params[param_name] = getattr(field, param_name)
+
+        return ConfigField(**params)
 
     def _get_chat_command_addon_fields(self) -> list[ConfigField]:
         """Adds each chat command's config fields to the config. After resolving

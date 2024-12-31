@@ -48,14 +48,14 @@ def test_call_update_state_first(setup_llm_model) -> None:
 
 def test_get_code_from_solution():
     assert (
-        SolutionGenerator.get_code_from_solution(
+        SolutionGenerator.extract_code_from_solution(
             "This is a code block:\n\n```c\naaa\n```"
         )
         == "aaa"
     )
 
     assert (
-        SolutionGenerator.get_code_from_solution(
+        SolutionGenerator.extract_code_from_solution(
             "This is a code block:\n\n```\nabc\n```"
         )
         == "abc"
@@ -63,12 +63,14 @@ def test_get_code_from_solution():
 
     # Edge case
     assert (
-        SolutionGenerator.get_code_from_solution("This is a code block:```abc\n```")
+        SolutionGenerator.extract_code_from_solution("This is a code block:```abc\n```")
         == ""
     )
 
     assert (
-        SolutionGenerator.get_code_from_solution("The repaired C code is:\n\n```\n```")
+        SolutionGenerator.extract_code_from_solution(
+            "The repaired C code is:\n\n```\n```"
+        )
         == ""
     )
 
