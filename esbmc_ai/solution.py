@@ -235,11 +235,31 @@ class Solution:
         return tuple(self._files)
 
     @property
-    def files_mapped(self) -> dict[Path, SourceFile]:
+    def files_mapped(self) -> dict[str, SourceFile]:
         """Will return the files mapped to their directory. Returns by value."""
-        return {source_file.file_path: source_file for source_file in self._files}
+        return {str(source_file.file_path): source_file for source_file in self._files}
 
-    def add_source_file(self, file_path: Path, content: Optional[str]) -> None:
+    def add_source_file(self, source_file: SourceFile) -> None:
+        """Adds a source file to the solution."""
+        self._files.append(source_file)
+
+    def add_source_files(self, source_files: list[SourceFile]) -> None:
+        """Adds multiple source files to the solution"""
+        for f in source_files:
+            self._files.append(f)
+
+    def load_source_files(self, file_paths: list[Path]) -> None:
+        """Loads multiple source files from disk."""
+        for f in file_paths:
+            assert isinstance(f, Path), f"Invalid type: {type(f)}"
+            if f.is_dir():
+                for path in f.glob("**/*"):
+                    if path.is_file() and path.name:
+                        self.load_source_file(path, None)
+            else:
+                self.load_source_file(f, None)
+
+    def load_source_file(self, file_path: Path, content: Optional[str] = None) -> None:
         """Add a source file to the solution. If content is provided then it will
         not be loaded."""
         assert file_path

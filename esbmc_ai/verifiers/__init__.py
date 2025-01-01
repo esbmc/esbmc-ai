@@ -1,4 +1,4 @@
 from .base_source_verifier import BaseSourceVerifier
-from .esbmc_util import ESBMCUtil
+from .esbmc import ESBMC
 
-__all__ = ["BaseSourceVerifier", "ESBMCUtil"]
+__all__ = ["BaseSourceVerifier", "ESBMC"]

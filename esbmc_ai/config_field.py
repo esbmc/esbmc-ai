@@ -42,3 +42,6 @@ class ConfigField(NamedTuple):
     This is a more versatile version of on_load. So if this is used, the on_load
     will be ignored."""
     error_message: Optional[str] = None
+    """Optional string to provide a generic error message."""
+    get_error_message: Optional[Callable[[Any], str]] = None
+    """Optionsl function to get more verbose output than error_message."""

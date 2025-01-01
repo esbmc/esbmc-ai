@@ -2,8 +2,7 @@
 
 from pytest import raises
 
-import esbmc_ai.config as config
-
+from esbmc_ai.config import Config
 from esbmc_ai.ai_models import is_valid_ai_model
 
 
@@ -16,7 +15,7 @@ def test_load_custom_ai() -> None:
         }
     }
 
-    config._load_custom_ai(custom_ai_config)
+    Config()._load_custom_ai(custom_ai_config)
 
     assert is_valid_ai_model("example_ai")
 
@@ -27,59 +26,59 @@ def test_load_custom_ai_fail() -> None:
         "example_ai_2": {
             "max_tokens": "1024",
             "url": "www.example.com",
-            "config_message": "example",
+            "server_type": "ollama",
         }
     }
 
-    with raises(AssertionError):
-        config._load_custom_ai(ai_conf)
+    with raises(TypeError):
+        Config()._validate_custom_ai(ai_conf)
 
     # Wrong max_tokens value
     ai_conf: dict = {
         "example_ai_2": {
             "max_tokens": 0,
             "url": "www.example.com",
-            "config_message": "example",
+            "server_type": "ollama",
         }
     }
 
-    with raises(AssertionError):
-        config._load_custom_ai(ai_conf)
+    with raises(ValueError):
+        Config()._validate_custom_ai(ai_conf)
 
     # Missing max_tokens
     ai_conf: dict = {
         "example_ai_2": {
             "url": "www.example.com",
-            "config_message": "example",
+            "server_type": "ollama",
         }
     }
 
-    with raises(AssertionError):
-        config._load_custom_ai(ai_conf)
+    with raises(KeyError):
+        Config()._validate_custom_ai(ai_conf)
 
     # Missing url
     ai_conf: dict = {
         "example_ai_2": {
-            "max_tokens": 0,
-            "config_message": "example",
+            "max_tokens": 1000,
+            "server_type": "ollama",
         }
     }
 
-    with raises(AssertionError):
-        config._load_custom_ai(ai_conf)
+    with raises(KeyError):
+        Config()._validate_custom_ai(ai_conf)
 
-    # Missing config message
+    # Missing server type
     ai_conf: dict = {
         "example_ai_2": {
-            "max_tokens": 0,
+            "max_tokens": 100,
             "url": "www.example.com",
         }
     }
 
-    with raises(AssertionError):
-        config._load_custom_ai(ai_conf)
+    with raises(KeyError):
+        Config()._validate_custom_ai(ai_conf)
 
     # Test load empty
     ai_conf: dict = {}
 
-    config._load_custom_ai(ai_conf)
+    Config()._validate_custom_ai(ai_conf)

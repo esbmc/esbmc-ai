@@ -64,6 +64,8 @@ dependencies = [
   "hatch",
   "transformers",
   "torch",
+  "langchain",
+  "langchain_community"
 ]
 
 [project.scripts]

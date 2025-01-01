@@ -5,10 +5,14 @@ allow_successful = false
 loading_hints = true
 source_code_format = "full"
 
-[esbmc]
+[verifier]
+name = "esbmc"
+
+[verifier.esbmc]
 path = "~/.local/bin/esbmc"
 params = [
     "--interval-analysis",
+    "--memory-leak-check",
     "--goto-unwind",
     "--unlimited-goto-unwind",
     "--k-induction",
@@ -18,7 +22,6 @@ params = [
     "2",
     "--floatbv",
     "--unlimited-k-steps",
-    "--compact-trace",
     "--context-bound",
     "2",
 ]

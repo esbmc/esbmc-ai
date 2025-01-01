@@ -5,24 +5,24 @@ import sys
 from typing import Any, Optional
 from typing_extensions import override
 
+from esbmc_ai.solution import Solution, SourceFile
 from esbmc_ai.ai_models import AIModel
 from esbmc_ai.api_key_collection import APIKeyCollection
 from esbmc_ai.chat_response import FinishReason
 from esbmc_ai.chats import LatestStateSolutionGenerator, SolutionGenerator
 from esbmc_ai.verifiers.base_source_verifier import VerifierTimedOutException
 from esbmc_ai.commands.command_result import CommandResult
-from esbmc_ai.config import FixCodeScenarios
+from esbmc_ai.config import FixCodeScenario
 from esbmc_ai.chats.reverse_order_solution_generator import (
     ReverseOrderSolutionGenerator,
 )
-from esbmc_ai.solution import SourceFile
 from esbmc_ai.verifier_runner import VerifierRunner
 from esbmc_ai.verifiers.base_source_verifier import BaseSourceVerifier, VerifierOutput
 
 from .chat_command import ChatCommand
 from ..msg_bus import Signal
 from ..loading_widget import BaseLoadingWidget
-from ..logging import print_horizontal_line, printv, printvv
+from ..logging import print_horizontal_line, printv, printvvv
 
 
 class FixCodeCommandResult(CommandResult):
@@ -67,8 +67,9 @@ class FixCodeCommand(ChatCommand):
         def print_raw_conversation() -> None:
             print_horizontal_line(0)
             print("ESBMC-AI Notice: Printing raw conversation...")
-            all_messages = solution_generator._system_messages.copy()
-            all_messages.extend(solution_generator.messages.copy())
+            all_messages = (
+                solution_generator._system_messages + solution_generator.messages
+            )
             messages: list[str] = [f"{msg.type}: {msg.content}" for msg in all_messages]
             print("\n" + "\n\n".join(messages))
             print("ESBMC-AI Notice: End of raw conversation")
@@ -91,7 +92,7 @@ class FixCodeCommand(ChatCommand):
         timeout: int = kwargs["requests_timeout"]
         source_code_format: str = kwargs["source_code_format"]
         esbmc_output_format: str = kwargs["esbmc_output_format"]
-        scenarios: FixCodeScenarios = kwargs["scenarios"]
+        scenarios: dict[str, FixCodeScenario] = kwargs["scenarios"]
         max_attempts: int = kwargs["max_attempts"]
         raw_conversation: bool = (
             kwargs["raw_conversation"] if "raw_conversation" in kwargs else False
@@ -102,9 +103,27 @@ class FixCodeCommand(ChatCommand):
         anim: BaseLoadingWidget = (
             kwargs["anim"] if "anim" in kwargs else BaseLoadingWidget()
         )
+        entry_function: str = (
+            kwargs["entry_function"] if "entry_function" in kwargs else "main"
+        )
         # End of handle kwargs
 
+        printv(f"Temperature: {temperature}")
+        printv(f"Verifying function: {entry_function}")
+
         verifier: BaseSourceVerifier = VerifierRunner().verifier
+        printv(f"Running verifier: {verifier.verifier_name}")
+        verifier_result: VerifierOutput = verifier.verify_source(**kwargs)
+        source_file.assign_verifier_output(verifier_result.output)
+
+        if verifier_result.successful():
+            print("File verified successfully")
+            returned_source: str
+            if generate_patches:
+                returned_source = source_file.get_patch(0, -1)
+            else:
+                returned_source = source_file.latest_content
+            return FixCodeCommandResult(True, 0, returned_source)
 
         match message_history:
             case "normal":
@@ -160,7 +179,7 @@ class FixCodeCommand(ChatCommand):
                 esbmc_output=source_file.latest_verifier_output,
             )
         except VerifierTimedOutException:
-            print("error: ESBMC has timed out...")
+            print("ESBMC-AI Notice: ESBMC has timed out...")
             sys.exit(1)
 
         print()
@@ -181,27 +200,24 @@ class FixCodeCommand(ChatCommand):
                     break
 
             # Print verbose lvl 2
-            printvv("\nESBMC-AI Notice: Source Code Generation:")
-            print_horizontal_line(2)
-            printvv(source_file.latest_content)
-            print_horizontal_line(2)
-            printvv("")
+            printvvv("\nESBMC-AI Notice: Source Code Generation:")
+            print_horizontal_line(3)
+            printvvv(source_file.latest_content)
+            print_horizontal_line(3)
+            printvvv("")
 
             # Pass to ESBMC, a workaround is used where the file is saved
             # to a temporary location since ESBMC needs it in file format.
             with anim("Verifying with ESBMC... Please Wait"):
-                verifier_result: VerifierOutput = verifier.verify_source(
-                    source_file=source_file,
-                    **kwargs,
-                )
+                verifier_result: VerifierOutput = verifier.verify_source(**kwargs)
 
             source_file.assign_verifier_output(verifier_result.output)
 
             # Print verbose lvl 2
-            printvv("\nESBMC-AI Notice: ESBMC Output:")
-            print_horizontal_line(2)
-            printvv(source_file.latest_verifier_output)
-            print_horizontal_line(2)
+            printvvv("\nESBMC-AI Notice: ESBMC Output:")
+            print_horizontal_line(3)
+            printvvv(source_file.latest_verifier_output)
+            print_horizontal_line(3)
 
             # Solution found
             if verifier_result.return_code == 0:
@@ -242,7 +258,7 @@ class FixCodeCommand(ChatCommand):
             if attempt != max_attempts:
                 print(f"ESBMC-AI Notice: Failure {attempt}/{max_attempts}: Retrying...")
             else:
-                print(f"ESBMC-AI Notice: Failure {attempt}/{max_attempts}")
+                print(f"ESBMC-AI Notice: Failure {attempt}/{max_attempts}: Exiting...")
 
         if raw_conversation:
             print_raw_conversation()

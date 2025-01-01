@@ -6,9 +6,10 @@ from subprocess import PIPE, STDOUT, run, CompletedProcess
 from pathlib import Path
 from typing_extensions import Any, Optional, override
 
+from esbmc_ai.config import Config
 from esbmc_ai.solution import SourceFile
 
-from esbmc_ai.config import default_scenario
+from esbmc_ai.base_config import BaseConfig, default_scenario
 from esbmc_ai.verifiers.base_source_verifier import (
     BaseSourceVerifier,
     SourceCodeParseError,
@@ -23,7 +24,7 @@ class ESBMCOutput(VerifierOutput):
         return self.return_code == 0
 
 
-class ESBMCUtil(BaseSourceVerifier):
+class ESBMC(BaseSourceVerifier):
     @classmethod
     def esbmc_get_violated_property(cls, esbmc_output: str) -> Optional[str]:
         """Gets the violated property line of the ESBMC output."""
@@ -90,10 +91,11 @@ class ESBMCUtil(BaseSourceVerifier):
 
     def __init__(self) -> None:
         super().__init__("esbmc")
+        self.config = Config()
 
     @property
     def esbmc_path(self) -> Path:
-        return self.get_config_value("path")
+        return self.get_config_value("verifier.esbmc.path")
 
     @override
     def verify_source(
@@ -102,11 +104,24 @@ class ESBMCUtil(BaseSourceVerifier):
         source_file_iteration: int = -1,
         esbmc_params: tuple = (),
         auto_clean: bool = False,
+        entry_function: str = "main",
         temp_file_dir: Optional[Path] = None,
         timeout: Optional[int] = None,
         **kwargs: Any,
     ) -> ESBMCOutput:
         _ = kwargs
+
+        if "--timeout" in esbmc_params:
+            print(
+                "Do not add --timeout to ESBMC parameters, instead specify it in its own field."
+            )
+            sys.exit(1)
+        if "--function" in esbmc_params:
+            print(
+                "Don't add --function to ESBMC parameters, instead specify it in its own field."
+            )
+            sys.exit(1)
+
         file_path: Path
         if temp_file_dir:
             file_path = source_file.save_file(
@@ -125,6 +140,7 @@ class ESBMCUtil(BaseSourceVerifier):
         results = self._esbmc(
             path=file_path,
             esbmc_params=esbmc_params,
+            entry_function=entry_function,
             timeout=timeout,
         )
 
@@ -215,6 +231,7 @@ class ESBMCUtil(BaseSourceVerifier):
         self,
         path: Path,
         esbmc_params: tuple,
+        entry_function: str,
         timeout: Optional[int] = None,
     ):
         """Exit code will be 0 if verification successful, 1 if verification
@@ -225,13 +242,10 @@ class ESBMCUtil(BaseSourceVerifier):
         esbmc_cmd.extend(esbmc_params)
         esbmc_cmd.append(str(path))
 
-        if "--timeout" in esbmc_cmd:
-            print(
-                'Do not add --timeout to ESBMC parameters, instead specify it in "verifier_timeout".'
-            )
-            sys.exit(1)
-
-        esbmc_cmd.extend(["--timeout", str(timeout)])
+        # Add timeout suffix for parameter.
+        esbmc_cmd.extend(["--timeout", str(timeout) + "s"])
+        # Add entry function for parameter.
+        esbmc_cmd.extend(["--function", entry_function])
 
         # Add slack time to process to allow verifier to timeout and end gracefully.
         process_timeout: Optional[float] = timeout + 10 if timeout else None

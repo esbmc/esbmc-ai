@@ -25,25 +25,48 @@ class DummyVerifierOutput(VerifierOutput):
 
 
 class DummyVerifier(BaseSourceVerifier):
-    """The base class for creating a source verifier for ESBMC-AI. In order for
-    this class to work with ESBMC-AI, the constructor must have default values
-    to all arguments because it will be invoked without passing anything.
+    """Dummy verifier with pre-configured responses. Used for testing."""
 
-    Loading from the config will be permitted but it would be preferred if you
-    use the base class method `get_config_value`. The fields of the config that
-    are going to be loaded need to be declared and returned by the
-    `get_config_fields` method. The config loader will automatically preppend
-    the verifier_name declared to each key so that there are no clashes in the
-    config. So the verifier "esbmc" will have for key "timeout" the following
-    field in the config: "esbmc.timeout"."""
-
-    def __init__(self) -> None:
+    def __init__(
+        self, responses: Optional[list[str]] = None, load_config: bool = True
+    ) -> None:
         """Creates a new dummy verifier."""
         super().__init__(verifier_name="dummy_verifier")
+        self._responses: Optional[list[str]] = responses
+        self._current_response: int = 0
+        self._load_config = load_config
+
+    @property
+    def responses(self) -> list[str]:
+        if self._load_config:
+            return (
+                self._responses
+                if self._responses
+                else self.get_config_value("responses")
+            )
+        else:
+            return self._responses if self._responses else []
+
+    @responses.setter
+    def responses(self, value: Optional[list[str]]) -> None:
+        self._responses = value
+
+    def set_response_counter(self, value: Optional[int] = None) -> None:
+        self._current_response = value if value else 0
+        assert (
+            0 <= self._current_response < len(self.responses)
+        ), f"Responses index set out of range: 0 <= {self._current_response} < {len(self.responses)}"
 
     @override
     def get_config_fields(self) -> list[ConfigField]:
-        return []
+        return [
+            ConfigField(
+                name="responses",
+                default_value=[],
+                error_message="Invalid, needs to be an array of strings.",
+                validate=lambda v: isinstance(v, str),
+            )
+        ]
 
     @override
     def verify_source(
@@ -59,7 +82,7 @@ class DummyVerifier(BaseSourceVerifier):
         _ = source_file
         _ = source_file_iteration
         value = kwargs["value"] if "value" in kwargs else 0
-        return DummyVerifierOutput(value, "")
+        return DummyVerifierOutput(value, self.responses[self._current_response])
 
     @override
     def apply_formatting(self, verifier_output: str, format: str) -> str:

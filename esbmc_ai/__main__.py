@@ -8,13 +8,12 @@ import sys
 # Enables arrow key functionality for input(). Do not remove import.
 import readline
 
-from esbmc_ai.config import ConfigField
+from esbmc_ai.addon_loader import AddonLoader
+from esbmc_ai.commands.user_chat_command import UserChatCommand
 from esbmc_ai.verifier_runner import VerifierRunner
-from esbmc_ai.verifiers.base_source_verifier import BaseSourceVerifier, VerifierOutput
+from esbmc_ai.verifiers.esbmc import ESBMC
 
 _ = readline
-
-from langchain_core.language_models import BaseChatModel
 
 from esbmc_ai.command_runner import CommandRunner
 from esbmc_ai.commands.fix_code_command import FixCodeCommandResult
@@ -24,7 +23,7 @@ import argparse
 
 from esbmc_ai import Config
 from esbmc_ai import __author__, __version__
-from esbmc_ai.solution import SourceFile, Solution, get_solution
+from esbmc_ai.solution import get_solution
 
 from esbmc_ai.commands import (
     ChatCommand,
@@ -36,16 +35,14 @@ from esbmc_ai.commands import (
 
 from esbmc_ai.loading_widget import BaseLoadingWidget, LoadingWidget
 from esbmc_ai.chats import UserChat
-from esbmc_ai.logging import print_horizontal_line, printv, printvv
-from esbmc_ai.verifiers import ESBMCUtil
-from esbmc_ai.chat_response import FinishReason, ChatResponse
+from esbmc_ai.logging import printv, printvv
 from esbmc_ai.ai_models import _ai_model_names
 
 help_command: HelpCommand = HelpCommand()
 fix_code_command: FixCodeCommand = FixCodeCommand()
 exit_command: ExitCommand = ExitCommand()
 
-verifier_runner: VerifierRunner = VerifierRunner()
+verifier_runner: VerifierRunner = VerifierRunner().init([ESBMC()])
 command_runner: CommandRunner = CommandRunner().init(
     builtin_commands=[
         help_command,
@@ -94,7 +91,7 @@ For all the options, run ESBMC with -h as a parameter:
 def check_health() -> None:
     printv("Performing health check...")
     # Check that ESBMC exists.
-    esbmc_path: Path = Config.get_value("esbmc.path")
+    esbmc_path: Path = Config().get_value("verifier.esbmc.path")
     if esbmc_path.exists():
         printv("ESBMC has been located")
     else:
@@ -102,145 +99,27 @@ def check_health() -> None:
         sys.exit(3)
 
 
-def print_assistant_response(
-    chat: UserChat,
-    response: ChatResponse,
-    hide_stats: bool = False,
-) -> None:
-    print(f"{response.message.type}: {response.message.content}\n\n")
-
-    if not hide_stats:
-        print(
-            "Stats:",
-            f"total tokens: {response.total_tokens},",
-            f"max tokens: {chat.ai_model.tokens}",
-            f"finish reason: {response.finish_reason}",
-        )
-
-
-def _load_addons() -> None:
-    """Manages loading addons"""
-    # Load all the addon commands
-    command_runner.addon_commands.clear()
-    command_runner.addon_commands.extend(
-        [m for m in Config.get_value("addon_modules") if isinstance(m, ChatCommand)]
-    )
-    if len(command_runner.addon_commands):
-        printv(
-            "ChatCommand Addons:\n\t* "
-            + "\t * ".join(command_runner.addon_commands_names)
-        )
-
-    # Load all the addon verifiers
-    verifier_runner.init([ESBMCUtil()])
-    for m in Config.get_value("addon_modules"):
-        if isinstance(m, BaseSourceVerifier):
-            verifier_runner.addon_verifiers[m.verifier_name] = m
-
-    # Init config fields
-    for field in verifier_runner.init_configs():
-        Config.add_config_field(field)
-
-    Config.add_config_field(
-        ConfigField(
-            name="verifier",
-            default_value="esbmc",
-            validate=lambda v: isinstance(v, str) and v in verifier_runner.verifiers,
-            on_load=lambda v: verifier_runner.verifiers[v],
-            error_message="Invalid verifier name specified.",
-        )
-    )
-    printv(
-        "Verifier Addons:\n\t* " + "\t * ".join(verifier_runner.addon_verifier_names)
-    )
-
-
-def update_solution(source_code: str) -> None:
-    get_solution().files[0].update_content(content=source_code, reset_changes=True)
-
-
-def _run_esbmc(source_file: SourceFile, anim: BaseLoadingWidget) -> str:
-    assert source_file.file_path
-
-    with anim("ESBMC is processing... Please Wait"):
-        verifier_result: VerifierOutput = verifier_runner.verifier.verify_source(
-            source_file=source_file,
-            esbmc_params=Config.get_value("esbmc.params"),
-            timeout=Config.get_value("esbmc.timeout"),
-        )
-
-    # ESBMC will output 0 for verification success and 1 for verification
-    # failed, if anything else gets thrown, it's an ESBMC error.
-    if not Config.get_value("allow_successful") and verifier_result.successful():
-        printv("Success!")
-        print(verifier_result.output)
-        sys.exit(0)
-    elif verifier_result.return_code != 0 and verifier_result.return_code != 1:
-        printv(f"ESBMC exit code: {verifier_result.return_code}")
-        printv(f"ESBMC Output:\n\n{verifier_result.output}")
-        sys.exit(1)
-
-    return verifier_result.output
-
-
-def init_commands() -> None:
-    """# Bus Signals
-    Function that handles initializing commands. Each command needs to be added
-    into the commands array in order for the command to register to be called by
-    the user and also register in the help system."""
-
-    # Let the AI model know about the corrected code.
-    fix_code_command.on_solution_signal.add_listener(chat.set_solution)
-    fix_code_command.on_solution_signal.add_listener(update_solution)
-
-
-def _execute_fix_code_command(source_file: SourceFile) -> FixCodeCommandResult:
-    """Shortcut method to execute fix code command."""
-    return fix_code_command.execute(
-        ai_model=Config.get_ai_model(),
-        source_file=source_file,
-        generate_patches=Config.generate_patches,
-        message_history=Config.get_value("fix_code.message_history"),
-        api_keys=Config.api_keys,
-        temperature=Config.get_value("fix_code.temperature"),
-        max_attempts=Config.get_value("fix_code.max_attempts"),
-        requests_max_tries=Config.get_llm_requests_max_tries(),
-        requests_timeout=Config.get_llm_requests_timeout(),
-        esbmc_params=Config.get_value("esbmc.params"),
-        raw_conversation=Config.raw_conversation,
-        temp_auto_clean=Config.get_value("temp_auto_clean"),
-        verifier_timeout=Config.get_value("esbmc.timeout"),
-        source_code_format=Config.get_value("source_code_format"),
-        esbmc_output_format=Config.get_value("esbmc.output_type"),
-        scenarios=Config.get_fix_code_scenarios(),
-        temp_file_dir=Config.get_value("temp_file_dir"),
-        output_dir=Config.output_dir,
-    )
-
-
 def _run_command_mode(command: ChatCommand, args: argparse.Namespace) -> None:
-    path_arg: Path = Path(args.filename)
-
-    anim: BaseLoadingWidget = (
-        LoadingWidget() if Config.get_value("loading_hints") else BaseLoadingWidget()
-    )
-
-    solution: Solution = get_solution()
-    if path_arg.is_dir():
-        for path in path_arg.glob("**/*"):
-            if path.is_file() and path.name:
-                solution.add_source_file(path, None)
-    else:
-        solution.add_source_file(path_arg, None)
-
     match command.command_name:
+        # Basic fix mode: Supports only 1 file repair.
         case fix_code_command.command_name:
-            for source_file in solution.files:
-                # Run ESBMC first round
-                esbmc_output: str = _run_esbmc(source_file, anim)
-                source_file.assign_verifier_output(esbmc_output)
+            print("Reading source code...")
+            get_solution().load_source_files(Config().filenames)
+            print(f"Running ESBMC with {Config().get_value('verifier.esbmc.params')}\n")
 
-                result: FixCodeCommandResult = _execute_fix_code_command(source_file)
+            anim: BaseLoadingWidget = (
+                LoadingWidget()
+                if Config().get_value("loading_hints")
+                else BaseLoadingWidget()
+            )
+            for source_file in get_solution().files:
+                result: FixCodeCommandResult = (
+                    UserChatCommand._execute_fix_code_command_one_file(
+                        fix_code_command,
+                        source_file,
+                        anim=anim,
+                    )
+                )
 
                 print(result)
         case _:
@@ -250,7 +129,7 @@ def _run_command_mode(command: ChatCommand, args: argparse.Namespace) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        prog="ESBMC-ChatGPT",
+        prog="ESBMC-AI",
         description=HELP_MESSAGE,
         # argparse.RawDescriptionHelpFormatter allows the ESBMC_HELP to display
         # properly.
@@ -259,14 +138,20 @@ def main() -> None:
     )
 
     parser.add_argument(
-        "filename",
-        help="The filename to pass to esbmc.",
+        "filenames",
+        default=[],
+        type=str,
+        nargs=argparse.REMAINDER,
+        help="The filename(s) to pass to the verifier.",
     )
 
     parser.add_argument(
-        "remaining",
-        nargs=argparse.REMAINDER,
-        help="Any arguments after the filename will be passed to ESBMC as parameters.",
+        "--entry-function",
+        action="store",
+        default="main",
+        type=str,
+        required=False,
+        help="The name of the entry function to repair, defaults to main.",
     )
 
     parser.add_argument(
@@ -302,14 +187,6 @@ def main() -> None:
     )
 
     parser.add_argument(
-        "-a",
-        "--append",
-        action="store_true",
-        default=False,
-        help="Any ESBMC parameters passed after the file name will be appended to the ones set in the config file, or the default ones if config file options are not set.",
-    )
-
-    parser.add_argument(
         "-c",
         "--command",
         help="Runs the program in command mode, it will exit after the command ends with an exit code. Options: {"
@@ -339,22 +216,22 @@ def main() -> None:
     print(f"Made by {__author__}")
     print()
 
-    Config.init(args)
+    printvv("Loading main config")
+    Config().init(args)
+    printv(f"Config File: {Config().cfg_path}")
     check_health()
-    _load_addons()
+    # Load addons
+    printvv("Loading addons")
+    AddonLoader().init(Config(), verifier_runner.builtin_verifier_names)
+    # Bind addons to command runner and verifier runner.
+    command_runner.addon_commands = AddonLoader().chat_command_addons
+    verifier_runner.addon_verifiers = AddonLoader().verifier_addons
+    # Set verifier to use
+    printvv(f"Verifier: {verifier_runner.verfifier.verifier_name}")
+    verifier_runner.set_verifier_by_name(Config().get_value("verifier.name"))
 
-    printv(f"Source code format: {Config.get_value('source_code_format')}")
-    printv(f"ESBMC output type: {Config.get_value('esbmc.output_type')}")
-
-    anim: BaseLoadingWidget = (
-        LoadingWidget() if Config.get_value("loading_hints") else BaseLoadingWidget()
-    )
-
-    # Read the source code and esbmc output.
-    printv("Reading source code...")
-    print(f"Running ESBMC with {Config.get_value('esbmc.params')}\n")
-
-    assert isinstance(args.filename, str)
+    printv(f"Source code format: {Config().get_value('source_code_format')}")
+    printv(f"ESBMC output type: {Config().get_value('verifier.esbmc.output_type')}")
 
     # ===========================================
     # Command mode
@@ -366,9 +243,7 @@ def main() -> None:
         command_names: list[str] = command_runner.command_names
         if command in command_names:
             print("Running Command:", command)
-            for idx, command_name in enumerate(command_names):
-                if command == command_name:
-                    _run_command_mode(command=command_runner.commands[idx], args=args)
+            _run_command_mode(command=command_runner.commands[command], args=args)
             sys.exit(0)
         else:
             print(
@@ -381,146 +256,11 @@ def main() -> None:
     # User Mode (Supports only 1 file)
     # ===========================================
 
-    # Init Solution
-    solution: Solution
-    # Determine if we are processing one file versus multiple files
-    path_arg: Path = Path(args.filename)
-    if path_arg.is_dir():
-        # Load only files.
-        print(
-            "Processing multiple files is not supported in User Mode."
-            "Call a command using -c to process directories"
-        )
-        sys.exit(1)
-    else:
-        # Add the main source file to the solution explorer.
-        solution: Solution = get_solution()
-        solution.add_source_file(path_arg, None)
-    del path_arg
-
-    # Assert that we have one file and one filepath
-    assert len(solution.files) == 1
-
-    source_file: SourceFile = solution.files[0]
-
-    esbmc_output: str = _run_esbmc(source_file, anim)
-
-    # Print verbose lvl 2
-    print_horizontal_line(2)
-    printvv(esbmc_output)
-    print_horizontal_line(2)
-
-    source_file.assign_verifier_output(esbmc_output)
-    del esbmc_output
-
-    printv(f"Initializing the LLM: {Config.get_ai_model().name}\n")
-    chat_llm: BaseChatModel = Config.get_ai_model().create_llm(
-        api_keys=Config.api_keys,
-        temperature=Config.get_value("user_chat.temperature"),
-        requests_max_tries=Config.get_value("llm_requests.max_tries"),
-        requests_timeout=Config.get_value("llm_requests.timeout"),
-    )
-
-    printv("Creating user chat")
-    global chat
-    chat = UserChat(
-        ai_model=Config.get_ai_model(),
-        llm=chat_llm,
-        verifier=verifier_runner.verifier,
-        source_code=source_file.latest_content,
-        esbmc_output=source_file.latest_verifier_output,
-        system_messages=Config.get_user_chat_system_messages(),
-        set_solution_messages=Config.get_user_chat_set_solution(),
-    )
-
-    printv("Initializing commands...")
-    init_commands()
-
-    # Show the initial output.
-    response: ChatResponse
-    if len(str(Config.get_user_chat_initial().content)) > 0:
-        printv("Using initial prompt from file...\n")
-        with anim("Model is parsing ESBMC output... Please Wait"):
-            try:
-                response = chat.send_message(
-                    message=str(Config.get_user_chat_initial().content),
-                )
-            except Exception as e:
-                print("There was an error while generating a response: {e}")
-                sys.exit(1)
-
-        if response.finish_reason == FinishReason.length:
-            raise RuntimeError(f"The token length is too large: {chat.ai_model.tokens}")
-    else:
-        raise RuntimeError("User mode initial prompt not found in config.")
-
-    print_assistant_response(chat, response)
-    print(
-        "ESBMC-AI: Type '/help' to view the available in-chat commands, along",
-        "with useful prompts to ask the AI model...",
-    )
-
-    while True:
-        # Get user input.
-        user_message = input("user>: ")
-
-        # Check if it is a command, if not, then pass it to the chat interface.
-        if user_message.startswith("/"):
-            command, command_args = CommandRunner.parse_command(user_message)
-            command = command[1:]  # Remove the /
-            if command == fix_code_command.command_name:
-                # Fix Code command
-                print()
-                print("ESBMC-AI will generate a fix for the code...")
-
-                result: FixCodeCommandResult = _execute_fix_code_command(source_file)
-
-                if result.successful:
-                    print(
-                        "\n\nESBMC-AI: Here is the corrected code, verified with ESBMC:"
-                    )
-                    print(f"```\n{result.repaired_source}\n```")
-                continue
-            else:
-                # Commands without parameters or returns are handled automatically.
-                found: bool = False
-                for cmd in command_runner.commands:
-                    if cmd.command_name == command:
-                        found = True
-                        cmd.execute()
-                        break
-
-                if not found:
-                    print("Error: Unknown command...")
-                continue
-        elif user_message == "":
-            continue
-        else:
-            print()
-
-        # User chat mode send and process current message response.
-        while True:
-            # Send user message to AI model and process.
-            with anim("Generating response... Please Wait"):
-                response = chat.send_message(user_message)
-
-            if response.finish_reason == FinishReason.stop:
-                break
-            elif response.finish_reason == FinishReason.length:
-                with anim(
-                    "Message stack limit reached. Shortening message stack... Please Wait"
-                ):
-                    chat.compress_message_stack()
-                continue
-            else:
-                raise NotImplementedError(
-                    f"User Chat Mode: Finish Reason: {response.finish_reason}"
-                )
-
-        print_assistant_response(
-            chat,
-            response,
-        )
+    UserChatCommand(
+        command_runner=command_runner,
+        verifier_runner=verifier_runner,
+        fix_code_command=fix_code_command,
+    ).execute()
 
 
 if __name__ == "__main__":
