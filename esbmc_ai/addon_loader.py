@@ -78,7 +78,9 @@ class AddonLoader(BaseConfig):
             field_names.append(f.name)
         del field_names
 
-        # Init the verifier.name field for the main config
+        # Init the verifier.name field for the main config. The reason this is
+        # not part of the main config is that verifiers are treated as addons,
+        # even internally.
         self._config.add_config_field(
             ConfigField(
                 name="verifier.name",
@@ -109,10 +111,9 @@ class AddonLoader(BaseConfig):
             self.add_config_field(field)
 
         if len(self.chat_command_addons) > 0:
-            printv(
-                "ChatCommand Addons:\n\t* "
-                + "\t * ".join(self.chat_command_addon_names)
-            )
+            printv("ChatCommand Addons:")
+            for cm in self.chat_command_addon_names:
+                printv(f"\t* {cm}")
 
     def _load_verifier_addons(self) -> None:
         """Loads the verifier addons, initializes their config fields."""
