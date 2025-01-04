@@ -242,7 +242,7 @@ def main() -> None:
         command = args.command
         command_names: list[str] = command_runner.command_names
         if command in command_names:
-            print("Running Command:", command)
+            print("Running Command:", command, "\n")
             _run_command_mode(command=command_runner.commands[command], args=args)
             sys.exit(0)
         else:
