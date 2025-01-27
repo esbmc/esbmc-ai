@@ -10,11 +10,12 @@ from esbmc_ai.config import FixCodeScenario, default_scenario
 from esbmc_ai.ai_models import AIModel
 from esbmc_ai.chat_response import ChatResponse
 from esbmc_ai.chats.latest_state_solution_generator import LatestStateSolutionGenerator
-from esbmc_ai.verifiers import ESBMC
+from esbmc_ai.verifiers.dummy_verifier import DummyVerifier
 
 
 @pytest.fixture(scope="function")
 def setup_llm_model():
+    """Returns a mock LLM and model"""
     llm = FakeListChatModel(
         responses=[
             "This is a test response",
@@ -27,10 +28,11 @@ def setup_llm_model():
 
 
 def test_send_message(setup_llm_model) -> None:
+    """Tests the sending of messaging functionality"""
     llm, model = setup_llm_model
 
     solution_generator = LatestStateSolutionGenerator(
-        verifier=ESBMC(),
+        verifier=DummyVerifier([""] * 100, load_config=False),
         scenarios={
             "base": FixCodeScenario(
                 initial=HumanMessage(content="Initial test message"),
@@ -78,12 +80,14 @@ def test_send_message(setup_llm_model) -> None:
 
 
 def test_message_stack(setup_llm_model) -> None:
+    """Tests the stack functionality works as expected by only using the latest
+    message."""
     llm, model = setup_llm_model
 
     solution_generator = LatestStateSolutionGenerator(
         llm=llm,
         ai_model=model,
-        verifier=ESBMC(),
+        verifier=DummyVerifier([""] * 100),
         scenarios={
             "base": FixCodeScenario(
                 initial=HumanMessage("Initial test message"),
