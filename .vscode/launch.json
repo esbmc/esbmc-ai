@@ -31,19 +31,6 @@
       ]
     },
     {
-      "name": "Optimize Code on Open File",
-      "type": "debugpy",
-      "request": "launch",
-      "module": "esbmc_ai",
-      "justMyCode": true,
-      "cwd": "${workspaceFolder}",
-      "args": [
-        "-c",
-        "optimize-code",
-        "${file}"
-      ]
-    },
-    {
       "name": "Python: Current File",
       "type": "debugpy",
       "request": "launch",
