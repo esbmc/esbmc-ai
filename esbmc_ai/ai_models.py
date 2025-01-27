@@ -160,14 +160,15 @@ class AIModelOpenAI(AIModel):
         )
 
     @classmethod
-    def get_openai_model_max_tokens(self, name: str) -> int:
+    def get_openai_model_max_tokens(cls, name: str) -> int:
         """Dynamically resolves the max tokens from a base model."""
 
         # https://platform.openai.com/docs/models
         tokens = {
+            "o1-mini": 128000,
+            "o1": 200000,
             "gpt-4o": 128000,
             "chatgpt-4o": 128000,
-            "o1": 128000,
             "gpt-4": 8192,
             "gpt-3.5-turbo": 16385,
             "gpt-3.5-turbo-instruct": 4096,
@@ -229,6 +230,21 @@ _custom_ai_models: list[AIModel] = []
 _ai_model_names: set[str] = set(item.value.name for item in _AIModels)
 
 
+def add_open_ai_model(model_name: str) -> None:
+    """Registers an OpenAI model."""
+    try:
+        add_custom_ai_model(
+            AIModelOpenAI(
+                model_name,
+                AIModelOpenAI.get_openai_model_max_tokens(model_name),
+            ),
+        )
+    except ValueError:
+        # Some models are included in the models list like dalle which aren't
+        # sequence models.
+        pass
+
+
 def add_custom_ai_model(ai_model: AIModel) -> None:
     """Registers a custom AI model."""
     # Check if AI already already exists.
@@ -238,13 +254,28 @@ def add_custom_ai_model(ai_model: AIModel) -> None:
     _custom_ai_models.append(ai_model)
 
 
+def download_openai_model_names(api_keys: APIKeyCollection) -> list[str]:
+    """Gets the open AI models from the API service and returns them."""
+    assert api_keys and api_keys.openai
+    from openai import Client
+
+    "llm_requests.open_ai.model_refresh_seconds"
+    # Check if needs refreshing
+    try:
+        return [
+            str(model.id)
+            for model in Client(api_key=api_keys.openai).models.list().data
+        ]
+    except ImportError:
+        return []
+
+
 def is_valid_ai_model(
     ai_model: Union[str, AIModel], api_keys: Optional[APIKeyCollection] = None
 ) -> bool:
     """Accepts both the AIModel object and the name as parameter. It checks the
     openai servers to see if a model is defined on their servers, if not, then
     it checks the internally defined AI models list."""
-    from openai import Client
 
     # Get the name of the model
     name: str = ai_model.name if isinstance(ai_model, AIModel) else ai_model
@@ -252,38 +283,13 @@ def is_valid_ai_model(
     # Try accessing openai api and checking if there is a model defined.
     # Will only work on models that start with gpt- to avoid spamming API and
     # getting blocked. NOTE: This is not tested as no way to mock API currently.
-    if name.startswith("gpt-") and api_keys and api_keys.openai:
-        try:
-            for model in Client(api_key=api_keys.openai).models.list().data:
-                if model.id == name:
-                    return True
-        except ImportError:
-            pass
 
     # Use the predefined list of models.
     return name in _ai_model_names
 
 
-def get_ai_model_by_name(
-    name: str, api_keys: Optional[APIKeyCollection] = None
-) -> AIModel:
+def get_ai_model_by_name(name: str) -> AIModel:
     """Checks for built-in and custom_ai models"""
-    # Check OpenAI models.
-    if api_keys and api_keys.openai:
-        try:
-            from openai import Client
-
-            for model in Client(api_key=api_keys.openai).models.list().data:
-                if model.id == name:
-                    add_custom_ai_model(
-                        AIModelOpenAI(
-                            model.id,
-                            AIModelOpenAI.get_openai_model_max_tokens(model.id),
-                        ),
-                    )
-        except ImportError:
-            pass
-
     # Check AIModels enum.
     for enum_value in _AIModels:
         ai_model: AIModel = enum_value.value

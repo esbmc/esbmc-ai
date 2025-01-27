@@ -3,6 +3,7 @@
 
 import argparse
 from dataclasses import dataclass
+from datetime import timedelta, datetime
 import os
 import sys
 from platform import system as system_name
@@ -14,6 +15,7 @@ from typing import (
     Optional,
 )
 
+from platformdirs import user_cache_dir
 from dotenv import load_dotenv, find_dotenv
 from langchain.schema import HumanMessage
 
@@ -23,11 +25,13 @@ from esbmc_ai.chat_response import list_to_base_messages
 from esbmc_ai.logging import set_verbose
 from .ai_models import (
     BaseMessage,
+    add_open_ai_model,
     is_valid_ai_model,
     get_ai_model_by_name,
     add_custom_ai_model,
     AIModel,
     OllamaAIModel,
+    download_openai_model_names,
 )
 from .api_key_collection import APIKeyCollection
 
@@ -122,6 +126,8 @@ class Config(BaseConfig):
         self.generate_patches: bool
         self.output_dir: Optional[Path] = None
 
+        self._load_envs()
+
         fields: list[ConfigField] = [
             ConfigField(
                 name="ai_custom",
@@ -129,15 +135,23 @@ class Config(BaseConfig):
                 on_read=lambda cfg: self._load_custom_ai(cfg["ai_custom"]),
                 error_message="Invalid custom AI specification",
             ),
+            # This needs to be before "ai_model"
+            ConfigField(
+                name="llm_requests.open_ai.model_refresh_seconds",
+                # Default is to refresh once a day
+                default_value=self._load_openai_model_names(86400),
+                validate=lambda v: isinstance(v, int),
+                on_load=lambda v: self._load_openai_model_names(v),
+                error_message="Invalid value, needs to be an int in seconds",
+            ),
             # This needs to be processed after ai_custom
             ConfigField(
                 name="ai_model",
                 default_value=None,
                 # Api keys are loaded from system env so they are already
                 # available
-                validate=lambda v: isinstance(v, str)
-                and is_valid_ai_model(v, self.api_keys),
-                on_load=lambda v: get_ai_model_by_name(v, self.api_keys),
+                validate=lambda v: isinstance(v, str) and is_valid_ai_model(v),
+                on_load=lambda v: get_ai_model_by_name(v),
             ),
             ConfigField(
                 name="temp_auto_clean",
@@ -307,8 +321,6 @@ class Config(BaseConfig):
             ),
         ]
 
-        self._load_envs()
-
         # Base init needs to be called last (only before load args)
         super().base_init(self.cfg_path, fields)
         self._load_args()
@@ -322,9 +334,11 @@ class Config(BaseConfig):
         3. esbmc-ai.env file in the current directory, moving upwards in the directory tree.
         4. esbmc-ai.env file in $HOME/.config/ for Linux/macOS and %userprofile% for Windows.
 
-        Note: ESBMCAI_CONFIG_PATH undergoes tilde user expansion and also environment
+        Note: ESBMCAI_CONFIG_FILE undergoes tilde user expansion and also environment
         variable expansion.
         """
+
+        config_env_name: str = "ESBMCAI_CONFIG_FILE"
 
         def get_env_vars() -> None:
             """Gets all the system environment variables that are currently loaded."""
@@ -333,7 +347,7 @@ class Config(BaseConfig):
                 if value is not None:
                     values[k] = value
 
-        keys: list[str] = ["OPENAI_API_KEY", "ESBMCAI_CONFIG_PATH"]
+        keys: list[str] = ["OPENAI_API_KEY", config_env_name]
         values: dict[str, str] = {}
 
         # Load from system env
@@ -376,9 +390,7 @@ class Config(BaseConfig):
         )
 
         self.cfg_path: Path = Path(
-            os.path.expanduser(
-                os.path.expandvars(str(os.getenv("ESBMCAI_CONFIG_PATH")))
-            )
+            os.path.expanduser(os.path.expandvars(str(os.getenv(config_env_name))))
         )
 
     def _load_args(self) -> None:
@@ -389,7 +401,7 @@ class Config(BaseConfig):
         # AI Model -m
         if args.ai_model != "":
             if is_valid_ai_model(args.ai_model, self.api_keys):
-                ai_model = get_ai_model_by_name(args.ai_model, self.api_keys)
+                ai_model = get_ai_model_by_name(args.ai_model)
                 self.set_value("ai_model", ai_model)
             else:
                 print(f"Error: invalid --ai-model parameter {args.ai_model}")
@@ -482,10 +494,11 @@ class Config(BaseConfig):
         results: list[Path] = []
 
         if len(self._args.filenames):
-            results.extend(Path(f) for f in self._args.filenames)
+            results.extend(Path(f).absolute() for f in self._args.filenames)
 
         for file in file_names:
-            results.append(Path(file))
+            results.append(Path(file).absolute())
+
         return results
 
     @staticmethod
@@ -501,3 +514,46 @@ class Config(BaseConfig):
                 wrong.append(file_name)
 
         return "The following files cannot be found: " + ", ".join(wrong)
+
+    def _load_openai_model_names(self, refresh_duration_seconds: int) -> timedelta:
+        """Loads the OpenAI models from cache or refreshes them from the internet."""
+
+        def write_cache(cache: Path) -> list[str]:
+            with open(cache / "openai_models.txt", "w") as file:
+                models_list: list[str] = download_openai_model_names(self.api_keys)
+                file.seek(0)
+                file.write(datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "\n")
+                file.writelines(model_name + "\n" for model_name in models_list)
+            return models_list
+
+        duration = timedelta(seconds=refresh_duration_seconds)
+        if self.api_keys and self.api_keys.openai:
+            print("Loading OpenAI models list")
+            models_list: list[str] = []
+            cache: Path = Path(user_cache_dir("esbmc-ai", "Yiannis Charalambous"))
+            cache.mkdir(parents=True, exist_ok=True)
+
+            # Read the last updated date to determine if a new update is required
+            try:
+                with open(cache / "openai_models.txt", "r") as file:
+                    last_update: datetime = datetime.strptime(
+                        file.readline().strip(), "%Y-%m-%d %H:%M:%S"
+                    )
+                    models_list = file.readlines()
+
+                # Write new & updated cache file
+                if datetime.now() >= last_update + duration:
+                    print("\tModels list outdated, refreshing...")
+                    models_list = write_cache(cache)
+            except ValueError as e:
+                print("Error while loading OpenAI models list:", e)
+                print("\tCreating new models list.")
+                models_list = write_cache(cache)
+            except FileNotFoundError:
+                print("\tModels list not found, creating new...")
+                models_list = write_cache(cache)
+
+            # Add models that have been loaded.
+            for model_name in models_list:
+                add_open_ai_model(model_name.strip())
+        return duration
