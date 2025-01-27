@@ -2,20 +2,23 @@
 
 import os
 import sys
+import re
 from subprocess import PIPE, STDOUT, run, CompletedProcess
 from pathlib import Path
 from typing_extensions import Any, Optional, override
 
 from esbmc_ai.config import Config
-from esbmc_ai.solution import SourceFile
+from esbmc_ai.solution import Solution
+from esbmc_ai.logging import printvv
 
-from esbmc_ai.base_config import BaseConfig, default_scenario
+from esbmc_ai.base_config import default_scenario
+from esbmc_ai.verifier_output import VerifierOutput
 from esbmc_ai.verifiers.base_source_verifier import (
     BaseSourceVerifier,
     SourceCodeParseError,
-    VerifierOutput,
     VerifierTimedOutException,
 )
+from esbmc_ai.program_trace import ProgramTrace
 
 
 class ESBMCOutput(VerifierOutput):
@@ -25,8 +28,8 @@ class ESBMCOutput(VerifierOutput):
 
 
 class ESBMC(BaseSourceVerifier):
-    @classmethod
-    def esbmc_get_violated_property(cls, esbmc_output: str) -> Optional[str]:
+    @staticmethod
+    def _esbmc_get_violated_property(esbmc_output: str) -> Optional[str]:
         """Gets the violated property line of the ESBMC output."""
         # Find "Violated property:" string in ESBMC output
         lines: list[str] = esbmc_output.splitlines()
@@ -35,18 +38,20 @@ class ESBMC(BaseSourceVerifier):
                 return "\n".join(lines[ix : ix + 3])
         return None
 
-    @classmethod
-    def esbmc_get_counter_example(cls, esbmc_output: str) -> Optional[str]:
+    @staticmethod
+    def _esbmc_get_counter_example(esbmc_output: str) -> Optional[str]:
         """Gets ESBMC output after and including [Counterexample]"""
         idx: int = esbmc_output.find("[Counterexample]\n")
         if idx == -1:
             return None
         return esbmc_output[idx:]
 
-    @classmethod
-    def get_esbmc_err_line(cls, esbmc_output: str) -> Optional[int]:
+    @staticmethod
+    def _get_esbmc_err_line(esbmc_output: str) -> Optional[int]:
         """Return from the counterexample the line where the error occurs."""
-        violated_property: Optional[str] = cls.esbmc_get_violated_property(esbmc_output)
+        violated_property: Optional[str] = ESBMC._esbmc_get_violated_property(
+            esbmc_output
+        )
         if violated_property:
             # Get the line of the violated property.
             pos_line: str = violated_property.splitlines()[1]
@@ -57,16 +62,8 @@ class ESBMC(BaseSourceVerifier):
                     return int(pos_line_split[ix + 1])
         return None
 
-    @classmethod
-    def get_esbmc_err_line_idx(cls, esbmc_output: str) -> Optional[int]:
-        """Return from the counterexample the line index where the error occurs."""
-        line: Optional[int] = cls.get_esbmc_err_line(esbmc_output)
-        if line:
-            return line - 1
-        return None
-
-    @classmethod
-    def get_clang_err_line(cls, clang_output: str) -> Optional[int]:
+    @staticmethod
+    def _get_clang_err_line(clang_output: str) -> Optional[int]:
         """For when the code does not compile, gets the error line reported in the clang
         output. This is useful for `esbmc_output_type single`"""
         lines: list[str] = clang_output.splitlines()
@@ -81,35 +78,30 @@ class ESBMC(BaseSourceVerifier):
 
         return None
 
-    @classmethod
-    def get_clang_err_line_idx(cls, clang_output: str) -> Optional[int]:
-        """Returns the clang error line as a 0-based index."""
-        line: Optional[int] = cls.get_clang_err_line(clang_output)
-        if line:
-            return line - 1
-        return None
-
     def __init__(self) -> None:
         super().__init__("esbmc")
         self.config = Config()
 
     @property
     def esbmc_path(self) -> Path:
+        """Returns the ESBMC path from config."""
         return self.get_config_value("verifier.esbmc.path")
 
     @override
     def verify_source(
         self,
-        source_file: SourceFile,
-        source_file_iteration: int = -1,
-        esbmc_params: tuple = (),
+        solution: Solution,
+        params: Optional[list[str]] = None,
         auto_clean: bool = False,
         entry_function: str = "main",
-        temp_file_dir: Optional[Path] = None,
         timeout: Optional[int] = None,
         **kwargs: Any,
     ) -> ESBMCOutput:
         _ = kwargs
+
+        esbmc_params: list[str] = (
+            params if params else self.get_config_value("verifier.esbmc.params")
+        )
 
         if "--timeout" in esbmc_params:
             print(
@@ -122,23 +114,11 @@ class ESBMC(BaseSourceVerifier):
             )
             sys.exit(1)
 
-        file_path: Path
-        if temp_file_dir:
-            file_path = source_file.save_file(
-                file_path=Path(temp_file_dir),
-                temp_dir=False,
-                index=source_file_iteration,
-            )
-        else:
-            file_path = source_file.save_file(
-                file_path=None,
-                temp_dir=True,
-                index=source_file_iteration,
-            )
+        tempsol: Solution = solution.save_temp()
 
         # Call ESBMC to temporary folder.
         results = self._esbmc(
-            path=file_path,
+            solution=tempsol,
             esbmc_params=esbmc_params,
             entry_function=entry_function,
             timeout=timeout,
@@ -147,7 +127,7 @@ class ESBMC(BaseSourceVerifier):
         # Delete temp files and path
         if auto_clean:
             # Remove file
-            os.remove(file_path)
+            os.remove(tempsol.base_dir)
 
         # Return
         return_code, output = results
@@ -170,12 +150,14 @@ class ESBMC(BaseSourceVerifier):
 
         match format:
             case "vp":
-                value: Optional[str] = self.esbmc_get_violated_property(verifier_output)
+                value: Optional[str] = self._esbmc_get_violated_property(
+                    verifier_output
+                )
                 if not value:
                     raise ValueError("Not found violated property." + verifier_output)
                 return value
             case "ce":
-                value: Optional[str] = self.esbmc_get_counter_example(verifier_output)
+                value: Optional[str] = self._esbmc_get_counter_example(verifier_output)
                 if not value:
                     raise ValueError("Not found counterexample.")
                 return value
@@ -185,7 +167,7 @@ class ESBMC(BaseSourceVerifier):
                 raise ValueError(f"Not a valid ESBMC output type: {format}")
 
     @override
-    def get_error_type(self, verifier_output: str) -> Optional[str]:
+    def get_error_type(self, verifier_output: str) -> str:
         """Gets the error of violated property, the entire line."""
         # TODO Test me
         # Start search from the marker.
@@ -210,37 +192,40 @@ class ESBMC(BaseSourceVerifier):
         return scenario
 
     @override
-    def get_error_line(self, verifier_output: str) -> Optional[int]:
+    def get_error_line(self, verifier_output: str) -> int:
         """Gets the error line of the esbmc_output, regardless if it is a
         counterexample or clang output."""
-        line: Optional[int] = self.get_esbmc_err_line(verifier_output)
+        line: Optional[int] = self._get_esbmc_err_line(verifier_output)
         if not line:
-            line = self.get_clang_err_line(verifier_output)
+            line = self._get_clang_err_line(verifier_output)
+
+        assert line
         return line
 
     @override
-    def get_error_line_idx(self, verifier_output: str) -> Optional[int]:
+    def get_error_line_idx(self, verifier_output: str) -> int:
         """Gets the error line index of the esbmc_output regardless if it is a
         counterexample or clang output."""
-        line: Optional[int] = self.get_esbmc_err_line_idx(verifier_output)
-        if not line:
-            return self.get_clang_err_line_idx(verifier_output)
-        return line - 1
+        return self.get_error_line(verifier_output) - 1
 
     def _esbmc(
         self,
-        path: Path,
-        esbmc_params: tuple,
+        solution: Solution,
+        esbmc_params: list[str],
         entry_function: str,
         timeout: Optional[int] = None,
     ):
         """Exit code will be 0 if verification successful, 1 if verification
         failed. And any other number for compilation error/general errors."""
-        # TODO verify_source
-        # Build parameters
+
+        # Build parameters list
         esbmc_cmd = [str(self.esbmc_path)]
+        # ESBMC parameters
         esbmc_cmd.extend(esbmc_params)
-        esbmc_cmd.append(str(path))
+        # Files (only accept valid ones)
+        esbmc_cmd.extend(
+            str(file.file_path) for file in solution.get_files(["c", "cpp"])
+        )
 
         # Add timeout suffix for parameter.
         esbmc_cmd.extend(["--timeout", str(timeout) + "s"])
@@ -261,3 +246,113 @@ class ESBMC(BaseSourceVerifier):
 
         output: str = process.stdout.decode("utf-8")
         return process.returncode, output
+
+    @staticmethod
+    def _parse_trace_line(
+        line: str,
+    ) -> Optional[
+        tuple[
+            Optional[int],
+            str,
+            int,
+            Optional[str],
+            Optional[int],
+            Optional[str],
+        ]
+    ]:
+        """Parses a line in the trace and returns the following from it:
+        * State idx
+        * Filename (or None if missing)
+        * Line number (or None if missing)
+        * Method name (or None if missing)
+        * Thread index (or None if missing)
+        * Error line (or None if missing)
+        """
+
+        if "Violated property:" in line:
+            pattern = re.compile(
+                r"State (\d+) file ([^ ]+) line (\d+) .*? function ([^ ]+) thread (\d+)",
+                re.DOTALL,
+            )
+            vp: bool = True
+        else:
+            vp: bool = False
+            pattern = re.compile(
+                r"State (\d+) file ([^ ]+) line (\d+) .*? "
+                r"function ([^ ]+) thread (\d+)\n[-]+\n(.*)",
+                re.DOTALL,
+            )
+
+        match = pattern.search(line)
+        if match:
+            state_number: Optional[int] = (
+                int(match.group(1)) if match.group(1) else None
+            )
+            filename: Optional[str] = match.group(2) if match.group(2) else None
+            line_number: Optional[int] = int(match.group(3)) if match.group(3) else None
+            method_name: Optional[str] = match.group(4) if match.group(4) else None
+            thread_index: Optional[int] = (
+                int(match.group(5)) if match.group(5) else None
+            )
+            error_line: Optional[str] = (
+                match.group(6).strip() if vp and match.group(6) else None
+            )
+            # Don't return if any of the useful information is missing
+            if any(x is None for x in [filename, line_number]):
+                return None
+            assert filename is not None and line_number is not None
+            return (
+                state_number,
+                filename,
+                line_number,
+                method_name,
+                thread_index,
+                error_line,
+            )
+        raise ValueError(f"Could not find a state match: {line}")
+
+    @override
+    def get_trace(self, verifier_output: str) -> list[ProgramTrace]:
+        # Get [Counterexample] idx
+        ce_idx: int = verifier_output.index("[Counterexample]") + len(
+            "[Counterexample]"
+        )
+        ce_idx_end: int = ce_idx
+        traces: list[ProgramTrace] = []
+
+        file_name: str
+        line_number: int
+        method_name: Optional[str]
+
+        # Get the traces
+        while True:
+            try:
+                ce_idx = verifier_output.index("State ", ce_idx)
+                # Get the end of line, which is 3 lines after.
+                ce_idx_end = ce_idx
+                ce_idx_end = verifier_output.index("\n", ce_idx_end)
+                ce_idx_end = verifier_output.index("\n", ce_idx_end)
+                ce_idx_end = verifier_output.index("\n", ce_idx_end) + 1
+
+                # Get the information from the state line.
+                trace_results = ESBMC._parse_trace_line(
+                    verifier_output[ce_idx:ce_idx_end]
+                )
+                if trace_results:
+                    _, file_name, line_number, method_name, _, _ = trace_results
+
+                    traces.append(
+                        ProgramTrace(
+                            trace_type="statement",
+                            file_name=file_name,
+                            line_idx=line_number,
+                            name=method_name if method_name else "",
+                        )
+                    )
+            except ValueError as e:
+                # Gets a value error from the str index method. This is an indicator
+                # that we don't have any more traces to parse.
+                printvv(e)
+                break
+
+        return traces
