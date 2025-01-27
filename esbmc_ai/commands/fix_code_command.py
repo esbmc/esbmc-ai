@@ -10,14 +10,17 @@ from esbmc_ai.ai_models import AIModel
 from esbmc_ai.api_key_collection import APIKeyCollection
 from esbmc_ai.chat_response import FinishReason
 from esbmc_ai.chats import LatestStateSolutionGenerator, SolutionGenerator
-from esbmc_ai.verifiers.base_source_verifier import VerifierTimedOutException
+from esbmc_ai.verifiers.base_source_verifier import (
+    VerifierTimedOutException,
+    BaseSourceVerifier,
+)
 from esbmc_ai.commands.command_result import CommandResult
 from esbmc_ai.config import FixCodeScenario
 from esbmc_ai.chats.reverse_order_solution_generator import (
     ReverseOrderSolutionGenerator,
 )
 from esbmc_ai.verifier_runner import VerifierRunner
-from esbmc_ai.verifiers.base_source_verifier import BaseSourceVerifier, VerifierOutput
+from esbmc_ai.verifier_output import VerifierOutput
 
 from .chat_command import ChatCommand
 from ..msg_bus import Signal
@@ -62,20 +65,23 @@ class FixCodeCommand(ChatCommand):
             help_message="Generates a solution for this code, and reevaluates it with ESBMC.",
         )
 
+    def print_raw_conversation(self, solution_generator: SolutionGenerator) -> None:
+        """Debug prints the raw conversation"""
+        print_horizontal_line(0)
+        print("ESBMC-AI Notice: Printing raw conversation...")
+        all_messages = solution_generator._system_messages + solution_generator.messages
+        messages: list[str] = [f"{msg.type}: {msg.content}" for msg in all_messages]
+        print("\n" + "\n\n".join(messages))
+        print("ESBMC-AI Notice: End of raw conversation")
+
     @override
     def execute(self, **kwargs: Any) -> FixCodeCommandResult:
-        def print_raw_conversation() -> None:
-            print_horizontal_line(0)
-            print("ESBMC-AI Notice: Printing raw conversation...")
-            all_messages = (
-                solution_generator._system_messages + solution_generator.messages
-            )
-            messages: list[str] = [f"{msg.type}: {msg.content}" for msg in all_messages]
-            print("\n" + "\n\n".join(messages))
-            print("ESBMC-AI Notice: End of raw conversation")
 
         # Handle kwargs
         source_file: SourceFile = kwargs["source_file"]
+        original_source_file: SourceFile = SourceFile(
+            source_file.file_path, source_file.content
+        )
 
         generate_patches: bool = (
             kwargs["generate_patches"] if "generate_patches" in kwargs else False
@@ -100,7 +106,7 @@ class FixCodeCommand(ChatCommand):
         output_dir: Optional[Path] = (
             kwargs["output_dir"] if "output_dir" in kwargs else None
         )
-        anim: BaseLoadingWidget = (
+        self.anim: BaseLoadingWidget = (
             kwargs["anim"] if "anim" in kwargs else BaseLoadingWidget()
         )
         entry_function: str = (
@@ -108,21 +114,24 @@ class FixCodeCommand(ChatCommand):
         )
         # End of handle kwargs
 
+        solution: Solution = Solution()
+        solution.add_source_file(source_file)
+
         printv(f"Temperature: {temperature}")
         printv(f"Verifying function: {entry_function}")
 
         verifier: BaseSourceVerifier = VerifierRunner().verifier
         printv(f"Running verifier: {verifier.verifier_name}")
-        verifier_result: VerifierOutput = verifier.verify_source(**kwargs)
-        source_file.assign_verifier_output(verifier_result.output)
+        verifier_result: VerifierOutput = verifier.verify_source(solution, **kwargs)
+        source_file.verifier_output = verifier_result
 
         if verifier_result.successful():
             print("File verified successfully")
             returned_source: str
             if generate_patches:
-                returned_source = source_file.get_patch(0, -1)
+                returned_source = source_file.get_patch(source_file)
             else:
-                returned_source = source_file.latest_content
+                returned_source = source_file.content
             return FixCodeCommandResult(True, 0, returned_source)
 
         match message_history:
@@ -175,8 +184,8 @@ class FixCodeCommand(ChatCommand):
 
         try:
             solution_generator.update_state(
-                source_code=source_file.latest_content,
-                esbmc_output=source_file.latest_verifier_output,
+                source_code=source_file.content,
+                esbmc_output=source_file.verifier_output.output,
             )
         except VerifierTimedOutException:
             print("ESBMC-AI Notice: ESBMC has timed out...")
@@ -185,82 +194,104 @@ class FixCodeCommand(ChatCommand):
         print()
 
         for attempt in range(1, max_attempts + 1):
-            # Get a response. Use while loop to account for if the message stack
-            # gets full, then need to compress and retry.
-            while True:
-                # Generate AI solution
-                with anim("Generating Solution... Please Wait"):
-                    llm_solution, finish_reason = solution_generator.generate_solution()
-
-                if finish_reason == FinishReason.length:
-                    solution_generator.compress_message_stack()
-                else:
-                    # Update the source file state
-                    source_file.update_content(llm_solution)
-                    break
-
-            # Print verbose lvl 2
-            printvvv("\nESBMC-AI Notice: Source Code Generation:")
-            print_horizontal_line(3)
-            printvvv(source_file.latest_content)
-            print_horizontal_line(3)
-            printvvv("")
-
-            # Pass to ESBMC, a workaround is used where the file is saved
-            # to a temporary location since ESBMC needs it in file format.
-            with anim("Verifying with ESBMC... Please Wait"):
-                verifier_result: VerifierOutput = verifier.verify_source(**kwargs)
-
-            source_file.assign_verifier_output(verifier_result.output)
-
-            # Print verbose lvl 2
-            printvvv("\nESBMC-AI Notice: ESBMC Output:")
-            print_horizontal_line(3)
-            printvvv(source_file.latest_verifier_output)
-            print_horizontal_line(3)
-
-            # Solution found
-            if verifier_result.return_code == 0:
-                self.on_solution_signal.emit(source_file.latest_content)
-
+            result: Optional[FixCodeCommandResult] = self._attempt_repair(
+                attempt=attempt,
+                solution_generator=solution_generator,
+                verifier=verifier,
+                **kwargs,
+            )
+            if result:
                 if raw_conversation:
-                    print_raw_conversation()
+                    self.print_raw_conversation(solution_generator)
 
-                printv("ESBMC-AI Notice: Successfully verified code")
-
-                returned_source: str
                 if generate_patches:
-                    returned_source = source_file.get_patch(0, -1)
-                else:
-                    returned_source = source_file.latest_content
+                    result.repaired_source = source_file.get_patch(original_source_file)
 
-                # Check if an output directory is specified and save to it
-                if output_dir:
-                    assert (
-                        output_dir.is_dir()
-                    ), "FixCodeCommand: Output directory needs to be valid"
-                    with open(output_dir / source_file.file_path.name, "w") as file:
-                        file.write(source_file.latest_content)
-                return FixCodeCommandResult(True, attempt, returned_source)
-
-            try:
-                # Update state
-                solution_generator.update_state(
-                    source_file.latest_content, source_file.latest_verifier_output
-                )
-            except VerifierTimedOutException:
-                if raw_conversation:
-                    print_raw_conversation()
-                print("ESBMC-AI Notice: error: ESBMC has timed out...")
-                sys.exit(1)
-
-            # Failure case
-            if attempt != max_attempts:
-                print(f"ESBMC-AI Notice: Failure {attempt}/{max_attempts}: Retrying...")
-            else:
-                print(f"ESBMC-AI Notice: Failure {attempt}/{max_attempts}: Exiting...")
+                return result
 
         if raw_conversation:
-            print_raw_conversation()
+            self.print_raw_conversation(solution_generator)
 
         return FixCodeCommandResult(False, max_attempts, None)
+
+    def _attempt_repair(
+        self,
+        attempt: int,
+        max_attempts: int,
+        solution_generator: SolutionGenerator,
+        source_file: SourceFile,
+        verifier: BaseSourceVerifier,
+        output_dir: Optional[Path],
+        raw_conversation: bool,
+        **kwargs: Any,
+    ) -> Optional[FixCodeCommandResult]:
+        # Get a response. Use while loop to account for if the message stack
+        # gets full, then need to compress and retry.
+        while True:
+            # Generate AI solution
+            with self.anim("Generating Solution... Please Wait"):
+                llm_solution, finish_reason = solution_generator.generate_solution()
+
+            if finish_reason == FinishReason.length:
+                solution_generator.compress_message_stack()
+            else:
+                # Update the source file state
+                source_file.content = llm_solution
+                break
+
+        # Print verbose lvl 2
+        printvvv("\nESBMC-AI Notice: Source Code Generation:")
+        print_horizontal_line(3)
+        printvvv(source_file.content)
+        print_horizontal_line(3)
+        printvvv("")
+
+        solution: Solution = Solution()
+        solution.add_source_file(source_file)
+
+        # Pass to ESBMC, a workaround is used where the file is saved
+        # to a temporary location since ESBMC needs it in file format.
+        with self.anim("Verifying with ESBMC... Please Wait"):
+            verifier_result: VerifierOutput = verifier.verify_source(solution, **kwargs)
+
+        source_file.verifier_output = verifier_result
+
+        # Print verbose lvl 2
+        printvvv("\nESBMC-AI Notice: ESBMC Output:")
+        print_horizontal_line(3)
+        printvvv(source_file.verifier_output.output)
+        print_horizontal_line(3)
+
+        # Solution found
+        if verifier_result.return_code == 0:
+            self.on_solution_signal.emit(source_file.content)
+
+            if raw_conversation:
+                self.print_raw_conversation(solution_generator)
+
+            printv("ESBMC-AI Notice: Successfully verified code")
+
+            # Check if an output directory is specified and save to it
+            if output_dir:
+                assert (
+                    output_dir.is_dir()
+                ), "FixCodeCommand: Output directory needs to be valid"
+                source_file.save_file(output_dir / source_file.file_path.name)
+            return FixCodeCommandResult(True, attempt, source_file.content)
+
+        try:
+            # Update state
+            solution_generator.update_state(
+                source_file.content, source_file.verifier_output.output
+            )
+        except VerifierTimedOutException:
+            if raw_conversation:
+                self.print_raw_conversation(solution_generator)
+            print("ESBMC-AI Notice: error: ESBMC has timed out...")
+            sys.exit(1)
+
+        # Failure case
+        if attempt != max_attempts:
+            print(f"ESBMC-AI Notice: Failure {attempt}/{max_attempts}: Retrying...")
+        else:
+            print(f"ESBMC-AI Notice: Failure {attempt}/{max_attempts}: Exiting...")
