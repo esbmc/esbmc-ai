@@ -32,10 +32,11 @@ class BaseLoadingWidget:
         return self
 
     def start(self, text: str = "") -> None:
+        """Starts the animation."""
         _ = text
 
     def stop(self) -> None:
-        pass
+        """Stops the animation."""
 
 
 class LoadingWidget(BaseLoadingWidget):
@@ -51,17 +52,16 @@ class LoadingWidget(BaseLoadingWidget):
     def __init__(
         self,
         anim_speed: float = 0.1,
-        animation: list[str] = ["|", "/", "-", "\\"],
+        animation: Optional[list[str]] = None,
     ) -> None:
         super().__init__()
         self.anim_speed = anim_speed
-        self.animation = animation
+        self.animation = animation if animation else ["|", "/", "-", "\\"]
 
         # Find the largest animatioon
         self.anim_clear_length = 0
         for frame in self.animation:
-            if len(frame) > self.anim_clear_length:
-                self.anim_clear_length = len(frame)
+            self.anim_clear_length = max(self.anim_clear_length, len(frame))
 
     def __call__(self, text: Optional[str] = None):
         """Allows you to set the text in a with statement easily."""
@@ -100,3 +100,9 @@ class LoadingWidget(BaseLoadingWidget):
         # Block until end.
         if self.thread:
             self.thread.join()
+
+
+if __name__ == "__main__":
+    LoadingWidget().start()
+    while True:
+        pass
