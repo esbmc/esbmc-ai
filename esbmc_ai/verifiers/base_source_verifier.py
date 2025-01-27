@@ -2,13 +2,14 @@
 
 """This module holds the code for the base source code verifier."""
 
-from dataclasses import dataclass
+from abc import ABC
 import re
-from abc import ABC, abstractmethod
-from typing import Any, Optional
+from typing import Any
 
-from esbmc_ai.solution import SourceFile
+from esbmc_ai.solution import Solution
 from esbmc_ai.base_config import BaseConfig, ConfigField, default_scenario
+from esbmc_ai.verifier_output import VerifierOutput
+from esbmc_ai.program_trace import ProgramTrace
 
 
 class SourceCodeParseError(Exception):
@@ -19,21 +20,6 @@ class SourceCodeParseError(Exception):
 class VerifierTimedOutException(Exception):
     """Error that means that ESBMC timed out and so the error could not be
     determined."""
-
-
-@dataclass
-class VerifierOutput:
-    """Class that represents the verifier output."""
-
-    return_code: int
-    """The return code of the verifier."""
-    output: str
-    """The output of the verifier."""
-
-    @abstractmethod
-    def successful(self) -> bool:
-        """If the verification was successful."""
-        raise NotImplementedError()
 
 
 class BaseSourceVerifier(ABC):
@@ -62,6 +48,7 @@ class BaseSourceVerifier(ABC):
 
     @property
     def config(self) -> BaseConfig:
+        """Gets the config of this class."""
         return self._config
 
     @config.setter
@@ -82,16 +69,12 @@ class BaseSourceVerifier(ABC):
 
     def verify_source(
         self,
-        source_file: SourceFile,
-        source_file_iteration: int = -1,
+        solution: Solution,
         **kwargs: Any,
     ) -> VerifierOutput:
         """Verifies source_file, the kwargs are optional arguments that are
-        child dependent. For API purposes, the overriden method can provide the
-        abilitiy to override values that would be loaded from the config by
-        specifying them in the kwargs."""
-        _ = source_file
-        _ = source_file_iteration
+        implementation dependent."""
+        _ = solution
         _ = kwargs
         raise NotImplementedError()
 
@@ -103,17 +86,17 @@ class BaseSourceVerifier(ABC):
         _ = format
         raise NotImplementedError()
 
-    def get_error_line(self, verifier_output: str) -> Optional[int]:
+    def get_error_line(self, verifier_output: str) -> int:
         """Returns the line number of where the error as occurred."""
         _ = verifier_output
         raise NotImplementedError()
 
-    def get_error_line_idx(self, verifier_output: str) -> Optional[int]:
+    def get_error_line_idx(self, verifier_output: str) -> int:
         """Returns the line index of where the error as occurred."""
         _ = verifier_output
         raise NotImplementedError()
 
-    def get_error_type(self, verifier_output: str) -> Optional[str]:
+    def get_error_type(self, verifier_output: str) -> str:
         """Returns a string of the type of error found by the verifier output."""
         _ = verifier_output
         raise NotImplementedError()
@@ -122,3 +105,8 @@ class BaseSourceVerifier(ABC):
         """Gets the scenario for fixing the error from verifier output"""
         _ = verifier_output
         return default_scenario
+
+    def get_trace(self, verifier_output: str) -> list[ProgramTrace]:
+        """Returns the trace given a counterexample."""
+        _ = verifier_output
+        raise NotImplementedError()
