@@ -1,25 +1,26 @@
 # Author: Yiannis Charalambous
 
-"""# Solution
-Keeps track of all the source files that ESBMC-AI is targeting. """
+"""Keeps track of all the source files that ESBMC-AI is targeting. """
 
-import os
+from dataclasses import dataclass
+from os import getcwd, walk
 from typing import Optional
 from pathlib import Path
 from subprocess import PIPE, STDOUT, run, CompletedProcess
-from tempfile import NamedTemporaryFile, gettempdir
+from tempfile import NamedTemporaryFile, TemporaryDirectory
 import lizard
 
+from esbmc_ai.verifier_output import VerifierOutput
 
+
+@dataclass
 class SourceFile:
     """Represents a source file in the Solution. This class also holds the
     verifier output. Contains methods to manipulate and get information about
     different versions."""
 
-    @classmethod
-    def apply_line_patch(
-        cls, source_code: str, patch: str, start: int, end: int
-    ) -> str:
+    @staticmethod
+    def apply_line_patch(source_code: str, patch: str, start: int, end: int) -> str:
         """Applies a patch to the source code.
 
         To replace a single line, start and end are equal.
@@ -38,78 +39,29 @@ class SourceFile:
         lines = lines[:start] + [patch] + lines[end + 1 :]
         return "\n".join(lines)
 
-    def __init__(
-        self, file_path: Path, content: str, file_ext: Optional[str] = None
-    ) -> None:
-        self._file_path: Path = file_path
-        # Content file shows the file throughout the repair process. Index 0 is
-        # the orignial.
-        self._content: list[str] = [content]
-        # Map _content (each iteration) to esbmc output
-        self._esbmc_output: dict[int, str] = {}
-        self._file_ext: Optional[str] = file_ext
-
-    @property
-    def file_path(self) -> Path:
-        """Returns the file path of this source file."""
-        return self._file_path
+    def __init__(self, file_path: Path, content: str) -> None:
+        self.file_path: Path = file_path
+        self.content: str = content
+        self.verifier_output: Optional[VerifierOutput] = None
 
     @property
     def file_extension(self) -> str:
-        if self._file_ext:
-            return self._file_ext
-        elif self._file_path:
-            return self._file_path.suffix
-        else:
-            raise ValueError("No extension for SourceFile could be resolved")
+        """Returns the file extension to the file."""
+        return self.file_path.suffix
 
-    @property
-    def initial_content(self) -> str:
-        """Returns the initial state content."""
-        return self._content[0]
-
-    @property
-    def latest_content(self) -> str:
-        """Returns the latest available content."""
-        return self._content[-1]
-
-    @property
-    def content(self) -> tuple[str, ...]:
-        """Returns a tuple of the content of this source file."""
-        return tuple(self._content)
-
-    @property
-    def initial_verifier_output(self) -> str:
-        """Returns the first verifier output"""
-        assert 0 in self._esbmc_output, "Error: No initial verifier output assigned."
-        return self._esbmc_output[0]
-
-    @property
-    def latest_verifier_output(self) -> str:
-        """Returns the latest verifier output"""
-        return self._esbmc_output[len(self._content) - 1]
-
-    @property
-    def verifier_output(self) -> dict[int, str]:
-        """Returns the verifier outputs of the SourceFile"""
-        return self._esbmc_output
-
-    def get_patch(self, index_a: int, index_b: int) -> str:
-        """Return diff between `index_a` and `index_b` which are indicies
-        referencing the content list."""
-        assert len(self._content) > index_a and len(self._content) > index_b
-
+    def get_patch(self, source_file_2: "SourceFile") -> str:
+        """Return diff between two SourceFiles."""
         # Save as temp files
         with (
-            NamedTemporaryFile(mode="w", delete=False) as file_a,
-            NamedTemporaryFile(mode="w", delete=False) as file_b,
+            NamedTemporaryFile(mode="w", delete=False) as file,
+            NamedTemporaryFile(mode="w", delete=False) as file_2,
         ):
-            file_a.write(self._content[index_a])
-            file_a.flush()
-            file_b.write(self._content[index_b])
-            file_b.flush()
+            file.write(self.content)
+            file.flush()
+            file_2.write(source_file_2.content)
+            file_2.flush()
 
-            cmd = ["diff", file_a.name, file_b.name]
+            cmd = ["diff", file.name, file_2.name]
             process: CompletedProcess = run(
                 cmd,
                 stdout=PIPE,
@@ -121,94 +73,35 @@ class SourceFile:
             # https://askubuntu.com/questions/698784/exit-code-of-diff
             if process.returncode == 2:
                 raise ValueError(
-                    f"Diff for {file_a.name} and {file_b.name} failed (exit 2)."
+                    f"Diff for {file.name} and {file_2.name} failed (exit 2)."
                 )
 
             return process.stdout.decode("utf-8")
 
-    # Not used
-    # def push_line_patch(self, patch: str, start: int, end: int) -> str:
-    #     """Calls `apply_line_patch` using the latest source code and then pushes
-    #     the new patch to the content."""
-    #     new_source: str = SourceFile.apply_line_patch(
-    #         source_code=self._content[-1],
-    #         patch=patch,
-    #         start=start,
-    #         end=end,
-    #     )
-    #     self._content.append(new_source)
-    #     return new_source
+    def save_temp_file(self) -> Path:
+        """Saves the file in a temporary directory it creates. The temp file is
+        placed in a temporary directory"""
+        parent_dir: Path = self.file_path.parent
+        with TemporaryDirectory(
+            prefix="esbmc-ai", suffix="-" + parent_dir.name
+        ) as temp_dir:
+            return self.save_file(Path(temp_dir) / self.file_path)
 
-    def update_content(self, content: str, reset_changes: bool = False) -> None:
-        """Ascociates a new version of the content of source code to a file."""
-        if reset_changes:
-            self._content = [content]
-        else:
-            self._content.append(content)
+    def save_file(self, file_path: Path) -> Path:
+        """Saves the source code file."""
 
-    def assign_verifier_output(self, verifier_output: str, index: int = -1) -> None:
-        """Assigns verifier output to the ascociated file. If no file is given,
-        then assigns to the latest one."""
-        if index < 0:
-            # Simulate negative indicies like with Lists.
-            index = len(self._content) + index
-        self._esbmc_output[index] = verifier_output
+        with open(file_path, "w") as file:
+            file.write(self.content)
+            return Path(file.name)
 
-    def save_file(
-        self, file_path: Optional[Path], temp_dir: bool = True, index: int = -1
-    ) -> Path:
-        """Saves the source code file. If file_path is not specified, it
-        will generate an automatic name. If temp_dir is True, it will place
-        the saved file in /tmp and use the file_path file name only."""
-
-        file_name: Optional[str] = None
-        dir_path: Path
-        if file_path:
-            # If file path is a file, then use the name and directory. If not
-            # then use a temporary name and just store the folder.
-            if file_path.is_file():
-                file_name = file_path.name
-                dir_path = file_path.parent
-            else:
-                dir_path = file_path
-        else:
-            # Just store the file and use the temp dir.
-            file_name = self._file_path.name
-
-            if not temp_dir:
-                raise ValueError(
-                    "Need to enable temporary directory or provide file path to store to."
-                )
-
-            dir_path = Path(gettempdir())
-
-        # Create path if it does not exist.
-        if not os.path.exists(dir_path):
-            os.mkdir(dir_path)
-
-        with NamedTemporaryFile(
-            mode="w",
-            buffering=-1,
-            newline=None,
-            suffix=self.file_extension,
-            prefix=file_name,
-            dir=dir_path,
-            delete=False,
-        ) as temp_file:
-            temp_file.write(self.content[index])
-            return Path(temp_file.name)
-
-    @classmethod
     def calculate_cyclomatic_complexity_delta(
-        cls,
-        source_1: "SourceFile",
+        self,
         source_2: "SourceFile",
-        temp_dir: bool = True,
     ) -> Optional[float]:
         """Calculates the cyclomatic complexity difference between the two source files."""
         try:
-            file_1: Path = source_1.save_file(None, temp_dir=temp_dir)
-            file_2: Path = source_2.save_file(None, temp_dir=temp_dir)
+            file_1: Path = self.save_temp_file()
+            file_2: Path = source_2.save_temp_file()
 
             cc1 = lizard.analyze_file(file_1)
             cc2 = lizard.analyze_file(file_2)
@@ -222,7 +115,22 @@ class Solution:
     """Represents a solution, that is a collection of all the source files that
     ESBMC-AI will be involved in analyzing."""
 
-    def __init__(self, files: Optional[list[Path]] = None) -> None:
+    @staticmethod
+    def from_dir(path: Path) -> "Solution":
+        """Creates a solution from a directory."""
+        result: list[Path] = []
+        for dir_path, _, files in walk(path):
+            result.extend(Path(dir_path) / file for file in files)
+
+        return Solution(result, path)
+
+    def __init__(
+        self,
+        files: Optional[list[Path]] = None,
+        base_dir: Optional[Path] = None,
+    ) -> None:
+        """Creates a new solution with a base directory."""
+        self.base_dir: Path = base_dir if base_dir else Path(getcwd())
         files = files if files else []
         self._files: list[SourceFile] = []
         for file_path in files:
@@ -230,14 +138,41 @@ class Solution:
                 self._files.append(SourceFile(file_path, file.read()))
 
     @property
-    def files(self) -> tuple[SourceFile, ...]:
+    def files(self) -> list[SourceFile]:
         """Will return a list of the files. Returns by value."""
-        return tuple(self._files)
+        return list(self._files)
 
     @property
     def files_mapped(self) -> dict[str, SourceFile]:
         """Will return the files mapped to their directory. Returns by value."""
         return {str(source_file.file_path): source_file for source_file in self._files}
+
+    def get_files(self, included_ext: list[str]) -> list[SourceFile]:
+        """Gets the files that are only specified in the included extensions. File
+        extensions that have a . prefix are trimmed so they still work."""
+        return [s for s in self.files if s.file_extension.strip(".") in included_ext]
+
+    def save_temp(self) -> "Solution":
+        """Saves the solution in a temporary directory it creates while preserving
+        the file structure."""
+        with TemporaryDirectory(
+            prefix="esbmc-ai", suffix=self.base_dir.name, delete=False
+        ) as temp_dir:
+            return self.save_solution(Path(temp_dir))
+
+    def save_solution(self, path: Path) -> "Solution":
+        """Saves the solution to path, and then returns it. The solution's base
+        directory is replaced by the final component of path."""
+        base_dir_path: Path = path
+        new_file_paths: list[Path] = []
+        for source_file in self.files:
+            relative_path: Path = source_file.file_path.relative_to(self.base_dir)
+            new_path: Path = base_dir_path / relative_path
+            # Write new file
+            new_file_paths.append(new_path)
+            new_path.parent.mkdir(parents=True, exist_ok=True)
+            source_file.save_file(new_path)
+        return Solution(new_file_paths, Path(base_dir_path))
 
     def add_source_file(self, source_file: SourceFile) -> None:
         """Adds a source file to the solution."""
@@ -255,19 +190,16 @@ class Solution:
             if f.is_dir():
                 for path in f.glob("**/*"):
                     if path.is_file() and path.name:
-                        self.load_source_file(path, None)
+                        self.load_source_file(path)
             else:
-                self.load_source_file(f, None)
+                self.load_source_file(f)
 
-    def load_source_file(self, file_path: Path, content: Optional[str] = None) -> None:
+    def load_source_file(self, file_path: Path) -> None:
         """Add a source file to the solution. If content is provided then it will
         not be loaded."""
         assert file_path
-        if content:
-            self._files.append(SourceFile(file_path, content))
-        else:
-            with open(file_path, "r") as file:
-                self._files.append(SourceFile(file_path, file.read()))
+        with open(file_path, "r") as file:
+            self._files.append(SourceFile(file_path, file.read()))
 
 
 # Define a global solution (is not required to be used)
