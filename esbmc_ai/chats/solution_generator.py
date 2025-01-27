@@ -5,7 +5,7 @@
 from typing import Optional
 from langchain_core.language_models import BaseChatModel
 from typing_extensions import override
-from langchain.schema import BaseMessage, HumanMessage
+from langchain.schema import BaseMessage
 
 from esbmc_ai.chat_response import ChatResponse, FinishReason
 from esbmc_ai.config import FixCodeScenario, default_scenario

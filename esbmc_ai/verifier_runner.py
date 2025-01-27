@@ -1,5 +1,6 @@
-from esbmc_ai.verifiers import BaseSourceVerifier
-from esbmc_ai.config import ConfigField
+# Author: Yiannis Charalambous
+
+from esbmc_ai.verifiers.base_source_verifier import BaseSourceVerifier
 
 
 class VerifierRunner:

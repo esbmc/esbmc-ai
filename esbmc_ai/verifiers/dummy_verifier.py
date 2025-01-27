@@ -4,7 +4,7 @@
 
 from typing import Any, Optional, override
 
-from esbmc_ai.solution import SourceFile
+from esbmc_ai.solution import Solution
 from esbmc_ai.config import ConfigField
 from esbmc_ai.verifiers.base_source_verifier import BaseSourceVerifier, VerifierOutput
 
@@ -28,7 +28,7 @@ class DummyVerifier(BaseSourceVerifier):
     """Dummy verifier with pre-configured responses. Used for testing."""
 
     def __init__(
-        self, responses: Optional[list[str]] = None, load_config: bool = True
+        self, responses: Optional[list[str]] = None, load_config: bool = False
     ) -> None:
         """Creates a new dummy verifier."""
         super().__init__(verifier_name="dummy_verifier")
@@ -71,17 +71,15 @@ class DummyVerifier(BaseSourceVerifier):
     @override
     def verify_source(
         self,
-        source_file: SourceFile,
-        source_file_iteration: int = -1,
+        solution: Solution,
         **kwargs: Any,
     ) -> DummyVerifierOutput:
         """Verifies source_file, the kwargs are optional arguments that are
         child dependent. For API purposes, the overriden method can provide the
         abilitiy to override values that would be loaded from the config by
         specifying them in the kwargs."""
-        _ = source_file
-        _ = source_file_iteration
         value = kwargs["value"] if "value" in kwargs else 0
+        _ = solution
         return DummyVerifierOutput(value, self.responses[self._current_response])
 
     @override
@@ -90,19 +88,19 @@ class DummyVerifier(BaseSourceVerifier):
         return verifier_output
 
     @override
-    def get_error_line(self, verifier_output: str) -> Optional[int]:
+    def get_error_line(self, verifier_output: str) -> int:
         """1"""
         _ = verifier_output
         return 1
 
     @override
-    def get_error_line_idx(self, verifier_output: str) -> Optional[int]:
+    def get_error_line_idx(self, verifier_output: str) -> int:
         """0"""
         _ = verifier_output
         return 0
 
     @override
-    def get_error_type(self, verifier_output: str) -> Optional[str]:
+    def get_error_type(self, verifier_output: str) -> str:
         """Returns empty string"""
         _ = verifier_output
         return ""
