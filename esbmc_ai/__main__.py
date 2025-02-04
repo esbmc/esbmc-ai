@@ -7,36 +7,30 @@ import sys
 
 # Enables arrow key functionality for input(). Do not remove import.
 import readline
+import argparse
 
 from esbmc_ai.addon_loader import AddonLoader
 from esbmc_ai.commands.user_chat_command import UserChatCommand
+from esbmc_ai.solution import Solution
 from esbmc_ai.verifier_runner import VerifierRunner
 from esbmc_ai.verifiers.esbmc import ESBMC
-
-_ = readline
-
 from esbmc_ai.command_runner import CommandRunner
 from esbmc_ai.commands.fix_code_command import FixCodeCommandResult
-
-
-import argparse
-
 from esbmc_ai import Config
 from esbmc_ai import __author__, __version__
-from esbmc_ai.solution import get_solution
-
 from esbmc_ai.commands import (
     ChatCommand,
     FixCodeCommand,
     HelpCommand,
     ExitCommand,
-    FixCodeCommandResult,
 )
-
 from esbmc_ai.loading_widget import BaseLoadingWidget, LoadingWidget
 from esbmc_ai.chats import UserChat
 from esbmc_ai.logging import printv, printvv
 from esbmc_ai.ai_models import _ai_model_names
+
+_ = readline
+
 
 help_command: HelpCommand = HelpCommand()
 fix_code_command: FixCodeCommand = FixCodeCommand()
@@ -104,7 +98,7 @@ def _run_command_mode(command: ChatCommand, args: argparse.Namespace) -> None:
         # Basic fix mode: Supports only 1 file repair.
         case fix_code_command.command_name:
             print("Reading source code...")
-            get_solution().load_source_files(Config().filenames)
+            solution: Solution = Solution(Config().filenames)
             print(f"Running ESBMC with {Config().get_value('verifier.esbmc.params')}\n")
 
             anim: BaseLoadingWidget = (
@@ -112,7 +106,7 @@ def _run_command_mode(command: ChatCommand, args: argparse.Namespace) -> None:
                 if Config().get_value("loading_hints")
                 else BaseLoadingWidget()
             )
-            for source_file in get_solution().files:
+            for source_file in solution.files:
                 result: FixCodeCommandResult = (
                     UserChatCommand._execute_fix_code_command_one_file(
                         fix_code_command,
@@ -238,7 +232,7 @@ def main() -> None:
     # ===========================================
     # Check if command is called and call it.
     # If not, then continue to user mode.
-    if args.command != None:
+    if args.command is not None:
         command = args.command
         command_names: list[str] = command_runner.command_names
         if command in command_names:
