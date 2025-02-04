@@ -39,10 +39,21 @@ class SourceFile:
         lines = lines[:start] + [patch] + lines[end + 1 :]
         return "\n".join(lines)
 
-    def __init__(self, file_path: Path, content: str) -> None:
+    @staticmethod
+    def load(file_path: Path, base_path: Path) -> "SourceFile":
+        with open(base_path / file_path, "r") as file:
+            return SourceFile(file_path, base_path, file.read())
+
+    def __init__(self, file_path: Path, base_path: Path, content: str) -> None:
         self.file_path: Path = file_path
+        self.base_path: Path = base_path
         self.content: str = content
         self.verifier_output: Optional[VerifierOutput] = None
+
+    @property
+    def abs_path(self) -> Path:
+        """Returns the abs path"""
+        return self.base_path / self.file_path
 
     @property
     def file_extension(self) -> str:
@@ -126,16 +137,19 @@ class Solution:
 
     def __init__(
         self,
-        files: Optional[list[Path]] = None,
-        base_dir: Optional[Path] = None,
+        files: list[Path],
+        base_dir: Path = Path(getcwd()),
     ) -> None:
         """Creates a new solution with a base directory."""
-        self.base_dir: Path = base_dir if base_dir else Path(getcwd())
-        files = files if files else []
+        self.base_dir: Path = base_dir
+
         self._files: list[SourceFile] = []
+
         for file_path in files:
+            # Get the relative path to the base dir.
+            rel_path: Path = file_path.relative_to(self.base_dir)
             with open(file_path, "r") as file:
-                self._files.append(SourceFile(file_path, file.read()))
+                self._files.append(SourceFile(rel_path, self.base_dir, file.read()))
 
     @property
     def files(self) -> list[SourceFile]:
@@ -147,7 +161,7 @@ class Solution:
         """Will return the files mapped to their directory. Returns by value."""
         return {str(source_file.file_path): source_file for source_file in self._files}
 
-    def get_files(self, included_ext: list[str]) -> list[SourceFile]:
+    def get_files_by_ext(self, included_ext: list[str]) -> list[SourceFile]:
         """Gets the files that are only specified in the included extensions. File
         extensions that have a . prefix are trimmed so they still work."""
         return [s for s in self.files if s.file_extension.strip(".") in included_ext]
@@ -166,7 +180,7 @@ class Solution:
         base_dir_path: Path = path
         new_file_paths: list[Path] = []
         for source_file in self.files:
-            relative_path: Path = source_file.file_path.relative_to(self.base_dir)
+            relative_path: Path = source_file.file_path
             new_path: Path = base_dir_path / relative_path
             # Write new file
             new_file_paths.append(new_path)
@@ -199,14 +213,4 @@ class Solution:
         not be loaded."""
         assert file_path
         with open(file_path, "r") as file:
-            self._files.append(SourceFile(file_path, file.read()))
-
-
-# Define a global solution (is not required to be used)
-
-_solution: Solution = Solution()
-
-
-def get_solution() -> Solution:
-    """Returns the global default solution object."""
-    return _solution
+            self._files.append(SourceFile(file_path, self.base_dir, file.read()))
