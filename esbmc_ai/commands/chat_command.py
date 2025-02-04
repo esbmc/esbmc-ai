@@ -27,6 +27,7 @@ class ChatCommand(ABC):
 
     @property
     def config(self) -> BaseConfig:
+        """Gets the config for this chat command."""
         return self._config
 
     @config.setter

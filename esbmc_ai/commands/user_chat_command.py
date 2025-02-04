@@ -1,5 +1,6 @@
 # Author: Yiannis Charalambous
 
+from pathlib import Path
 import sys
 from typing import Any, Optional, override
 
@@ -13,7 +14,7 @@ from esbmc_ai.commands.fix_code_command import FixCodeCommand, FixCodeCommandRes
 from esbmc_ai.config import Config
 from esbmc_ai.loading_widget import BaseLoadingWidget, LoadingWidget
 from esbmc_ai.logging import print_horizontal_line, printv, printvv
-from esbmc_ai.solution import SourceFile, get_solution
+from esbmc_ai.solution import Solution, SourceFile
 from esbmc_ai.verifier_runner import VerifierRunner
 from esbmc_ai.verifiers.base_source_verifier import VerifierOutput
 
@@ -38,20 +39,19 @@ class UserChatCommand(ChatCommand):
         self.command_runner: CommandRunner = command_runner
         self.verifier_runner: VerifierRunner = verifier_runner
         self.fix_code_command: FixCodeCommand = fix_code_command
-
+        self.chat: UserChat
+        self.solution: Solution
         self.anim: BaseLoadingWidget = (
             LoadingWidget()
             if Config().get_value("loading_hints")
             else BaseLoadingWidget()
         )
 
-    def _run_esbmc(self, source_file: SourceFile, anim: BaseLoadingWidget) -> str:
-        assert source_file.file_path
-
-        with anim("Verifier is processing... Please Wait"):
+    def _run_esbmc(self) -> str:
+        with self.anim("Verifier is processing... Please Wait"):
             verifier_result: VerifierOutput = (
                 self.verifier_runner.verifier.verify_source(
-                    source_file=source_file,
+                    solution=self.solution,
                     esbmc_params=Config().get_value("verifier.esbmc.params"),
                     timeout=Config().get_value("verifier.esbmc.timeout"),
                 )
@@ -73,12 +73,13 @@ class UserChatCommand(ChatCommand):
         into the commands array in order for the command to register to be called by
         the user and also register in the help system."""
 
+        def update_source(solution: Solution, content: str) -> None:
+            solution.files[0].content = content
+
         # Let the AI model know about the corrected code.
         self.fix_code_command.on_solution_signal.add_listener(self.chat.set_solution)
         self.fix_code_command.on_solution_signal.add_listener(
-            lambda source_code: get_solution()
-            .files[0]
-            .update_content(content=source_code, reset_changes=True)
+            lambda source_code: update_source(self.solution, source_code)
         )
 
     def print_assistant_response(
@@ -127,21 +128,19 @@ class UserChatCommand(ChatCommand):
 
     @override
     def execute(self, **kwargs: Optional[Any]) -> Optional[CommandResult]:
+        _ = kwargs
         # Read the source code and esbmc output.
         print("Reading source code...")
-        get_solution().load_source_files(Config().filenames)
-        print(f"Running ESBMC with {Config().get_value('verifier.esbmc.params')}\n")
-        source_file: SourceFile = get_solution().files[0]
+        file_paths: list[Path] = self.get_config_value("solution.filenames")
+        self.solution = Solution(file_paths)
 
-        esbmc_output: str = self._run_esbmc(source_file, self.anim)
+        print(f"Running ESBMC with {Config().get_value('verifier.esbmc.params')}\n")
+        esbmc_output: str = self._run_esbmc()
 
         # Print verbose lvl 2
         print_horizontal_line(2)
         printvv(esbmc_output)
         print_horizontal_line(2)
-
-        source_file.assign_verifier_output(esbmc_output)
-        del esbmc_output
 
         printv(f"Initializing the LLM: {Config().get_ai_model().name}\n")
         chat_llm: BaseChatModel = (
@@ -156,12 +155,12 @@ class UserChatCommand(ChatCommand):
         )
 
         printv("Creating user chat")
-        self.chat: UserChat = UserChat(
+        self.chat = UserChat(
             ai_model=Config().get_ai_model(),
             llm=chat_llm,
             verifier=self.verifier_runner.verifier,
-            source_code=source_file.latest_content,
-            esbmc_output=source_file.latest_verifier_output,
+            solution=self.solution,
+            esbmc_output=esbmc_output,
             system_messages=Config().get_user_chat_system_messages(),
             set_solution_messages=Config().get_user_chat_set_solution(),
         )
@@ -211,7 +210,7 @@ class UserChatCommand(ChatCommand):
                     result: FixCodeCommandResult = (
                         self._execute_fix_code_command_one_file(
                             fix_code_command=self.fix_code_command,
-                            source_file=source_file,
+                            source_file=self.solution.files[0],
                         )
                     )
 
