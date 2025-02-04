@@ -33,7 +33,6 @@ from .ai_models import (
     OllamaAIModel,
     download_openai_model_names,
 )
-from .api_key_collection import APIKeyCollection
 
 
 @dataclass
@@ -81,6 +80,14 @@ class Config(BaseConfig):
             cls.instance = super(Config, cls).__new__(cls)
         return cls.instance
 
+    def __init__(self) -> None:
+        super().__init__()
+        self._args: argparse.Namespace
+        self.api_keys: dict[str, str] = {}
+        self.raw_conversation: bool = False
+        self.generate_patches: bool
+        self.output_dir: Optional[Path] = None
+
     # Define some shortcuts for the values here (instead of having to use get_value)
 
     def get_ai_model(self) -> AIModel:
@@ -92,7 +99,7 @@ class Config(BaseConfig):
         return self.get_value("llm_requests.max_tries")
 
     def get_llm_requests_timeout(self) -> float:
-        """"""
+        """Max timeout for a request when prompting the LLM"""
         return self.get_value("llm_requests.timeout")
 
     def get_user_chat_initial(self) -> BaseMessage:
@@ -120,11 +127,7 @@ class Config(BaseConfig):
         """Will load the config from the args, the env file and then from config file.
         Call once to initialize."""
 
-        self._args: argparse.Namespace = args
-        self.api_keys: APIKeyCollection
-        self.raw_conversation: bool = False
-        self.generate_patches: bool
-        self.output_dir: Optional[Path] = None
+        self._args = args
 
         self._load_envs()
 
@@ -141,7 +144,7 @@ class Config(BaseConfig):
                 # Default is to refresh once a day
                 default_value=self._load_openai_model_names(86400),
                 validate=lambda v: isinstance(v, int),
-                on_load=lambda v: self._load_openai_model_names(v),
+                on_load=self._load_openai_model_names,
                 error_message="Invalid value, needs to be an int in seconds",
             ),
             # This needs to be processed after ai_custom
@@ -151,7 +154,7 @@ class Config(BaseConfig):
                 # Api keys are loaded from system env so they are already
                 # available
                 validate=lambda v: isinstance(v, str) and is_valid_ai_model(v),
-                on_load=lambda v: get_ai_model_by_name(v),
+                on_load=get_ai_model_by_name,
             ),
             ConfigField(
                 name="temp_auto_clean",
@@ -180,6 +183,12 @@ class Config(BaseConfig):
                 default_value="full",
                 validate=lambda v: isinstance(v, str) and v in ["full", "single"],
                 error_message="source_code_format can only be 'full' or 'single'",
+            ),
+            # API Keys is a pseudo-entry, the value is fetched from the class
+            # itself rather config.
+            ConfigField(
+                name="api_keys",
+                default_value=self.api_keys,
             ),
             ConfigField(
                 name="solution.filenames",
@@ -279,7 +288,8 @@ class Config(BaseConfig):
                 name="fix_code.message_history",
                 default_value="normal",
                 validate=lambda v: v in ["normal", "latest_only", "reverse"],
-                error_message='fix_code.message_history can only be "normal", "latest_only", "reverse"',
+                error_message='fix_code.message_history can only be "normal", '
+                + '"latest_only", "reverse"',
             ),
             ConfigField(
                 name="prompt_templates.user_chat.initial",
@@ -385,9 +395,7 @@ class Config(BaseConfig):
                 print(f"Error: No ${key} in environment.")
                 sys.exit(1)
 
-        self.api_keys = APIKeyCollection(
-            openai=str(os.getenv("OPENAI_API_KEY")),
-        )
+        self.api_keys["openai"] = str(os.getenv("OPENAI_API_KEY"))
 
         self.cfg_path: Path = Path(
             os.path.expanduser(os.path.expandvars(str(os.getenv(config_env_name))))
@@ -400,7 +408,7 @@ class Config(BaseConfig):
 
         # AI Model -m
         if args.ai_model != "":
-            if is_valid_ai_model(args.ai_model, self.api_keys):
+            if is_valid_ai_model(args.ai_model):
                 ai_model = get_ai_model_by_name(args.ai_model)
                 self.set_value("ai_model", ai_model)
             else:
@@ -527,7 +535,7 @@ class Config(BaseConfig):
             return models_list
 
         duration = timedelta(seconds=refresh_duration_seconds)
-        if self.api_keys and self.api_keys.openai:
+        if "openai" in self.api_keys:
             print("Loading OpenAI models list")
             models_list: list[str] = []
             cache: Path = Path(user_cache_dir("esbmc-ai", "Yiannis Charalambous"))
