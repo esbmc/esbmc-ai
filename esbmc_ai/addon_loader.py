@@ -4,16 +4,17 @@
 
 import inspect
 from typing import Any
-from typing_extensions import Optional, override
+import traceback
+import sys
 import importlib
 from importlib.util import find_spec
 from importlib.machinery import ModuleSpec
-import sys
+from typing_extensions import Optional, override
 
 from esbmc_ai.base_config import BaseConfig
-from esbmc_ai.command_runner import ChatCommand
+from esbmc_ai.commands.chat_command import ChatCommand
 from esbmc_ai.logging import printv
-from esbmc_ai.verifier_runner import BaseSourceVerifier
+from esbmc_ai.verifiers.base_source_verifier import BaseSourceVerifier
 from esbmc_ai.config import Config, ConfigField
 
 
@@ -93,10 +94,12 @@ class AddonLoader(BaseConfig):
 
     @property
     def chat_command_addon_names(self) -> list[str]:
+        """Returns all the addon chat command names."""
         return list(self.chat_command_addons.keys())
 
     @property
     def verifier_addon_names(self) -> list[str]:
+        """Returns all the addon verifier names."""
         return list(self.verifier_addons.keys())
 
     def _load_chat_command_addons(self) -> None:
@@ -149,11 +152,8 @@ class AddonLoader(BaseConfig):
         This method will load classes:
         * ChatCommands
         * BaseSourceVerifier"""
-        from esbmc_ai.commands.chat_command import ChatCommand
-        from esbmc_ai.verifiers import BaseSourceVerifier
-        from esbmc_ai.testing.base_tester import BaseTester
 
-        allowed_types = ChatCommand | BaseSourceVerifier | BaseTester
+        allowed_types = ChatCommand | BaseSourceVerifier
 
         result: list = []
         for module_name in mods:
@@ -168,7 +168,12 @@ class AddonLoader(BaseConfig):
                         result.append(attr_class())
                         printv(f"Loading addon: {attr_name}")
             except ModuleNotFoundError as e:
+                print("Addon Loader: Error while loading module: Traceback:")
+                traceback.print_tb(e.__traceback__)
                 print(f"Addon Loader: Could not import module: {module_name}: {e}")
+                sys.exit(1)
+            except AttributeError as e:
+                print(f"Addon Loader: Module {module_name} is invalid: {e}")
                 sys.exit(1)
 
         return result
