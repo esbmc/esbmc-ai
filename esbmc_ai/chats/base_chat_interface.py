@@ -3,8 +3,7 @@
 """Contains code for the base class for interacting with the LLMs in a 
 conversation-based way."""
 
-from abc import abstractmethod
-from typing import Optional
+from typing import Any, Optional
 
 from langchain.schema import (
     BaseMessage,
@@ -33,10 +32,9 @@ class BaseChatInterface:
         self.messages: list[BaseMessage] = []
         self.llm: BaseChatModel = llm
 
-    @abstractmethod
     def compress_message_stack(self) -> None:
         """Compress the message stack, is abstract and needs to be implemented."""
-        raise NotImplementedError()
+        self.messages = []
 
     def push_to_message_stack(
         self,
@@ -47,6 +45,17 @@ class BaseChatInterface:
             self.messages.extend(list(message))
         else:
             self.messages.append(message)
+
+    def get_canonical_template_keys(
+        self, source_code: str, esbmc_output: str, error_line: str, error_type: str
+    ) -> dict[str, Any]:
+        """Gets the canonical template keys for applying in template values."""
+        return {
+            source_code: source_code,
+            esbmc_output: esbmc_output,
+            error_line: error_line,
+            error_type: error_type,
+        }
 
     def apply_template_value(self, **kwargs: str) -> None:
         """Will substitute an f-string in the message stack and system messages to
