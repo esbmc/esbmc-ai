@@ -7,7 +7,6 @@ from typing_extensions import override
 
 from esbmc_ai.solution import Solution, SourceFile
 from esbmc_ai.ai_models import AIModel
-from esbmc_ai.api_key_collection import APIKeyCollection
 from esbmc_ai.chat_response import FinishReason
 from esbmc_ai.chats import LatestStateSolutionGenerator, SolutionGenerator
 from esbmc_ai.verifiers.base_source_verifier import (
@@ -64,6 +63,7 @@ class FixCodeCommand(ChatCommand):
             command_name="fix-code",
             help_message="Generates a solution for this code, and reevaluates it with ESBMC.",
         )
+        self.anim: BaseLoadingWidget
 
     def print_raw_conversation(self, solution_generator: SolutionGenerator) -> None:
         """Debug prints the raw conversation"""
@@ -80,7 +80,7 @@ class FixCodeCommand(ChatCommand):
         # Handle kwargs
         source_file: SourceFile = kwargs["source_file"]
         original_source_file: SourceFile = SourceFile(
-            source_file.file_path, source_file.content
+            source_file.file_path, Path("."), source_file.content
         )
 
         generate_patches: bool = (
@@ -91,7 +91,7 @@ class FixCodeCommand(ChatCommand):
             kwargs["message_history"] if "message_history" in kwargs else "normal"
         )
 
-        api_keys: APIKeyCollection = kwargs["api_keys"]
+        api_keys = kwargs["api_keys"]
         ai_model: AIModel = kwargs["ai_model"]
         temperature: float = kwargs["temperature"]
         max_tries: int = kwargs["requests_max_tries"]
@@ -103,18 +103,13 @@ class FixCodeCommand(ChatCommand):
         raw_conversation: bool = (
             kwargs["raw_conversation"] if "raw_conversation" in kwargs else False
         )
-        output_dir: Optional[Path] = (
-            kwargs["output_dir"] if "output_dir" in kwargs else None
-        )
-        self.anim: BaseLoadingWidget = (
-            kwargs["anim"] if "anim" in kwargs else BaseLoadingWidget()
-        )
+        self.anim = kwargs["anim"] if "anim" in kwargs else BaseLoadingWidget()
         entry_function: str = (
             kwargs["entry_function"] if "entry_function" in kwargs else "main"
         )
         # End of handle kwargs
 
-        solution: Solution = Solution()
+        solution: Solution = Solution([])
         solution.add_source_file(source_file)
 
         printv(f"Temperature: {temperature}")
@@ -219,12 +214,14 @@ class FixCodeCommand(ChatCommand):
         attempt: int,
         max_attempts: int,
         solution_generator: SolutionGenerator,
-        source_file: SourceFile,
+        solution: Solution,
         verifier: BaseSourceVerifier,
         output_dir: Optional[Path],
         raw_conversation: bool,
         **kwargs: Any,
     ) -> Optional[FixCodeCommandResult]:
+        source_file: SourceFile = solution.files[0]
+
         # Get a response. Use while loop to account for if the message stack
         # gets full, then need to compress and retry.
         while True:
@@ -245,9 +242,6 @@ class FixCodeCommand(ChatCommand):
         printvvv(source_file.content)
         print_horizontal_line(3)
         printvvv("")
-
-        solution: Solution = Solution()
-        solution.add_source_file(source_file)
 
         # Pass to ESBMC, a workaround is used where the file is saved
         # to a temporary location since ESBMC needs it in file format.
