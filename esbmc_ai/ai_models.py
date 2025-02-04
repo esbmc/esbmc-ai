@@ -1,7 +1,7 @@
 # Author: Yiannis Charalambous
 
 from abc import abstractmethod
-from typing import Any, Iterable, Optional, Union
+from typing import Any, Iterable, Union
 from enum import Enum
 from langchain_core.language_models import BaseChatModel
 from pydantic.types import SecretStr
@@ -15,9 +15,6 @@ from langchain.schema import (
     BaseMessage,
     PromptValue,
 )
-
-
-from esbmc_ai.api_key_collection import APIKeyCollection
 
 
 class AIModel(object):
@@ -37,7 +34,7 @@ class AIModel(object):
     @abstractmethod
     def create_llm(
         self,
-        api_keys: APIKeyCollection,
+        api_keys: dict[str, str],
         temperature: float = 1.0,
         requests_max_tries: int = 5,
         requests_timeout: float = 60,
@@ -143,15 +140,15 @@ class AIModelOpenAI(AIModel):
     @override
     def create_llm(
         self,
-        api_keys: APIKeyCollection,
+        api_keys: dict[str, str],
         temperature: float = 1.0,
         requests_max_tries: int = 5,
         requests_timeout: float = 60,
     ) -> BaseChatModel:
-        assert api_keys.openai, "No OpenAI api key has been specified..."
+        assert "openai" in api_keys, "No OpenAI api key has been specified..."
         return ChatOpenAI(
             model=self.name,
-            api_key=SecretStr(api_keys.openai),
+            api_key=SecretStr(api_keys["openai"]),
             max_tokens=None,
             temperature=temperature,
             max_retries=requests_max_tries,
@@ -199,7 +196,7 @@ class OllamaAIModel(AIModel):
     @override
     def create_llm(
         self,
-        api_keys: APIKeyCollection,
+        api_keys: dict[str, str],
         temperature: float = 1,
         requests_max_tries: int = 5,
         requests_timeout: float = 60,
@@ -222,7 +219,6 @@ class _AIModels(Enum):
     defined because they are fetched from the API."""
 
     # FALCON_7B = OllamaAIModel(...)
-    pass
 
 
 _custom_ai_models: list[AIModel] = []
@@ -254,9 +250,9 @@ def add_custom_ai_model(ai_model: AIModel) -> None:
     _custom_ai_models.append(ai_model)
 
 
-def download_openai_model_names(api_keys: APIKeyCollection) -> list[str]:
+def download_openai_model_names(api_keys: dict[str, str]) -> list[str]:
     """Gets the open AI models from the API service and returns them."""
-    assert api_keys and api_keys.openai
+    assert "openai" in api_keys
     from openai import Client
 
     "llm_requests.open_ai.model_refresh_seconds"
@@ -264,15 +260,13 @@ def download_openai_model_names(api_keys: APIKeyCollection) -> list[str]:
     try:
         return [
             str(model.id)
-            for model in Client(api_key=api_keys.openai).models.list().data
+            for model in Client(api_key=api_keys["openai"]).models.list().data
         ]
     except ImportError:
         return []
 
 
-def is_valid_ai_model(
-    ai_model: Union[str, AIModel], api_keys: Optional[APIKeyCollection] = None
-) -> bool:
+def is_valid_ai_model(ai_model: Union[str, AIModel]) -> bool:
     """Accepts both the AIModel object and the name as parameter. It checks the
     openai servers to see if a model is defined on their servers, if not, then
     it checks the internally defined AI models list."""
@@ -301,4 +295,4 @@ def get_ai_model_by_name(name: str) -> AIModel:
         if name == custom_ai.name:
             return custom_ai
 
-    raise Exception(f'The AI "{name}" was not found...')
+    raise ValueError(f'The AI "{name}" was not found...')
