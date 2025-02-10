@@ -1,5 +1,9 @@
 # Author: Yiannis Charalambous
 
+"""This module contains the User Chat Command which is the default command that
+is executed when no command is specified. It acts as a command line interface
+for running the program."""
+
 from pathlib import Path
 import sys
 from typing import Any, Optional, override
@@ -14,13 +18,9 @@ from esbmc_ai.commands.fix_code_command import FixCodeCommand, FixCodeCommandRes
 from esbmc_ai.config import Config
 from esbmc_ai.loading_widget import BaseLoadingWidget, LoadingWidget
 from esbmc_ai.logging import print_horizontal_line, printv, printvv
-from esbmc_ai.solution import Solution, SourceFile
+from esbmc_ai.solution import Solution
 from esbmc_ai.verifier_runner import VerifierRunner
 from esbmc_ai.verifiers.base_source_verifier import VerifierOutput
-
-"""This module contains the User Chat Command which is the default command that
-is executed when no command is specified. It acts as a command line interface
-for running the program."""
 
 
 class UserChatCommand(ChatCommand):
@@ -28,24 +28,21 @@ class UserChatCommand(ChatCommand):
     other command is specified. It runs with execute and exits the entire program
     when the command is finished. It is used to launch other commands."""
 
-    def __init__(
-        self,
-        command_runner: CommandRunner,
-        verifier_runner: VerifierRunner,
-        fix_code_command: FixCodeCommand,
-    ) -> None:
-        super().__init__("userchat", "Ran automatically and not exposed to the system.")
+    def __init__(self) -> None:
+        super().__init__(
+            "userchat",
+            "Allow the user to ask the LLM questions about the vulnerability."
+            "Currently only supports 1 file.",
+        )
 
-        self.command_runner: CommandRunner = command_runner
-        self.verifier_runner: VerifierRunner = verifier_runner
-        self.fix_code_command: FixCodeCommand = fix_code_command
+        self.command_runner: CommandRunner
+        self.verifier_runner: VerifierRunner
+        self.fix_code_command: FixCodeCommand
         self.chat: UserChat
         self.solution: Solution
-        self.anim: BaseLoadingWidget = (
-            LoadingWidget()
-            if Config().get_value("loading_hints")
-            else BaseLoadingWidget()
-        )
+        self.anim: BaseLoadingWidget
+
+        self._config = Config()
 
     def _run_esbmc(self) -> str:
         with self.anim("Verifier is processing... Please Wait"):
@@ -97,38 +94,29 @@ class UserChatCommand(ChatCommand):
                 f"finish reason: {response.finish_reason}",
             )
 
-    @staticmethod
-    def _execute_fix_code_command_one_file(
-        fix_code_command: FixCodeCommand,
-        source_file: SourceFile,
-        anim: Optional[BaseLoadingWidget] = None,
-    ) -> FixCodeCommandResult:
-        """Shortcut method to execute fix code command."""
-        return fix_code_command.execute(
-            anim=anim,
-            ai_model=Config().get_ai_model(),
-            source_file=source_file,
-            generate_patches=Config().generate_patches,
-            message_history=Config().get_value("fix_code.message_history"),
-            api_keys=Config().api_keys,
-            temperature=Config().get_value("fix_code.temperature"),
-            max_attempts=Config().get_value("fix_code.max_attempts"),
-            requests_max_tries=Config().get_llm_requests_max_tries(),
-            requests_timeout=Config().get_llm_requests_timeout(),
-            esbmc_params=Config().get_value("verifier.esbmc.params"),
-            raw_conversation=Config().raw_conversation,
-            temp_auto_clean=Config().get_value("temp_auto_clean"),
-            verifier_timeout=Config().get_value("verifier.esbmc.timeout"),
-            source_code_format=Config().get_value("source_code_format"),
-            esbmc_output_format=Config().get_value("verifier.esbmc.output_type"),
-            scenarios=Config().get_fix_code_scenarios(),
-            temp_file_dir=Config().get_value("temp_file_dir"),
-            output_dir=Config().output_dir,
-        )
-
     @override
     def execute(self, **kwargs: Optional[Any]) -> Optional[CommandResult]:
-        _ = kwargs
+
+        assert "command_runner" in kwargs and isinstance(
+            kwargs["command_runner"], CommandRunner
+        )
+        assert "verifier_runner" in kwargs and isinstance(
+            kwargs["verifier_runner"], VerifierRunner
+        )
+
+        self.command_runner = kwargs["command_runner"]
+        self.verifier_runner = kwargs["verifier_runner"]
+        self.anim = (
+            LoadingWidget()
+            if Config().get_value("loading_hints")
+            else BaseLoadingWidget()
+        )
+
+        # Assign fix code command - In the future make this not explicitly mentioned
+        # and make the signal bus system available to all commands.
+        assert isinstance(self.command_runner.commands["fix-code"], FixCodeCommand)
+        self.fix_code_command = self.command_runner.commands["fix-code"]
+
         # Read the source code and esbmc output.
         print("Reading source code...")
         file_paths: list[Path] = self.get_config_value("solution.filenames")
@@ -178,7 +166,7 @@ class UserChatCommand(ChatCommand):
                         message=str(Config().get_user_chat_initial().content),
                     )
                 except Exception as e:
-                    print("There was an error while generating a response: {e}")
+                    print(f"There was an error while generating a response: {e}")
                     sys.exit(1)
 
             if response.finish_reason == FinishReason.length:
@@ -207,12 +195,9 @@ class UserChatCommand(ChatCommand):
                     print()
                     print("ESBMC-AI will generate a fix for the code...")
 
-                    result: FixCodeCommandResult = (
-                        self._execute_fix_code_command_one_file(
-                            fix_code_command=self.fix_code_command,
-                            source_file=self.solution.files[0],
-                        )
-                    )
+                    result: FixCodeCommandResult = self.command_runner.commands[
+                        "fix-code"
+                    ].execute(source_file=self.solution.files[0])
 
                     if result.successful:
                         print(
@@ -224,9 +209,8 @@ class UserChatCommand(ChatCommand):
                     # Commands without parameters or returns are handled automatically.
                     if command in self.command_runner.commands:
                         self.command_runner.commands[command].execute()
-                        break
-                    else:
-                        print("Error: Unknown command...")
+                        continue
+                    print("Error: Unknown command...")
                     continue
             elif user_message == "":
                 continue

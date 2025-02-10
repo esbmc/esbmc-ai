@@ -14,7 +14,7 @@ from esbmc_ai.verifiers.base_source_verifier import (
     BaseSourceVerifier,
 )
 from esbmc_ai.commands.command_result import CommandResult
-from esbmc_ai.config import FixCodeScenario
+from esbmc_ai.config import Config, FixCodeScenario
 from esbmc_ai.chats.reverse_order_solution_generator import (
     ReverseOrderSolutionGenerator,
 )
@@ -23,11 +23,13 @@ from esbmc_ai.verifier_output import VerifierOutput
 
 from .chat_command import ChatCommand
 from ..msg_bus import Signal
-from ..loading_widget import BaseLoadingWidget
+from ..loading_widget import BaseLoadingWidget, LoadingWidget
 from ..logging import print_horizontal_line, printv, printvvv
 
 
 class FixCodeCommandResult(CommandResult):
+    """Returned by the FixCodeCommand"""
+
     def __init__(
         self,
         successful: bool,
@@ -48,7 +50,7 @@ class FixCodeCommandResult(CommandResult):
     def __str__(self) -> str:
         return (
             self.repaired_source
-            if self._successful and self.repaired_source != None
+            if self._successful and self.repaired_source is not None
             else "ESBMC-AI Notice: Failed all attempts..."
         )
 
@@ -77,36 +79,34 @@ class FixCodeCommand(ChatCommand):
     @override
     def execute(self, **kwargs: Any) -> FixCodeCommandResult:
 
+        self._config = Config()
+
         # Handle kwargs
         source_file: SourceFile = kwargs["source_file"]
         original_source_file: SourceFile = SourceFile(
-            source_file.file_path, Path("."), source_file.content
+            source_file.file_path, source_file.base_path, source_file.content
         )
-
-        generate_patches: bool = (
-            kwargs["generate_patches"] if "generate_patches" in kwargs else False
+        self.anim = (
+            LoadingWidget()
+            if self.get_config_value("loading_hints")
+            else BaseLoadingWidget()
         )
-
-        message_history: str = (
-            kwargs["message_history"] if "message_history" in kwargs else "normal"
+        generate_patches: bool = self.get_config_value("generate_patches")
+        message_history: str = self.get_config_value("fix_code.message_history")
+        api_keys = self.get_config_value("api_keys")
+        ai_model: AIModel = self.get_config_value("ai_model")
+        temperature: float = self.get_config_value("fix_code.temperature")
+        max_tries: int = self.get_config_value("fix_code.max_attempts")
+        timeout: int = self.get_config_value("llm_requests.timeout")
+        source_code_format: str = self.get_config_value("source_code_format")
+        esbmc_output_format: str = self.get_config_value("verifier.esbmc.output_type")
+        scenarios: dict[str, FixCodeScenario] = self.get_config_value(
+            "prompt_templates.fix_code"
         )
-
-        api_keys = kwargs["api_keys"]
-        ai_model: AIModel = kwargs["ai_model"]
-        temperature: float = kwargs["temperature"]
-        max_tries: int = kwargs["requests_max_tries"]
-        timeout: int = kwargs["requests_timeout"]
-        source_code_format: str = kwargs["source_code_format"]
-        esbmc_output_format: str = kwargs["esbmc_output_format"]
-        scenarios: dict[str, FixCodeScenario] = kwargs["scenarios"]
-        max_attempts: int = kwargs["max_attempts"]
-        raw_conversation: bool = (
-            kwargs["raw_conversation"] if "raw_conversation" in kwargs else False
-        )
-        self.anim = kwargs["anim"] if "anim" in kwargs else BaseLoadingWidget()
-        entry_function: str = (
-            kwargs["entry_function"] if "entry_function" in kwargs else "main"
-        )
+        max_attempts: int = self.get_config_value("fix_code.max_attempts")
+        raw_conversation: bool = self.get_config_value("fix_code.raw_conversation")
+        entry_function: str = self.get_config_value("solution.entry_function")
+        output_dir: Path = self.get_config_value("solution.output_dir")
         # End of handle kwargs
 
         solution: Solution = Solution([])
@@ -193,7 +193,10 @@ class FixCodeCommand(ChatCommand):
                 attempt=attempt,
                 solution_generator=solution_generator,
                 verifier=verifier,
-                **kwargs,
+                max_attempts=max_attempts,
+                output_dir=output_dir,
+                solution=solution,
+                raw_conversation=raw_conversation,
             )
             if result:
                 if raw_conversation:
@@ -218,7 +221,6 @@ class FixCodeCommand(ChatCommand):
         verifier: BaseSourceVerifier,
         output_dir: Optional[Path],
         raw_conversation: bool,
-        **kwargs: Any,
     ) -> Optional[FixCodeCommandResult]:
         source_file: SourceFile = solution.files[0]
 
@@ -246,7 +248,7 @@ class FixCodeCommand(ChatCommand):
         # Pass to ESBMC, a workaround is used where the file is saved
         # to a temporary location since ESBMC needs it in file format.
         with self.anim("Verifying with ESBMC... Please Wait"):
-            verifier_result: VerifierOutput = verifier.verify_source(solution, **kwargs)
+            verifier_result: VerifierOutput = verifier.verify_source(solution)
 
         source_file.verifier_output = verifier_result
 
