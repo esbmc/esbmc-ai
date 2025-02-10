@@ -21,7 +21,6 @@ class HelpCommand(ChatCommand):
 
     @override
     def execute(self, **_: Optional[Any]) -> Optional[Any]:
-        print()
         print("Commands:")
 
         for command in self.commands:
@@ -30,8 +29,7 @@ class HelpCommand(ChatCommand):
                 print(f"\tAuthors: {command.authors}")
 
         print()
-        print("Useful AI Questions:")
-        print("1) How can I correct this code?")
-        print("2) What is the line with the error?")
-        print("3) What is the exact error?")
-        print()
+        print("User Chat Mode Prompts:")
+        print("1) What is the exact error?")
+        print("2) Please explain the error to me.")
+        print("3) What is the cause of this error?")
