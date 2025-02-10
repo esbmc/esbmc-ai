@@ -3,14 +3,15 @@
 """This module contains code regarding configuring and loading addon modules."""
 
 import inspect
-from typing import Any
+from typing import Any, override
 import traceback
 import sys
 import importlib
 from importlib.util import find_spec
 from importlib.machinery import ModuleSpec
-from typing_extensions import Optional, override
+from typing_extensions import Optional
 
+from esbmc_ai.base_component import BaseComponent
 from esbmc_ai.base_config import BaseConfig
 from esbmc_ai.commands.chat_command import ChatCommand
 from esbmc_ai.logging import printv
@@ -38,13 +39,17 @@ class AddonLoader(BaseConfig):
             cls.instance = super(AddonLoader, cls).__new__(cls)
         return cls.instance
 
+    _config: Config
+    chat_command_addons: dict[str, ChatCommand] = {}
+    verifier_addons: dict[str, BaseSourceVerifier] = {}
+
     def init(self, config: Config, builtin_verifier_names: list[str]):
         """Call to initialize the addon loader. It will load the addons and
         register them with the command runner and verifier runner."""
 
         self.base_init(config.cfg_path, [])
 
-        self._config: Config = config
+        self._config = config
 
         # Register field with Config to know which modules to load. This will
         # load them automatically.
@@ -57,9 +62,6 @@ class AddonLoader(BaseConfig):
                 error_message="addon_modules must be a list of Python modules to load",
             ),
         )
-
-        self.chat_command_addons: dict[str, ChatCommand] = {}
-        self.verifier_addons: dict[str, BaseSourceVerifier] = {}
 
         # Load all the addon commands
         self._load_chat_command_addons()
@@ -110,7 +112,7 @@ class AddonLoader(BaseConfig):
                 self.chat_command_addons[m.command_name] = m
 
         # Init config fields
-        for field in self._get_chat_command_addon_fields():
+        for field in self._get_addons_fields(list(self.chat_command_addons.values())):
             self.add_config_field(field)
 
         if len(self.chat_command_addons) > 0:
@@ -126,7 +128,7 @@ class AddonLoader(BaseConfig):
                 self.verifier_addons[m.verifier_name] = m
 
         # Init config fields
-        for field in self._get_verifier_addon_fields():
+        for field in self._get_addons_fields(list(self.verifier_addons.values())):
             self.add_config_field(field)
 
         if len(self.verifier_addons) > 0:
@@ -136,7 +138,7 @@ class AddonLoader(BaseConfig):
             )
 
     def _validate_addon_modules(self, mods: list[str]) -> bool:
-        """Validates that all values are string."""
+        """Validates that all values are string and that the module exists."""
         for m in mods:
             if not isinstance(m, str):
                 return False
@@ -222,40 +224,21 @@ class AddonLoader(BaseConfig):
 
         return ConfigField(**params)
 
-    def _get_chat_command_addon_fields(self) -> list[ConfigField]:
-        """Adds each chat command's config fields to the config. After resolving
-        each chat command's config fields to their namespace."""
+    def _get_addons_fields(self, addons: list[BaseComponent]) -> list[ConfigField]:
+        """Returns each addons's config fields. After resolving each field to
+        their namespace using the name of the component."""
         # If an addon prefix is defined, then add a .
         addons_prefix: str = (
             AddonLoader.addon_prefix + "." if AddonLoader.addon_prefix else ""
         )
         fields_resolved: list[ConfigField] = []
         # Loop through verifier addons
-        for cmd in self.chat_command_addons.values():
+        for addon in addons:
             # Loop through each field of the verifier addon
-            fields: list[ConfigField] = cmd.get_config_fields()
+            fields: list[ConfigField] = addon.get_config_fields()
             for field in fields:
                 new_field: ConfigField = self._resolve_config_field(
-                    field, f"{addons_prefix}{cmd.command_name}"
-                )
-                fields_resolved.append(new_field)
-        return fields_resolved
-
-    def _get_verifier_addon_fields(self) -> list[ConfigField]:
-        """Adds each verifier's config fields to the config. After resolving
-        each verifier's config fields to their namespace."""
-        # If an addon prefix is defined, then add a .
-        addons_prefix: str = (
-            AddonLoader.addon_prefix + "." if AddonLoader.addon_prefix else ""
-        )
-        fields_resolved: list[ConfigField] = []
-        # Loop through verifier addons
-        for verifier in self.verifier_addons.values():
-            # Loop through each field of the verifier addon
-            fields: list[ConfigField] = verifier.get_config_fields()
-            for field in fields:
-                new_field: ConfigField = self._resolve_config_field(
-                    field, f"{addons_prefix}{verifier.verifier_name}"
+                    field, f"{addons_prefix}{addon.name}"
                 )
                 fields_resolved.append(new_field)
         return fields_resolved

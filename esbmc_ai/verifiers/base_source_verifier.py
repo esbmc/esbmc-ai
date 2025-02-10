@@ -2,12 +2,12 @@
 
 """This module holds the code for the base source code verifier."""
 
-from abc import ABC
 import re
 from typing import Any
 
+from esbmc_ai.base_component import BaseComponent
 from esbmc_ai.solution import Solution
-from esbmc_ai.base_config import BaseConfig, ConfigField, default_scenario
+from esbmc_ai.base_config import BaseConfig, default_scenario
 from esbmc_ai.verifier_output import VerifierOutput
 from esbmc_ai.program_trace import ProgramTrace
 
@@ -22,7 +22,7 @@ class VerifierTimedOutException(Exception):
     determined."""
 
 
-class BaseSourceVerifier(ABC):
+class BaseSourceVerifier(BaseComponent):
     """The base class for creating a source verifier for ESBMC-AI. In order for
     this class to work with ESBMC-AI, the constructor must have default values
     to all arguments because it will be invoked without passing anything.
@@ -35,37 +35,20 @@ class BaseSourceVerifier(ABC):
     config. So the verifier "esbmc" will have for key "timeout" the following
     field in the config: "esbmc.timeout"."""
 
-    def __init__(self, verifier_name: str) -> None:
+    def __init__(self, verifier_name: str, authors: str) -> None:
         """Verifier name needs to be a valid TOML key."""
-        super().__init__()
+        super().__init__(name=verifier_name, authors=authors)
         pattern = re.compile(r"[a-zA-Z_]\w*")
         assert pattern.match(
             verifier_name
         ), f"Invalid toml-friendly verifier name: {verifier_name}"
 
-        self.verifier_name: str = verifier_name
         self._config: BaseConfig
 
     @property
-    def config(self) -> BaseConfig:
-        """Gets the config of this class."""
-        return self._config
-
-    @config.setter
-    def config(self, value: BaseConfig) -> None:
-        self._config: BaseConfig = value
-
-    def get_config_fields(self) -> list[ConfigField]:
-        """Called during initialization, this is meant to return all config
-        fields that are going to be loaded from the config. The name that each
-        field has will automatically be prefixed with {verifier name}."""
-        return []
-
-    def get_config_value(self, key: str) -> Any:
-        """Loads a value from the config. If the value is defined in the namespace
-        of the verifier name then that value will be returned.
-        """
-        return self._config.get_value(key)
+    def verifier_name(self) -> str:
+        """Alias for name"""
+        return self.name
 
     def verify_source(
         self,
