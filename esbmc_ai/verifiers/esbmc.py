@@ -79,7 +79,7 @@ class ESBMC(BaseSourceVerifier):
         return None
 
     def __init__(self) -> None:
-        super().__init__("esbmc")
+        super().__init__("esbmc", "")
         self.config = Config()
 
     @property
@@ -224,7 +224,7 @@ class ESBMC(BaseSourceVerifier):
         esbmc_cmd.extend(esbmc_params)
         # Files (only accept valid ones)
         esbmc_cmd.extend(
-            str(file.file_path) for file in solution.get_files(["c", "cpp"])
+            str(file.file_path) for file in solution.get_files_by_ext(["c", "cpp"])
         )
 
         # Add timeout suffix for parameter.
@@ -269,20 +269,14 @@ class ESBMC(BaseSourceVerifier):
         * Error line (or None if missing)
         """
 
-        if "Violated property:" in line:
-            pattern = re.compile(
-                r"State (\d+) file ([^ ]+) line (\d+) .*? function ([^ ]+) thread (\d+)",
-                re.DOTALL,
-            )
-            vp: bool = True
-        else:
-            vp: bool = False
-            pattern = re.compile(
-                r"State (\d+) file ([^ ]+) line (\d+) .*? "
-                r"function ([^ ]+) thread (\d+)\n[-]+\n(.*)",
-                re.DOTALL,
-            )
+        method_name: Optional[str] = None
+        error_line: Optional[str] = None
 
+        # Get elements that are always present
+        base_pattern: str = (
+            r"State (\d+) file ([^ ]+) line (\d+)(?:.+) thread (\d+)\n[-]+\n?(.*)?"
+        )
+        pattern = re.compile(base_pattern, re.DOTALL)
         match = pattern.search(line)
         if match:
             state_number: Optional[int] = (
@@ -290,26 +284,38 @@ class ESBMC(BaseSourceVerifier):
             )
             filename: Optional[str] = match.group(2) if match.group(2) else None
             line_number: Optional[int] = int(match.group(3)) if match.group(3) else None
-            method_name: Optional[str] = match.group(4) if match.group(4) else None
+
             thread_index: Optional[int] = (
-                int(match.group(5)) if match.group(5) else None
+                int(match.group(4)) if match.group(4) else None
             )
-            error_line: Optional[str] = (
-                match.group(6).strip() if vp and match.group(6) else None
-            )
+
             # Don't return if any of the useful information is missing
             if any(x is None for x in [filename, line_number]):
                 return None
             assert filename is not None and line_number is not None
-            return (
-                state_number,
-                filename,
-                line_number,
-                method_name,
-                thread_index,
-                error_line,
-            )
-        raise ValueError(f"Could not find a state match: {line}")
+        else:
+            raise ValueError(f"Could not find a state match:\n{line}\n")
+
+        # Optional elements
+        if " function " in line:
+            pattern = re.compile(r"^(:?.+) function [^ ]+(:?.+)\n", re.DOTALL)
+            match = pattern.search(line)
+            method_name = match.group(1) if match else None
+
+        # If violated property is printed, don't get error line, it's not supported.
+        if "Violated property:" not in line:
+            pattern = re.compile(r"State (?:.+)\n[-]+\n?(.*)?", re.DOTALL)
+            match = pattern.search(line)
+            error_line = match.group(1) if match else None
+
+        return (
+            state_number,
+            filename,
+            line_number,
+            method_name,
+            thread_index,
+            error_line,
+        )
 
     @override
     def get_trace(self, verifier_output: str) -> list[ProgramTrace]:
@@ -330,10 +336,9 @@ class ESBMC(BaseSourceVerifier):
                 ce_idx = verifier_output.index("State ", ce_idx)
                 # Get the end of line, which is 3 lines after.
                 ce_idx_end = ce_idx
-                ce_idx_end = verifier_output.index("\n", ce_idx_end)
-                ce_idx_end = verifier_output.index("\n", ce_idx_end)
                 ce_idx_end = verifier_output.index("\n", ce_idx_end) + 1
-
+                ce_idx_end = verifier_output.index("\n", ce_idx_end) + 1
+                ce_idx_end = verifier_output.index("\n", ce_idx_end) + 1
                 # Get the information from the state line.
                 trace_results = ESBMC._parse_trace_line(
                     verifier_output[ce_idx:ce_idx_end]
@@ -349,6 +354,8 @@ class ESBMC(BaseSourceVerifier):
                             name=method_name if method_name else "",
                         )
                     )
+
+                ce_idx = ce_idx_end + 1
             except ValueError as e:
                 # Gets a value error from the str index method. This is an indicator
                 # that we don't have any more traces to parse.
