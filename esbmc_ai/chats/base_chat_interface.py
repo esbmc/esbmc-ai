@@ -51,10 +51,10 @@ class BaseChatInterface:
     ) -> dict[str, Any]:
         """Gets the canonical template keys for applying in template values."""
         return {
-            source_code: source_code,
-            esbmc_output: esbmc_output,
-            error_line: error_line,
-            error_type: error_type,
+            "source_code": source_code,
+            "esbmc_output": esbmc_output,
+            "error_line": error_line,
+            "error_type": error_type,
         }
 
     def apply_template_value(self, **kwargs: str) -> None:

@@ -220,7 +220,7 @@ class SolutionGenerator(BaseChatInterface):
 
         # Apply template substitution to message stack
         self.apply_template_value(
-            *self.get_canonical_template_keys(
+            **self.get_canonical_template_keys(
                 source_code=self.source_code_formatted,
                 esbmc_output=self.esbmc_output,
                 error_line=str(self.verifier.get_error_line(self.esbmc_output)),

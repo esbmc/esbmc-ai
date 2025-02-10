@@ -137,7 +137,7 @@ class Solution:
 
     def __init__(
         self,
-        files: list[Path],
+        files: list[Path] | None = None,
         base_dir: Path = Path(getcwd()),
     ) -> None:
         """Creates a new solution with a base directory."""
@@ -145,11 +145,12 @@ class Solution:
 
         self._files: list[SourceFile] = []
 
-        for file_path in files:
-            # Get the relative path to the base dir.
-            rel_path: Path = file_path.relative_to(self.base_dir)
-            with open(file_path, "r") as file:
-                self._files.append(SourceFile(rel_path, self.base_dir, file.read()))
+        if files:
+            for file_path in files:
+                # Get the relative path to the base dir.
+                rel_path: Path = file_path.relative_to(self.base_dir)
+                with open(file_path, "r") as file:
+                    self._files.append(SourceFile(rel_path, self.base_dir, file.read()))
 
     @property
     def files(self) -> list[SourceFile]:

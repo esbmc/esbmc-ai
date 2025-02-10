@@ -80,13 +80,11 @@ class Config(BaseConfig):
             cls.instance = super(Config, cls).__new__(cls)
         return cls.instance
 
-    def __init__(self) -> None:
-        super().__init__()
-        self._args: argparse.Namespace
-        self.api_keys: dict[str, str] = {}
-        self.raw_conversation: bool = False
-        self.generate_patches: bool
-        self.output_dir: Optional[Path] = None
+    _args: argparse.Namespace
+    api_keys: dict[str, str] = {}
+    raw_conversation: bool = False
+    generate_patches: bool
+    output_dir: Path | None = None
 
     # Define some shortcuts for the values here (instead of having to use get_value)
 
@@ -184,12 +182,8 @@ class Config(BaseConfig):
                 validate=lambda v: isinstance(v, str) and v in ["full", "single"],
                 error_message="source_code_format can only be 'full' or 'single'",
             ),
-            # API Keys is a pseudo-entry, the value is fetched from the class
-            # itself rather config.
-            ConfigField(
-                name="api_keys",
-                default_value=self.api_keys,
-            ),
+            # This is the parameters that the user passes as args which are the
+            # file names of the source code to target. It can also be a directory.
             ConfigField(
                 name="solution.filenames",
                 default_value=[],
@@ -252,10 +246,6 @@ class Config(BaseConfig):
                 name="verifier.esbmc.timeout",
                 default_value=60,
                 validate=lambda v: isinstance(v, int),
-            ),
-            ConfigField(
-                name="tester",
-                default_value="simple",
             ),
             ConfigField(
                 name="llm_requests.max_tries",
@@ -334,6 +324,37 @@ class Config(BaseConfig):
         # Base init needs to be called last (only before load args)
         super().base_init(self.cfg_path, fields)
         self._load_args()
+
+        # Config Pseudo-Entries - In the future have different type of config field
+        # that won't be read from the config file.
+        self.add_config_field(
+            ConfigField(
+                name="generate_patches",
+                default_value=self.generate_patches,
+                default_value_none=True,
+            )
+        )
+        self.add_config_field(
+            ConfigField(
+                name="fix_code.raw_conversation",
+                default_value=self.raw_conversation,
+                default_value_none=True,
+            )
+        )
+        self.add_config_field(
+            ConfigField(
+                name="solution.output_dir",
+                default_value=self.output_dir,
+                default_value_none=True,
+            )
+        )
+        self.add_config_field(
+            ConfigField(
+                name="api_keys",
+                default_value=self.api_keys,
+                default_value_none=True,
+            )
+        )
 
     def _load_envs(self) -> None:
         """Environment variables are loaded in the following order:
@@ -506,7 +527,6 @@ class Config(BaseConfig):
 
         for file in file_names:
             results.append(Path(file).absolute())
-
         return results
 
     @staticmethod

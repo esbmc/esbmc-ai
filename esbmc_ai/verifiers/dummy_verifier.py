@@ -31,13 +31,14 @@ class DummyVerifier(BaseSourceVerifier):
         self, responses: Optional[list[str]] = None, load_config: bool = False
     ) -> None:
         """Creates a new dummy verifier."""
-        super().__init__(verifier_name="dummy_verifier")
+        super().__init__(verifier_name="dummy_verifier", authors="")
         self._responses: Optional[list[str]] = responses
         self._current_response: int = 0
         self._load_config = load_config
 
     @property
     def responses(self) -> list[str]:
+        """The list of responses to give for each call to verify_source."""
         if self._load_config:
             return (
                 self._responses
@@ -52,10 +53,12 @@ class DummyVerifier(BaseSourceVerifier):
         self._responses = value
 
     def set_response_counter(self, value: Optional[int] = None) -> None:
+        """Sets the index of the response to use."""
         self._current_response = value if value else 0
-        assert (
-            0 <= self._current_response < len(self.responses)
-        ), f"Responses index set out of range: 0 <= {self._current_response} < {len(self.responses)}"
+        assert 0 <= self._current_response < len(self.responses), (
+            "Responses index set out of range: 0 <= "
+            f"{self._current_response} < {len(self.responses)}"
+        )
 
     @override
     def get_config_fields(self) -> list[ConfigField]:

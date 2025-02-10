@@ -46,7 +46,7 @@ class UserChat(BaseChatInterface):
         error_type: Optional[str] = verifier.get_error_type(self.esbmc_output)
 
         self.apply_template_value(
-            *self.get_canonical_template_keys(
+            **self.get_canonical_template_keys(
                 source_code=self.solution.files[0].content,
                 esbmc_output=self.esbmc_output,
                 error_line=str(verifier.get_error_line(self.esbmc_output)),
