@@ -1,5 +1,6 @@
 # Author: Yiannis Charalambous
 
+from pathlib import Path
 from langchain_core.language_models import FakeListChatModel
 import pytest
 
@@ -8,6 +9,7 @@ from langchain.schema import AIMessage, HumanMessage, SystemMessage
 from esbmc_ai.ai_models import AIModel
 from esbmc_ai.chat_response import ChatResponse, FinishReason
 from esbmc_ai.chats.user_chat import UserChat
+from esbmc_ai.solution import Solution, SourceFile
 from esbmc_ai.verifiers.dummy_verifier import DummyVerifier
 from esbmc_ai.verifiers.esbmc import ESBMC
 
@@ -23,13 +25,16 @@ def setup():
 
     verifier = DummyVerifier([], load_config=False)
 
+    solution = Solution()
+    solution.add_source_file(SourceFile(Path(""), Path(""), "This is source code"))
+
     summary_text = "THIS IS A SUMMARY OF THE CONVERSATION"
     chat: UserChat = UserChat(
         system_messages=system_messages,
         ai_model=AIModel(name="test", tokens=12),
         llm=FakeListChatModel(responses=[summary_text]),
+        solution=solution,
         verifier=verifier,
-        source_code="This is source code",
         esbmc_output="This is esbmc output",
         set_solution_messages=[
             SystemMessage(content="Corrected output"),
@@ -82,13 +87,18 @@ def test_substitution() -> None:
     ) as file:
         esbmc_output: str = file.read()
 
+    solution = Solution()
+    solution.add_source_file(SourceFile(Path(""), Path(""), "11111"))
+
+    # This test is designed to work with ESBMC as it uses ESBMC output as a test
+    # sample. So get error line and type work using ESBMC.
     chat = UserChat(
-        source_code="11111",
-        esbmc_output=esbmc_output,
+        solution=solution,
         ai_model=AIModel("test", 1000),
         system_messages=[
             SystemMessage(content="{source_code}{esbmc_output}{error_line}{error_type}")
         ],
+        esbmc_output=esbmc_output,
         verifier=ESBMC(),
         llm=FakeListChatModel(responses=["THIS IS A SUMMARY OF THE CONVERSATION"]),
         set_solution_messages=[HumanMessage(content="")],
