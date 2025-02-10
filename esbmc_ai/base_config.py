@@ -20,23 +20,31 @@ default_scenario: str = "base"
 class BaseConfig(ABC):
     """Config loader for ESBMC-AI"""
 
+    def __init__(self) -> None:
+        super().__init__()
+        self._fields: List[ConfigField]
+        self._values: Dict[str, Any]
+        self.cfg_path: Path
+        self.original_config_file: dict[str, Any]
+        self.config_file: dict[str, Any]
+
     def base_init(self, cfg_path: Path, fields: list[ConfigField]) -> None:
         """Initializes the base config structures. Loads the config file and fields."""
-        self._fields: List[ConfigField] = fields
-        self._values: Dict[str, Any] = {}
+        self._fields = fields
+        self._values = {}
 
-        self.cfg_path: Path = cfg_path
+        self.cfg_path = cfg_path
 
-        if not self.cfg_path.exists() and self.cfg_path.is_file():
+        if not (self.cfg_path.exists() and self.cfg_path.is_file()):
             print(f"Error: Config not found: {self.cfg_path}")
             sys.exit(1)
 
         with open(self.cfg_path, "r") as file:
-            self.original_config_file: dict[str, Any] = toml.loads(file.read())
+            self.original_config_file = toml.loads(file.read())
 
         # Flatten dict as the _fields are defined in a flattened format for
         # convenience.
-        self.config_file: dict[str, Any] = self.flatten_dict(self.original_config_file)
+        self.config_file = self.flatten_dict(self.original_config_file)
 
         # Load all the config file field entries
         for field in self._fields:

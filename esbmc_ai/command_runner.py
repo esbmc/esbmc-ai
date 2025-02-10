@@ -13,10 +13,11 @@ class CommandRunner:
             cls.instance = super(CommandRunner, cls).__new__(cls)
         return cls.instance
 
+    _builtin_commands: dict[str, ChatCommand]
+
     def init(self, builtin_commands: list[ChatCommand]) -> "CommandRunner":
-        self._builtin_commands: dict[str, ChatCommand] = {
-            cmd.command_name: cmd for cmd in builtin_commands
-        }
+        """Initializes the singleton."""
+        self._builtin_commands = {cmd.command_name: cmd for cmd in builtin_commands}
         self._addon_commands: dict[str, ChatCommand] = {}
 
         # Set the help command commands
