@@ -12,7 +12,7 @@ authors = [
 description = "LLM driven development and automatic repair kit."
 readme = "README.md"
 license-files = { paths = ["LICENSE"] }
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: GNU Affero General Public License v3",
@@ -41,6 +41,7 @@ dependencies = [
   "langchain-community",
   "langchain-ollama",
   "lizard",
+  "platformdirs",
 ]
 
 #[project.optional-dependencies]

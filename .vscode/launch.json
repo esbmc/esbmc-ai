@@ -5,13 +5,14 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Launch ESBMC-AI on Open File",
+      "name": "UserChat on Open File",
       "type": "debugpy",
       "request": "launch",
       "module": "esbmc_ai",
       "justMyCode": true,
       "cwd": "${workspaceFolder}",
       "args": [
+        "userchat",
         "${file}"
       ]
     },
@@ -23,7 +24,6 @@
       "justMyCode": true,
       "cwd": "${workspaceFolder}",
       "args": [
-        "-c",
         "fix-code",
         "-v",
         "-r",
