@@ -51,6 +51,11 @@ class AddonLoader(BaseConfig):
 
         self._config = config
 
+        # Ensure the current directory is in sys.path in order for relative
+        # addon modules to be imported (used for dev purposes).
+        if self._config.get_value("dev_mode") and "" not in sys.path:
+            sys.path.insert(0, "")
+
         # Register field with Config to know which modules to load. This will
         # load them automatically.
         config.add_config_field(

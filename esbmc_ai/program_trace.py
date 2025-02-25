@@ -13,9 +13,10 @@ class ProgramTrace:
 
     trace_type: Literal["function", "statement", "file"]
     """The scope of this trace."""
+    trace_index: int
+    """The index position of this trace point in the trace stack."""
     source_file: SourceFile
-    """The filename of this trace. The SourceFile can then be extracted from the
-    solution."""
+    """The source file of this trace."""
     name: str
     """The name of the symbol, if applicable."""
     line_idx: int

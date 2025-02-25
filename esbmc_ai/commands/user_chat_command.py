@@ -49,7 +49,7 @@ class UserChatCommand(ChatCommand):
             verifier_result: VerifierOutput = (
                 self.verifier_runner.verifier.verify_source(
                     solution=self.solution,
-                    esbmc_params=Config().get_value("verifier.esbmc.params"),
+                    params=Config().get_value("verifier.esbmc.params"),
                     timeout=Config().get_value("verifier.esbmc.timeout"),
                 )
             )
@@ -121,6 +121,9 @@ class UserChatCommand(ChatCommand):
         print("Reading source code...")
         file_paths: list[Path] = self.get_config_value("solution.filenames")
         self.solution = Solution(file_paths)
+        if len(self.solution.files) == 0:
+            print("Error: No files specified.")
+            sys.exit(1)
 
         print(f"Running ESBMC with {Config().get_value('verifier.esbmc.params')}\n")
         esbmc_output: str = self._run_esbmc()

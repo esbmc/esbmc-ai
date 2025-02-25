@@ -89,7 +89,8 @@ class BaseSourceVerifier(BaseComponent):
         _ = verifier_output
         return default_scenario
 
-    def get_trace(self, verifier_output: str) -> list[ProgramTrace]:
+    def get_trace(self, solution: Solution, verifier_output: str) -> list[ProgramTrace]:
         """Returns the trace given a counterexample."""
+        _ = solution
         _ = verifier_output
         raise NotImplementedError()
