@@ -17,7 +17,7 @@ from langchain.schema import (
 )
 
 
-class AIModel(object):
+class AIModel:
     """This base class represents an abstract AI model."""
 
     name: str
@@ -30,6 +30,9 @@ class AIModel(object):
     ) -> None:
         self.name = name
         self.tokens = tokens
+        self._llm_for_tokens: BaseChatModel
+        """Workaround for using get_num_tokens without needing to provide API keys.
+        We use the LLM from create_llm."""
 
     @abstractmethod
     def create_llm(
@@ -41,6 +44,13 @@ class AIModel(object):
     ) -> BaseChatModel:
         """Initializes a large language model model with the provided parameters."""
         raise NotImplementedError()
+
+    def get_num_tokens(self, content: str) -> int:
+        """Gets the number of tokens for this AI model."""
+        assert (
+            self._llm_for_tokens
+        ), "LLM for tokens is not initialized. Make sure to create an LLM first using create_llm."
+        return self._llm_for_tokens.get_num_tokens(content)
 
     @classmethod
     def convert_messages_to_tuples(
@@ -134,6 +144,8 @@ class AIModel(object):
 
 
 class AIModelOpenAI(AIModel):
+    """OpenAI model."""
+
     context_length_exceeded_error: str = "context_length_exceeded"
     """Error code for when the length has been reached."""
 
@@ -146,7 +158,7 @@ class AIModelOpenAI(AIModel):
         requests_timeout: float = 60,
     ) -> BaseChatModel:
         assert "openai" in api_keys, "No OpenAI api key has been specified..."
-        return ChatOpenAI(
+        self._llm_for_tokens = ChatOpenAI(
             model=self.name,
             api_key=SecretStr(api_keys["openai"]),
             max_tokens=None,
@@ -155,6 +167,7 @@ class AIModelOpenAI(AIModel):
             timeout=requests_timeout,
             model_kwargs={},
         )
+        return self._llm_for_tokens
 
     @classmethod
     def get_openai_model_max_tokens(cls, name: str) -> int:
@@ -189,6 +202,8 @@ class AIModelOpenAI(AIModel):
 
 
 class OllamaAIModel(AIModel):
+    """A model that is running on the Ollama service."""
+
     def __init__(self, name: str, tokens: int, url: str) -> None:
         super().__init__(name, tokens)
         self.url: str = url
@@ -204,7 +219,7 @@ class OllamaAIModel(AIModel):
         # Ollama does not use API keys
         _ = api_keys
         _ = requests_max_tries
-        return ChatOllama(
+        self._llm_for_tokens = ChatOllama(
             base_url=self.url,
             model=self.name,
             temperature=temperature,
@@ -212,6 +227,7 @@ class OllamaAIModel(AIModel):
                 "timeout": requests_timeout,
             },
         )
+        return self._llm_for_tokens
 
 
 class _AIModels(Enum):

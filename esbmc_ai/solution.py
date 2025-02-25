@@ -10,6 +10,7 @@ from subprocess import PIPE, STDOUT, run, CompletedProcess
 from tempfile import NamedTemporaryFile, TemporaryDirectory
 import lizard
 
+from esbmc_ai.ai_models import AIModel
 from esbmc_ai.verifier_output import VerifierOutput
 
 
@@ -41,6 +42,7 @@ class SourceFile:
 
     @staticmethod
     def load(file_path: Path, base_path: Path) -> "SourceFile":
+        """Creates a new source file by loading the content from disk."""
         with open(base_path / file_path, "r") as file:
             return SourceFile(file_path, base_path, file.read())
 
@@ -59,6 +61,21 @@ class SourceFile:
     def file_extension(self) -> str:
         """Returns the file extension to the file."""
         return self.file_path.suffix
+
+    def get_num_tokens(
+        self,
+        ai_model: AIModel,
+        lower_idx: int | None = None,
+        upper_idx: int | None = None,
+    ) -> int:
+        """Gets the context size this source code."""
+        if not lower_idx:
+            lower_idx = 0
+        if not upper_idx:
+            upper_idx = len(self.content)
+
+        assert lower_idx < upper_idx
+        return ai_model.get_num_tokens(self.content[lower_idx:upper_idx])
 
     def get_patch(self, source_file_2: "SourceFile") -> str:
         """Return diff between two SourceFiles."""
@@ -127,8 +144,11 @@ class Solution:
     ESBMC-AI will be involved in analyzing."""
 
     @staticmethod
-    def from_dir(path: Path) -> "Solution":
-        """Creates a solution from a directory."""
+    def from_dir(path: Path, file_paths: list[Path] | None = None) -> "Solution":
+        """Creates a solution from a base directory. Can override with files manually."""
+        if file_paths:
+            return Solution(file_paths, path)
+
         result: list[Path] = []
         for dir_path, _, files in walk(path):
             result.extend(Path(dir_path) / file for file in files)
