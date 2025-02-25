@@ -92,7 +92,6 @@ class ESBMC(BaseSourceVerifier):
         self,
         solution: Solution,
         params: Optional[list[str]] = None,
-        auto_clean: bool = False,
         entry_function: str = "main",
         timeout: Optional[int] = None,
         **kwargs: Any,
@@ -114,20 +113,13 @@ class ESBMC(BaseSourceVerifier):
             )
             sys.exit(1)
 
-        tempsol: Solution = solution.save_temp()
-
         # Call ESBMC to temporary folder.
         results = self._esbmc(
-            solution=tempsol,
+            solution=solution,
             esbmc_params=esbmc_params,
             entry_function=entry_function,
             timeout=timeout,
         )
-
-        # Delete temp files and path
-        if auto_clean:
-            # Remove file
-            os.remove(tempsol.base_dir)
 
         # Return
         return_code, output = results
@@ -235,11 +227,12 @@ class ESBMC(BaseSourceVerifier):
         # Add slack time to process to allow verifier to timeout and end gracefully.
         process_timeout: Optional[float] = timeout + 10 if timeout else None
 
-        # Run ESBMC and get output
+        # Run ESBMC from solution base_dir and get output
         process: CompletedProcess = run(
             esbmc_cmd,
             stdout=PIPE,
             stderr=STDOUT,
+            cwd=solution.base_dir,
             timeout=process_timeout,
             check=False,
         )
@@ -318,8 +311,8 @@ class ESBMC(BaseSourceVerifier):
         )
 
     @override
-    def get_trace(self, verifier_output: str) -> list[ProgramTrace]:
-        # Get [Counterexample] idx
+    def get_trace(self, solution: Solution, verifier_output: str) -> list[ProgramTrace]:
+        # Get [Counterexample] string idx
         ce_idx: int = verifier_output.index("[Counterexample]") + len(
             "[Counterexample]"
         )
@@ -329,6 +322,7 @@ class ESBMC(BaseSourceVerifier):
         file_name: str
         line_number: int
         method_name: Optional[str]
+        trace_idx: int = 0
 
         # Get the traces
         while True:
@@ -349,13 +343,15 @@ class ESBMC(BaseSourceVerifier):
                     traces.append(
                         ProgramTrace(
                             trace_type="statement",
-                            file_name=file_name,
+                            trace_index=trace_idx,
+                            source_file=solution.files_mapped[file_name],
                             line_idx=line_number,
                             name=method_name if method_name else "",
                         )
                     )
 
                 ce_idx = ce_idx_end + 1
+                trace_idx += 1
             except ValueError as e:
                 # Gets a value error from the str index method. This is an indicator
                 # that we don't have any more traces to parse.
