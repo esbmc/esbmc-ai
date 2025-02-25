@@ -130,6 +130,12 @@ class Config(BaseConfig):
         self._load_envs()
 
         fields: list[ConfigField] = [
+            # Adds to the python system path the current directory so addons can
+            # be developed.
+            ConfigField(
+                name="dev_mode",
+                default_value=False,
+            ),
             ConfigField(
                 name="ai_custom",
                 default_value=[],

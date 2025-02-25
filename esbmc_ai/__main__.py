@@ -57,6 +57,9 @@ def check_health() -> None:
         print(f"Error: ESBMC could not be found in {esbmc_path}")
         sys.exit(3)
 
+    if Config().get_value("dev_mode"):
+        print("Development Mode Activated")
+
 
 def _run_command_mode(command: ChatCommand, args: argparse.Namespace) -> None:
     match command.command_name:
