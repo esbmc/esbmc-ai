@@ -1,18 +1,21 @@
 # Author: Yiannis Charalambous
 
 from abc import abstractmethod
-from typing import Any, Iterable, Union
+from typing import Any, Iterable
 from enum import Enum
-from langchain_core.language_models import BaseChatModel
 from pydantic.types import SecretStr
 from typing_extensions import override
+import tiktoken
 
+from langchain_core.language_models import BaseChatModel
+from langchain_core.messages import get_buffer_string
 from langchain_openai import ChatOpenAI
 from langchain_ollama import ChatOllama
 
 from langchain.prompts.chat import ChatPromptTemplate
 from langchain.schema import (
     BaseMessage,
+    HumanMessage,
     PromptValue,
 )
 
@@ -30,7 +33,7 @@ class AIModel:
     ) -> None:
         self.name = name
         self.tokens = tokens
-        self._llm_for_tokens: BaseChatModel
+        self._llm_for_tokens: BaseChatModel | None = None
         """Workaround for using get_num_tokens without needing to provide API keys.
         We use the LLM from create_llm."""
 
@@ -51,6 +54,13 @@ class AIModel:
             self._llm_for_tokens
         ), "LLM for tokens is not initialized. Make sure to create an LLM first using create_llm."
         return self._llm_for_tokens.get_num_tokens(content)
+
+    def get_num_tokens_from_messages(self, messages: list[BaseMessage]) -> int:
+        """Gets the number of tokens for this AI model for a list of messages."""
+        assert (
+            self._llm_for_tokens
+        ), "LLM for tokens is not initialized. Make sure to create an LLM first using create_llm."
+        return self._llm_for_tokens.get_num_tokens_from_messages(messages)
 
     @classmethod
     def convert_messages_to_tuples(
@@ -142,12 +152,36 @@ class AIModel:
             **format_values,
         )
 
+    def apply_str_template(
+        self,
+        text: str,
+        **format_values: Any,
+    ) -> str:
+        """Applies the formatted values onto a string template. For example,
+        if the message contains the token {source}, then format_values contains a
+        value for {source} then it will be substituted."""
+
+        prompt: HumanMessage = HumanMessage(content=text)
+        result: str = str(
+            self.apply_chat_template(messages=[prompt], **format_values)
+            .to_messages()[0]
+            .content
+        )
+
+        return result
+
 
 class AIModelOpenAI(AIModel):
     """OpenAI model."""
 
     context_length_exceeded_error: str = "context_length_exceeded"
     """Error code for when the length has been reached."""
+
+    @property
+    def _reason_model(self) -> bool:
+        if "o3-mini" in self.name:
+            return True
+        return False
 
     @override
     def create_llm(
@@ -161,13 +195,23 @@ class AIModelOpenAI(AIModel):
         self._llm_for_tokens = ChatOpenAI(
             model=self.name,
             api_key=SecretStr(api_keys["openai"]),
-            max_tokens=None,
-            temperature=temperature,
+            temperature=None if self._reason_model else temperature,
+            reasoning_effort="high" if self._reason_model else None,
             max_retries=requests_max_tries,
             timeout=requests_timeout,
             model_kwargs={},
         )
         return self._llm_for_tokens
+
+    @override
+    def get_num_tokens(self, content: str) -> int:
+        encoding: tiktoken.Encoding = tiktoken.encoding_for_model(self.name)
+        return len(encoding.encode(content))
+
+    @override
+    def get_num_tokens_from_messages(self, messages: list[BaseMessage]) -> int:
+        encoding: tiktoken.Encoding = tiktoken.encoding_for_model(self.name)
+        return sum(len(encoding.encode(get_buffer_string([m]))) for m in messages)
 
     @classmethod
     def get_openai_model_max_tokens(cls, name: str) -> int:
@@ -177,9 +221,11 @@ class AIModelOpenAI(AIModel):
         tokens = {
             "o1-mini": 128000,
             "o1": 200000,
+            "o3-mini": 200000,
             "gpt-4o": 128000,
             "chatgpt-4o": 128000,
             "gpt-4": 8192,
+            "gpt-4.5": 128000,
             "gpt-3.5-turbo": 16385,
             "gpt-3.5-turbo-instruct": 4096,
         }
@@ -261,7 +307,7 @@ def add_custom_ai_model(ai_model: AIModel) -> None:
     """Registers a custom AI model."""
     # Check if AI already already exists.
     if ai_model.name in _ai_model_names:
-        raise Exception(f'AI Model "{ai_model.name}" already exists...')
+        raise KeyError(f'AI Model "{ai_model.name}" already exists...')
     _ai_model_names.add(ai_model.name)
     _custom_ai_models.append(ai_model)
 
@@ -271,7 +317,6 @@ def download_openai_model_names(api_keys: dict[str, str]) -> list[str]:
     assert "openai" in api_keys
     from openai import Client
 
-    "llm_requests.open_ai.model_refresh_seconds"
     # Check if needs refreshing
     try:
         return [
@@ -282,7 +327,7 @@ def download_openai_model_names(api_keys: dict[str, str]) -> list[str]:
         return []
 
 
-def is_valid_ai_model(ai_model: Union[str, AIModel]) -> bool:
+def is_valid_ai_model(ai_model: str | AIModel) -> bool:
     """Accepts both the AIModel object and the name as parameter. It checks the
     openai servers to see if a model is defined on their servers, if not, then
     it checks the internally defined AI models list."""
