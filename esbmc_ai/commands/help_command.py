@@ -2,8 +2,9 @@
 
 """Contains the help command."""
 
-from typing import Any, Optional
+from typing import Any
 from typing_extensions import override
+
 from .chat_command import ChatCommand
 
 
@@ -20,7 +21,7 @@ class HelpCommand(ChatCommand):
         )
 
     @override
-    def execute(self, **_: Optional[Any]) -> Optional[Any]:
+    def execute(self, **_: Any) -> Any:
         print("Commands:")
 
         for command in self.commands:
