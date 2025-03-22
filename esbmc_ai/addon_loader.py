@@ -65,6 +65,8 @@ class AddonLoader(BaseConfig):
                 validate=self._validate_addon_modules,
                 on_load=self._init_addon_modules,
                 error_message="addon_modules must be a list of Python modules to load",
+                help_message="The addon modules to load during startup. Additional "
+                "modules may be loaded by the specified modules as dependencies.",
             ),
         )
 
@@ -96,6 +98,7 @@ class AddonLoader(BaseConfig):
                 validate=lambda v: isinstance(v, str)
                 and v in self.verifier_addon_names + builtin_verifier_names,
                 error_message="Invalid verifier name specified.",
+                help_message="The verifier to use. Default is ESBMC.",
             )
         )
 
@@ -118,12 +121,17 @@ class AddonLoader(BaseConfig):
 
         # Init config fields
         for field in self._get_addons_fields(list(self.chat_command_addons.values())):
-            self.add_config_field(field)
+            try:
+                self.add_config_field(field)
+            except Exception:
+                print(f"AddonLoader: Failed to register config field: {field.name}")
+                raise
 
         if len(self.chat_command_addons) > 0:
-            printv("ChatCommand Addons:")
-            for cm in self.chat_command_addon_names:
-                printv(f"\t* {cm}")
+            printv(
+                "ChatCommand Addons:\n"
+                + "\n".join(f"\t* {cm}" for cm in self.chat_command_addon_names),
+            )
 
     def _load_verifier_addons(self) -> None:
         """Loads the verifier addons, initializes their config fields."""
@@ -138,8 +146,8 @@ class AddonLoader(BaseConfig):
 
         if len(self.verifier_addons) > 0:
             printv(
-                "Verifier Addons:\n\t* "
-                + "\t * ".join(list(self.verifier_addons.keys()))
+                "Verifier Addons:\n"
+                + "".join(f"\t* {k}" for k in self.verifier_addons.keys())
             )
 
     def _validate_addon_modules(self, mods: list[str]) -> bool:
