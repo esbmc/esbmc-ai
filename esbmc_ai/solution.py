@@ -11,6 +11,7 @@ from tempfile import NamedTemporaryFile, TemporaryDirectory
 import lizard
 
 from esbmc_ai.ai_models import AIModel
+from esbmc_ai.logging import print_horizontal_line
 from esbmc_ai.verifier_output import VerifierOutput
 
 
@@ -89,7 +90,12 @@ class SourceFile:
             file_2.write(source_file_2.content)
             file_2.flush()
 
-            cmd = ["diff", file.name, file_2.name]
+            cmd = [
+                "diff",
+                "-u",  # Adds context around the diff text.
+                file.name,
+                file_2.name,
+            ]
             process: CompletedProcess = run(
                 cmd,
                 stdout=PIPE,
@@ -122,6 +128,17 @@ class SourceFile:
             file.write(self.content)
             return Path(file.name)
 
+    def verify_file_integrity(self) -> bool:
+        """Verifies that this file matches with the file on disk and does not
+        contain any differences."""
+        if not self.abs_path.exists() or not self.abs_path.is_file():
+            return False
+
+        with open(self.abs_path) as file:
+            content: str = str(file.read())
+
+        return content == self.content
+
     def calculate_cyclomatic_complexity_delta(
         self,
         source_2: "SourceFile",
@@ -144,7 +161,11 @@ class Solution:
     ESBMC-AI will be involved in analyzing."""
 
     @staticmethod
-    def from_dir(path: Path, file_paths: list[Path] | None = None) -> "Solution":
+    def from_dir(
+        path: Path,
+        file_paths: list[Path] | None = None,
+        include_dirs: list[Path] | None = None,
+    ) -> "Solution":
         """Creates a solution from a base directory. Can override with files manually."""
         if file_paths:
             return Solution(file_paths, path)
@@ -153,24 +174,38 @@ class Solution:
         for dir_path, _, files in walk(path):
             result.extend(Path(dir_path) / file for file in files)
 
-        return Solution(result, path)
+        return Solution(result, path, include_dirs=include_dirs)
 
     def __init__(
         self,
         files: list[Path] | None = None,
         base_dir: Path = Path(getcwd()),
+        include_dirs: list[Path] | None = None,
     ) -> None:
         """Creates a new solution with a base directory."""
         self.base_dir: Path = base_dir
-
         self._files: list[SourceFile] = []
 
+        self._include_dirs: dict[Path, list[SourceFile]] = {}
+        """Used by C based verifiers."""
+
+        # If files are loaded
         if files:
             for file_path in files:
-                # Get the relative path to the base dir.
-                rel_path: Path = file_path.relative_to(self.base_dir)
-                with open(file_path, "r") as file:
-                    self._files.append(SourceFile(rel_path, self.base_dir, file.read()))
+                assert file_path.is_file(), f"Path is not a file: {file_path}"
+                self.load_source_file(file_path.absolute())
+
+        if include_dirs:
+            for d in include_dirs:
+                assert d.is_dir(), f"Path is not a directory: {d}"
+                rel_path: Path = d.absolute().relative_to(self.base_dir)
+                # TODO for now do not init SourceFiles
+                self._include_dirs[Path(rel_path)] = []
+
+    @property
+    def include_dirs(self) -> dict[Path, list[SourceFile]]:
+        """Used by C based verifiers."""
+        return self._include_dirs
 
     @property
     def files(self) -> list[SourceFile]:
@@ -209,6 +244,14 @@ class Solution:
             source_file.save_file(new_path)
         return Solution(new_file_paths, Path(base_dir_path))
 
+    def verify_solution_integrity(self) -> bool:
+        """Verifies if the content of the solution match with the files on disk.
+        If that's not the case, then the solution should be saved on disk before
+        any operations such as using verifiers that require on-disk solution
+        access to work."""
+
+        return all(f.verify_file_integrity() for f in self._files)
+
     def add_source_file(self, source_file: SourceFile) -> None:
         """Adds a source file to the solution."""
         self._files.append(source_file)
@@ -232,6 +275,88 @@ class Solution:
     def load_source_file(self, file_path: Path) -> None:
         """Add a source file to the solution. If content is provided then it will
         not be loaded."""
-        assert file_path
+        # Get the relative path to the base dir.
+        rel_path: Path = file_path.relative_to(self.base_dir)
         with open(file_path, "r") as file:
-            self._files.append(SourceFile(file_path, self.base_dir, file.read()))
+            self._files.append(SourceFile(rel_path, self.base_dir, file.read()))
+
+    def get_diff(self, other: "Solution") -> str:
+        """Gets the diff with another solution. The following params are used: -ruN"""
+
+        if not self.verify_solution_integrity():
+            self.save_temp()
+
+        if not other.verify_solution_integrity():
+            other.save_temp()
+
+        cmd = [
+            "patch",
+            "-ruN",  # (r)ecursive, (u) additional context, (N) treat absent files as empty
+            self.base_dir,
+            other.base_dir,
+        ]
+
+        process: CompletedProcess = run(
+            cmd,
+            stdout=PIPE,
+            stderr=STDOUT,
+            check=False,
+        )
+
+        # Exit status is 0 if inputs are the same, 1 if different, 2 if trouble.
+        # https://askubuntu.com/questions/698784/exit-code-of-diff
+        if process.returncode == 2:
+            raise ValueError(
+                f"Diff for {self.base_dir} and {other.base_dir} failed (exit 2)."
+            )
+
+        return process.stdout.decode("utf-8")
+
+    def patch_solution(self, patch: str) -> None:
+        """Patches the solution using the patch command."""
+        assert (
+            self.verify_solution_integrity()
+        ), "Cannot patch, solution integrity invalid."
+
+        # Save as temp files
+        with NamedTemporaryFile(mode="w", delete=False) as patch_file:
+            patch_file.write(patch)
+            patch_file.flush()
+
+            cmd = [
+                "patch",
+                "-d",  # Change to base dir first
+                self.base_dir,
+                "-i",  # Flag to specify patch file
+                Path(patch_file.name).absolute(),
+            ]
+
+            process: CompletedProcess = run(
+                cmd,
+                stdout=PIPE,
+                stderr=STDOUT,
+                check=False,
+            )
+
+            # patch's exit status is 0 if all hunks are applied successfully,
+            # 1 if some  hunks  cannot  be applied  or there were merge
+            # conflicts, and 2 if there is more serious trouble.
+            match process.returncode:
+                case 1:
+                    print_horizontal_line(0)
+                    print(
+                        f"The patch:\n\n{patch}\n\nThe diff output:\n\n"
+                        + process.stdout.decode("utf-8")
+                    )
+                    raise ValueError(
+                        f"Patch failed for some files in solution {self.base_dir}"
+                    )
+                case 2:
+                    print_horizontal_line(0)
+                    print(
+                        f"The patch:\n\n{patch}\n\nThe diff output:\n\n"
+                        + process.stdout.decode("utf-8")
+                    )
+                    raise ValueError(
+                        f"Patch failed SERIOUSLY in solution {self.base_dir}"
+                    )
