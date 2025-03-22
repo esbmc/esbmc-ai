@@ -24,7 +24,7 @@ jobs:
         run: echo "HATCH_DEP_HASH=$(hatch dep hash)" >> $GITHUB_ENV
 
       - name: Cache Hatch environment
-        uses: actions/cache@v4.1.2
+        uses: actions/cache@v4.2.3
         with:
           path: |
             ~/.cache/hatch
