@@ -6,7 +6,6 @@ from typing import (
     Any,
     Callable,
     NamedTuple,
-    Optional,
 )
 
 
@@ -33,7 +32,7 @@ class ConfigField(NamedTuple):
     file.
     
     Is ignored if on_read is defined."""
-    on_read: Optional[Callable[[dict[str, Any]], Any]] = None
+    on_read: Callable[[dict[str, Any]], Any] | None = None
     """If defined, will be called and allows to custom load complex types that
     may not match 1-1 in the config. The config file passed as a parameter here
     is the original, unflattened version. The value returned should be the value
@@ -41,7 +40,8 @@ class ConfigField(NamedTuple):
     
     This is a more versatile version of on_load. So if this is used, the on_load
     will be ignored."""
-    error_message: Optional[str] = None
+    help_message: str | None = None
+    error_message: str | None = None
     """Optional string to provide a generic error message."""
-    get_error_message: Optional[Callable[[Any], str]] = None
+    get_error_message: Callable[[Any], str] | None = None
     """Optionsl function to get more verbose output than error_message."""
