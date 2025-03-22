@@ -23,10 +23,13 @@
       "module": "esbmc_ai",
       "justMyCode": true,
       "cwd": "${workspaceFolder}",
+      "env": {
+        "ESBMCAI_CONFIG_FILE": "${workspaceFolder}/config_dev.toml"
+      },
       "args": [
-        "fix-code",
         "-v",
         "-r",
+        "fix-code",
         "${file}"
       ]
     },
