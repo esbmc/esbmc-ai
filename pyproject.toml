@@ -42,6 +42,12 @@ dependencies = [
   "langchain-ollama",
   "lizard",
   "platformdirs",
+  "blessed",
+  "transformers",
+  "torch",
+  "langchain",
+  "langchain_community",
+  "tiktoken"
 ]
 
 #[project.optional-dependencies]
@@ -63,10 +69,6 @@ dependencies = [
   "py",
   "twine",
   "hatch",
-  "transformers",
-  "torch",
-  "langchain",
-  "langchain_community"
 ]
 
 [project.scripts]

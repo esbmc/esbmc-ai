@@ -20,23 +20,27 @@ from esbmc_ai.commands import (
     ChatCommand,
     FixCodeCommand,
     HelpCommand,
+    ConfigInfoCommand,
     ExitCommand,
 )
-from esbmc_ai.logging import printv, printvv
+from esbmc_ai.logging import printv, printvv, set_default_label
 from esbmc_ai.ai_models import _ai_model_names
 
 # Enables arrow key functionality for input(). Do not remove import.
 _ = readline
 
+# Init built-in commands
 help_command: HelpCommand = HelpCommand()
 fix_code_command: FixCodeCommand = FixCodeCommand()
 exit_command: ExitCommand = ExitCommand()
 user_chat_command: UserChatCommand = UserChatCommand()
+config_info_command: ConfigInfoCommand = ConfigInfoCommand()
 
 verifier_runner: VerifierRunner = VerifierRunner()
 command_runner: CommandRunner = CommandRunner().init(
     builtin_commands=[
         help_command,
+        config_info_command,
         exit_command,
         fix_code_command,
         user_chat_command,
@@ -47,7 +51,7 @@ HELP_MESSAGE: str = """Automated Program Repair platform. To view additional hel
 run with the subcommand "help"."""
 
 
-def check_health() -> None:
+def _check_health() -> None:
     printv("Performing health check...")
     # Check that ESBMC exists.
     esbmc_path: Path = Config().get_value("verifier.esbmc.path")
@@ -62,6 +66,7 @@ def check_health() -> None:
 
 
 def _run_command_mode(command: ChatCommand, args: argparse.Namespace) -> None:
+    set_default_label("ESBMC-AI")
     match command.command_name:
         case user_chat_command.command_name:
             user_chat_command.execute(
@@ -180,7 +185,7 @@ def main() -> None:
     printvv("Loading main config")
     Config().init(args)
     printv(f"Config File: {Config().cfg_path}")
-    check_health()
+    _check_health()
     # Load addons
     printvv("Loading addons")
     AddonLoader().init(Config(), verifier_runner.builtin_verifier_names)

@@ -130,11 +130,11 @@ class Config(BaseConfig):
         self._load_envs()
 
         fields: list[ConfigField] = [
-            # Adds to the python system path the current directory so addons can
-            # be developed.
             ConfigField(
                 name="dev_mode",
                 default_value=False,
+                help_message="Adds to the python system path the current "
+                "directory so addons can be developed.",
             ),
             ConfigField(
                 name="ai_custom",
@@ -149,6 +149,8 @@ class Config(BaseConfig):
                 default_value=self._load_openai_model_names(86400),
                 validate=lambda v: isinstance(v, int),
                 on_load=self._load_openai_model_names,
+                help_message="How often to refresh the models list provided by OpenAI. "
+                "Make sure not to spam them as they can IP block. Default is once a day.",
                 error_message="Invalid value, needs to be an int in seconds",
             ),
             # This needs to be processed after ai_custom
@@ -159,11 +161,13 @@ class Config(BaseConfig):
                 # available
                 validate=lambda v: isinstance(v, str) and is_valid_ai_model(v),
                 on_load=get_ai_model_by_name,
+                help_message="Which AI model to use.",
             ),
             ConfigField(
                 name="temp_auto_clean",
                 default_value=True,
                 validate=lambda v: isinstance(v, bool),
+                help_message="Should the temporary files created be cleared automatically?",
             ),
             ConfigField(
                 name="temp_file_dir",
@@ -171,22 +175,29 @@ class Config(BaseConfig):
                 validate=lambda v: isinstance(v, str) and Path(v).is_file(),
                 on_load=Path,
                 default_value_none=True,
+                help_message="Sets the directory to store temporary ESBMC-AI files. "
+                "Don't supply a value to use the system default.",
             ),
             ConfigField(
                 name="allow_successful",
                 default_value=False,
                 validate=lambda v: isinstance(v, bool),
+                help_message="Run the ESBMC-AI command even if the verifier has not "
+                "found any problems.",
             ),
             ConfigField(
                 name="loading_hints",
                 default_value=True,
                 validate=lambda v: isinstance(v, bool),
+                help_message="Show loading hints when running. Turn off if output "
+                "is going to be logged to a file.",
             ),
             ConfigField(
                 name="source_code_format",
                 default_value="full",
                 validate=lambda v: isinstance(v, str) and v in ["full", "single"],
                 error_message="source_code_format can only be 'full' or 'single'",
+                help_message="The source code format in the fix code prompt.",
             ),
             # This is the parameters that the user passes as args which are the
             # file names of the source code to target. It can also be a directory.
@@ -194,12 +205,29 @@ class Config(BaseConfig):
                 name="solution.filenames",
                 default_value=[],
                 validate=lambda v: isinstance(v, list)
-                # Validate config values
-                and all(isinstance(f, str) and Path(f).exists() for f in v)
+                # Validate config values are strings and also the paths exist
+                and (
+                    len(v) == 0
+                    or all(isinstance(f, str) and Path(f).exists() for f in v)
+                )
                 # Validate arg values
-                and all(Path(f).exists() for f in self._args.filenames),
+                and (
+                    len(self._args.filenames) == 0
+                    or all(Path(f).exists() for f in self._args.filenames)
+                ),
                 on_load=self._filenames_load,
                 get_error_message=self._filenames_error_msg,
+            ),
+            ConfigField(
+                name="solution.include_dirs",
+                default_value=[],
+                validate=lambda v: isinstance(v, list)
+                and all(
+                    isinstance(f, str) and Path(f).exists() and Path(f).is_dir()
+                    for f in v
+                ),
+                help_message="Include directories for C files.",
+                on_load=lambda v: [Path(path) for path in v],
             ),
             # If argument is passed, then the config value is ignored.
             ConfigField(
@@ -213,9 +241,17 @@ class Config(BaseConfig):
                     or isinstance(self._args.entry_function, str)
                 ),
                 on_load=lambda v: (
-                    self._args.entry_function if self._args.entry_function else v
+                    self._args.entry_function
+                    if self._args.entry_function != "main" or not v
+                    else v
                 ),
                 error_message="The entry function name needs to be a string",
+            ),
+            ConfigField(
+                name="verifier.enable_cache",
+                default_value=True,
+                help_message="Cache the results of verification in order to save time. "
+                "This is not supported by all verifiers.",
             ),
             ConfigField(
                 name="verifier.esbmc.path",
@@ -223,6 +259,7 @@ class Config(BaseConfig):
                 validate=lambda v: isinstance(v, str)
                 and Path(v).expanduser().is_file(),
                 on_load=lambda v: Path(v).expanduser(),
+                help_message="Path to the ESBMC binary.",
             ),
             ConfigField(
                 name="verifier.esbmc.params",
@@ -242,43 +279,52 @@ class Config(BaseConfig):
                     "2",
                 ],
                 validate=lambda v: isinstance(v, list),
+                help_message="Parameters for ESBMC.",
             ),
             ConfigField(
                 name="verifier.esbmc.output_type",
                 default_value="full",
                 validate=lambda v: v in ["full", "vp", "ce"],
+                help_message="The type of output from ESBMC in the fix code command.",
             ),
             ConfigField(
                 name="verifier.esbmc.timeout",
-                default_value=60,
-                validate=lambda v: isinstance(v, int),
+                default_value=None,
+                default_value_none=True,
+                validate=lambda v: v is None or isinstance(v, int),
+                help_message="The timeout set for ESBMC.",
             ),
             ConfigField(
                 name="llm_requests.max_tries",
                 default_value=5,
                 validate=lambda v: isinstance(v, int),
+                help_message="How many times to query the AI service before giving up.",
             ),
             ConfigField(
                 name="llm_requests.timeout",
                 default_value=60,
                 validate=lambda v: isinstance(v, int),
+                help_message="The timeout for querying the AI service.",
             ),
             ConfigField(
                 name="user_chat.temperature",
                 default_value=1.0,
                 validate=lambda v: isinstance(v, float) and 0 <= v <= 2.0,
                 error_message="Temperature needs to be a value between 0 and 2.0",
+                help_message="The temperature of the LLM for the user chat command.",
             ),
             ConfigField(
                 name="fix_code.temperature",
                 default_value=1.0,
                 validate=lambda v: isinstance(v, float) and 0 <= v <= 2,
                 error_message="Temperature needs to be a value between 0 and 2.0",
+                help_message="The temperature of the LLM for the fix code command.",
             ),
             ConfigField(
                 name="fix_code.max_attempts",
                 default_value=5,
                 validate=lambda v: isinstance(v, int),
+                help_message="Fix code command max attempts.",
             ),
             ConfigField(
                 name="fix_code.message_history",
@@ -286,24 +332,29 @@ class Config(BaseConfig):
                 validate=lambda v: v in ["normal", "latest_only", "reverse"],
                 error_message='fix_code.message_history can only be "normal", '
                 + '"latest_only", "reverse"',
+                help_message="The type of history to be shown in the fix code command.",
             ),
             ConfigField(
                 name="prompt_templates.user_chat.initial",
                 default_value=None,
                 validate=lambda v: isinstance(v, str),
                 on_load=lambda v: HumanMessage(content=v),
+                help_message="The initial prompt for the user chat command.",
             ),
             ConfigField(
                 name="prompt_templates.user_chat.system",
                 default_value=None,
                 validate=_validate_prompt_template_conversation,
                 on_load=list_to_base_messages,
+                help_message="The system prompt for the user chat command.",
             ),
             ConfigField(
                 name="prompt_templates.user_chat.set_solution",
                 default_value=None,
                 validate=_validate_prompt_template_conversation,
                 on_load=list_to_base_messages,
+                help_message="The prompt for the user chat command when a solution "
+                "is found by the fix code command.",
             ),
             # Here we have a list of prompt templates that are for each scenario.
             # The base scenario prompt template is required.
@@ -324,6 +375,8 @@ class Config(BaseConfig):
                         "fix_code"
                     ].items()
                 },
+                help_message="Scenario prompt templates for differnet types of bugs "
+                "for the fix code command.",
             ),
         ]
 
@@ -338,6 +391,8 @@ class Config(BaseConfig):
                 name="generate_patches",
                 default_value=self.generate_patches,
                 default_value_none=True,
+                help_message="Should the repaired result be returned as a patch "
+                "instead of a new file.",
             )
         )
         self.add_config_field(
@@ -345,6 +400,7 @@ class Config(BaseConfig):
                 name="fix_code.raw_conversation",
                 default_value=self.raw_conversation,
                 default_value_none=True,
+                help_message="Print the raw conversation at different parts of execution.",
             )
         )
         self.add_config_field(
@@ -352,6 +408,8 @@ class Config(BaseConfig):
                 name="solution.output_dir",
                 default_value=self.output_dir,
                 default_value_none=True,
+                help_message="Set the output directory to save successfully repaired "
+                "files in. Leave empty to not use.",
             )
         )
         self.add_config_field(
@@ -543,11 +601,17 @@ class Config(BaseConfig):
         wrong: list[str] = []
         for file_name in file_names:
             if not isinstance(file_name, str) or not (
-                Path(file_name).is_file() and Path(file_name).is_dir()
+                Path(file_name).is_file() or Path(file_name).is_dir()
             ):
                 wrong.append(file_name)
 
-        return "The following files cannot be found: " + ", ".join(wrong)
+        # Don't return the error because if there's too many files, the message
+        # get's truncated.
+        print("The following files or directories cannot be found:")
+        for f in wrong:
+            print("\t*", f)
+
+        return "Error while loading files..."
 
     def _load_openai_model_names(self, refresh_duration_seconds: int) -> timedelta:
         """Loads the OpenAI models from cache or refreshes them from the internet."""
