@@ -17,7 +17,7 @@ from esbmc_ai.commands.command_result import CommandResult
 from esbmc_ai.commands.fix_code_command import FixCodeCommand, FixCodeCommandResult
 from esbmc_ai.config import Config
 from esbmc_ai.loading_widget import BaseLoadingWidget, LoadingWidget
-from esbmc_ai.logging import print_horizontal_line, printv, printvv
+from esbmc_ai.logging import print_horizontal_line, logv, logvv
 from esbmc_ai.solution import Solution
 from esbmc_ai.verifier_runner import VerifierRunner
 from esbmc_ai.verifiers.base_source_verifier import VerifierOutput
@@ -57,8 +57,8 @@ class UserChatCommand(ChatCommand):
         # ESBMC will output 0 for verification success and 1 for verification
         # failed, if anything else gets thrown, it's an ESBMC error.
         if not Config().get_value("allow_successful") and verifier_result.successful():
-            printv(f"Verifier exit code: {verifier_result.return_code}")
-            printv(f"Verifier Output:\n\n{verifier_result.output}")
+            logv(f"Verifier exit code: {verifier_result.return_code}")
+            logv(f"Verifier Output:\n\n{verifier_result.output}")
             print("Sample successfuly verified. Exiting...")
             sys.exit(0)
 
@@ -130,10 +130,10 @@ class UserChatCommand(ChatCommand):
 
         # Print verbose lvl 2
         print_horizontal_line(2)
-        printvv(esbmc_output)
+        logvv(esbmc_output)
         print_horizontal_line(2)
 
-        printv(f"Initializing the LLM: {Config().get_ai_model().name}\n")
+        logv(f"Initializing the LLM: {Config().get_ai_model().name}\n")
         chat_llm: BaseChatModel = (
             Config()
             .get_ai_model()
@@ -145,7 +145,7 @@ class UserChatCommand(ChatCommand):
             )
         )
 
-        printv("Creating user chat")
+        logv("Creating user chat")
         self.chat = UserChat(
             ai_model=Config().get_ai_model(),
             llm=chat_llm,
@@ -156,13 +156,13 @@ class UserChatCommand(ChatCommand):
             set_solution_messages=Config().get_user_chat_set_solution(),
         )
 
-        printv("Initializing commands...")
+        logv("Initializing commands...")
         self.init_commands()
 
         # Show the initial output.
         response: ChatResponse
         if len(str(Config().get_user_chat_initial().content)) > 0:
-            printv("Using initial prompt from file...\n")
+            logv("Using initial prompt from file...\n")
             with self.anim("Model is parsing ESBMC output... Please Wait"):
                 try:
                     response = self.chat.send_message(

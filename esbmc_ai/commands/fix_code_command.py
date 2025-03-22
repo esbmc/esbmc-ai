@@ -24,7 +24,7 @@ from esbmc_ai.verifier_output import VerifierOutput
 from .chat_command import ChatCommand
 from ..msg_bus import Signal
 from ..loading_widget import BaseLoadingWidget, LoadingWidget
-from ..logging import print_horizontal_line, printv, printvvv
+from ..logging import print_horizontal_line, logv, logvvv
 
 
 class FixCodeCommandResult(CommandResult):
@@ -112,11 +112,11 @@ class FixCodeCommand(ChatCommand):
         solution: Solution = Solution([])
         solution.add_source_file(source_file)
 
-        printv(f"Temperature: {temperature}")
-        printv(f"Verifying function: {entry_function}")
+        logv(f"Temperature: {temperature}")
+        logv(f"Verifying function: {entry_function}")
 
         verifier: BaseSourceVerifier = VerifierRunner().verifier
-        printv(f"Running verifier: {verifier.verifier_name}")
+        logv(f"Running verifier: {verifier.verifier_name}")
         verifier_result: VerifierOutput = verifier.verify_source(solution, **kwargs)
         source_file.verifier_output = verifier_result
 
@@ -239,11 +239,13 @@ class FixCodeCommand(ChatCommand):
                 break
 
         # Print verbose lvl 2
-        printvvv("\nESBMC-AI Notice: Source Code Generation:")
+        logvvv("\nESBMC-AI Notice: Source Code Generation:")
         print_horizontal_line(3)
-        printvvv(source_file.content)
+        logvvv(source_file.content)
         print_horizontal_line(3)
-        printvvv("")
+        logvvv("")
+
+        solution = solution.save_temp()
 
         # Pass to ESBMC, a workaround is used where the file is saved
         # to a temporary location since ESBMC needs it in file format.
@@ -253,9 +255,9 @@ class FixCodeCommand(ChatCommand):
         source_file.verifier_output = verifier_result
 
         # Print verbose lvl 2
-        printvvv("\nESBMC-AI Notice: ESBMC Output:")
+        logvvv("\nESBMC-AI Notice: ESBMC Output:")
         print_horizontal_line(3)
-        printvvv(source_file.verifier_output.output)
+        logvvv(source_file.verifier_output.output)
         print_horizontal_line(3)
 
         # Solution found
@@ -265,7 +267,7 @@ class FixCodeCommand(ChatCommand):
             if raw_conversation:
                 self.print_raw_conversation(solution_generator)
 
-            printv("ESBMC-AI Notice: Successfully verified code")
+            logv("ESBMC-AI Notice: Successfully verified code")
 
             # Check if an output directory is specified and save to it
             if output_dir:

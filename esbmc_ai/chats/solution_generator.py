@@ -90,8 +90,8 @@ class SolutionGenerator(BaseChatInterface):
         self.messages: list[BaseMessage] = []
         self.invokations = 0
 
-    @classmethod
-    def extract_code_from_solution(cls, solution: str) -> str:
+    @staticmethod
+    def extract_code_from_solution(solution: str) -> str:
         """Strip the source code of any leftover text as sometimes the AI model
         will generate text and formatting despite being told not to."""
         try:
