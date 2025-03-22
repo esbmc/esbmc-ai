@@ -62,7 +62,7 @@ jobs:
         run: python -m pip install --upgrade hatch
 
       - name: Cache Hatch environment
-        uses: actions/cache@v4.1.2
+        uses: actions/cache@v4.2.3
         with:
           path: |
             ~/.cache/hatch
@@ -101,7 +101,7 @@ jobs:
         run: python -m pip install --upgrade hatch
 
       - name: Cache Hatch environment
-        uses: actions/cache@v4.1.2
+        uses: actions/cache@v4.2.3
         with:
           path: |
             ~/.cache/hatch
@@ -138,7 +138,7 @@ jobs:
   #       run: python -m pip install --upgrade hatch
 
   #     - name: Cache Hatch environment
-  #       uses: actions/cache@v4.1.2
+  #       uses: actions/cache@v4.2.3
   #       with:
   #         path: |
   #           ~/.cache/hatch
@@ -187,7 +187,7 @@ jobs:
         run: python -m pip install --upgrade hatch
 
       - name: Cache Hatch environment
-        uses: actions/cache@v4.1.2
+        uses: actions/cache@v4.2.3
         with:
           path: |
             ~/.cache/hatch
