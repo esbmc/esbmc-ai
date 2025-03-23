@@ -5,9 +5,9 @@ from langchain_core.language_models import FakeListChatModel, FakeListLLM
 import pytest
 
 from esbmc_ai.config import FixCodeScenario
-from esbmc_ai.ai_models import AIModel
 from esbmc_ai.chats.solution_generator import SolutionGenerator
 from esbmc_ai.verifiers import ESBMC
+from tests.test_ai_models import MockAIModel
 
 
 @pytest.fixture(scope="function")
@@ -19,7 +19,7 @@ def setup_llm_model():
             "One more!",
         ],
     )
-    model = AIModel("test model", 1000)
+    model = MockAIModel("test model", 1000)
     return llm, model
 
 
@@ -95,7 +95,7 @@ def test_substitution() -> None:
             )
         },
         verifier=ESBMC(),
-        ai_model=AIModel("test", 10000000),
+        ai_model=MockAIModel("test", 10000000),
         llm=FakeListChatModel(responses=["22222", "33333"]),
         source_code_format="full",
         esbmc_output_type="full",

@@ -23,19 +23,13 @@ from langchain.schema import (
 class AIModel:
     """This base class represents an abstract AI model."""
 
-    name: str
-    tokens: int
-
     def __init__(
         self,
         name: str,
         tokens: int,
     ) -> None:
-        self.name = name
-        self.tokens = tokens
-        self._llm_for_tokens: BaseChatModel | None = None
-        """Workaround for using get_num_tokens without needing to provide API keys.
-        We use the LLM from create_llm."""
+        self.name: str = name
+        self.tokens: int = tokens
 
     @abstractmethod
     def create_llm(
@@ -48,19 +42,17 @@ class AIModel:
         """Initializes a large language model model with the provided parameters."""
         raise NotImplementedError()
 
+    @abstractmethod
     def get_num_tokens(self, content: str) -> int:
         """Gets the number of tokens for this AI model."""
-        assert (
-            self._llm_for_tokens
-        ), "LLM for tokens is not initialized. Make sure to create an LLM first using create_llm."
-        return self._llm_for_tokens.get_num_tokens(content)
+        _ = content
+        raise NotImplementedError()
 
+    @abstractmethod
     def get_num_tokens_from_messages(self, messages: list[BaseMessage]) -> int:
         """Gets the number of tokens for this AI model for a list of messages."""
-        assert (
-            self._llm_for_tokens
-        ), "LLM for tokens is not initialized. Make sure to create an LLM first using create_llm."
-        return self._llm_for_tokens.get_num_tokens_from_messages(messages)
+        _ = messages
+        raise NotImplementedError()
 
     @classmethod
     def convert_messages_to_tuples(
@@ -192,7 +184,7 @@ class AIModelOpenAI(AIModel):
         requests_timeout: float = 60,
     ) -> BaseChatModel:
         assert "openai" in api_keys, "No OpenAI api key has been specified..."
-        self._llm_for_tokens = ChatOpenAI(
+        return ChatOpenAI(
             model=self.name,
             api_key=SecretStr(api_keys["openai"]),
             temperature=None if self._reason_model else temperature,
@@ -201,7 +193,6 @@ class AIModelOpenAI(AIModel):
             timeout=requests_timeout,
             model_kwargs={},
         )
-        return self._llm_for_tokens
 
     @override
     def get_num_tokens(self, content: str) -> int:
@@ -265,7 +256,7 @@ class OllamaAIModel(AIModel):
         # Ollama does not use API keys
         _ = api_keys
         _ = requests_max_tries
-        self._llm_for_tokens = ChatOllama(
+        return ChatOllama(
             base_url=self.url,
             model=self.name,
             temperature=temperature,
@@ -273,7 +264,14 @@ class OllamaAIModel(AIModel):
                 "timeout": requests_timeout,
             },
         )
-        return self._llm_for_tokens
+
+    @override
+    def get_num_tokens(self, content: str) -> int:
+        return self.create_llm({}).get_num_tokens(content)
+
+    @override
+    def get_num_tokens_from_messages(self, messages: list[BaseMessage]) -> int:
+        return self.create_llm({}).get_num_tokens_from_messages(messages)
 
 
 class _AIModels(Enum):

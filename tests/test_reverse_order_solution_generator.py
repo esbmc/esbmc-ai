@@ -10,12 +10,11 @@ from langchain.schema import (
 )
 
 from esbmc_ai.config import FixCodeScenario, default_scenario
-from esbmc_ai.ai_models import AIModel
 from esbmc_ai.chats.reverse_order_solution_generator import (
     ReverseOrderSolutionGenerator,
 )
-from esbmc_ai.verifiers import ESBMC
 from esbmc_ai.verifiers.dummy_verifier import DummyVerifier
+from tests.test_ai_models import MockAIModel
 
 
 @pytest.fixture(scope="function")
@@ -27,7 +26,7 @@ def setup_llm_model():
             "One more!",
         ],
     )
-    model = AIModel("test model", 1000)
+    model = MockAIModel("test model", 1000)
     return llm, model
 
 

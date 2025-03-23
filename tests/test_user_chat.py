@@ -6,12 +6,12 @@ import pytest
 
 from langchain.schema import AIMessage, HumanMessage, SystemMessage
 
-from esbmc_ai.ai_models import AIModel
 from esbmc_ai.chat_response import ChatResponse, FinishReason
 from esbmc_ai.chats.user_chat import UserChat
 from esbmc_ai.solution import Solution, SourceFile
 from esbmc_ai.verifiers.dummy_verifier import DummyVerifier
 from esbmc_ai.verifiers.esbmc import ESBMC
+from tests.test_ai_models import MockAIModel
 
 
 @pytest.fixture(scope="function")
@@ -31,7 +31,7 @@ def setup():
     summary_text = "THIS IS A SUMMARY OF THE CONVERSATION"
     chat: UserChat = UserChat(
         system_messages=system_messages,
-        ai_model=AIModel(name="test", tokens=12),
+        ai_model=MockAIModel(name="test", tokens=12),
         llm=FakeListChatModel(responses=[summary_text]),
         solution=solution,
         verifier=verifier,
@@ -94,7 +94,7 @@ def test_substitution() -> None:
     # sample. So get error line and type work using ESBMC.
     chat = UserChat(
         solution=solution,
-        ai_model=AIModel("test", 1000),
+        ai_model=MockAIModel("test", 1000),
         system_messages=[
             SystemMessage(content="{source_code}{esbmc_output}{error_line}{error_type}")
         ],

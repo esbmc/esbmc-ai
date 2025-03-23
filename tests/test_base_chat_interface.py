@@ -4,14 +4,14 @@ from langchain_core.language_models import FakeListChatModel
 import pytest
 
 from langchain.schema import AIMessage, BaseMessage, HumanMessage, SystemMessage
-from esbmc_ai.ai_models import AIModel
 from esbmc_ai.chats.base_chat_interface import BaseChatInterface
 from esbmc_ai.chat_response import ChatResponse
+from tests.test_ai_models import MockAIModel
 
 
 @pytest.fixture(scope="module")
 def setup():
-    ai_model: AIModel = AIModel("test", 1024)
+    ai_model: MockAIModel = MockAIModel("test", 1024)
 
     system_messages: list[BaseMessage] = [
         SystemMessage(content="First system message"),
@@ -84,7 +84,7 @@ def test_send_message(setup) -> None:
 
 
 def test_apply_template() -> None:
-    ai_model: AIModel = AIModel("test", 1024)
+    ai_model: MockAIModel = MockAIModel("test", 1024)
 
     system_messages: list[BaseMessage] = [
         SystemMessage(content="This is a {source_code} message"),
