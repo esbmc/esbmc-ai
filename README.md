@@ -4,7 +4,9 @@ AI Augmented ESBMC processing. Passes the output from ESBMC to an AI model that 
 
 This is an area of active research.
 
-![ESBMC-AI Visual Abstract](docs/images/esbmc-ai_framework.png)
+![ESBMC-AI Visual Abstract](docs/assets/images/esbmc-ai_framework.png)
+
+![ESBMC-AI Platform](docs/assets/images/platform_diag.png)
 
 ## Demonstration
 
@@ -30,16 +32,10 @@ to discuss what you would like to change.
 3. Include comments and function doc-strings.
 4. Make sure to update tests as appropriate.
 
-## Acknowledgments
+## Developing Addons
 
-ESBMC-AI is made possible by the following listed entities:
-
-- [ESBMC](https://github.com/esbmc/esbmc)
-- [OpenAI Chat API](https://platform.openai.com/docs/guides/chat)
-- [Technology Innovation Institute](https://www.tii.ae/)
-- [Hugging Face](https://huggingface.co/)
-- [Langchain](https://github.com/langchain-ai/langchain)
+For development of addons, please look at the [addon development guide]().
 
 ## License
 
-[GNU Affero General Public License v3.0](https://github.com/Yiannis128/esbmc-ai/blob/master/LICENSE)
+[Modified GNU Affero General Public License v3.0](https://github.com/Yiannis128/esbmc-ai/blob/master/LICENSE)
