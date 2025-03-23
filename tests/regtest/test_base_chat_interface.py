@@ -5,9 +5,9 @@ import pytest
 
 from langchain.schema import BaseMessage, HumanMessage, AIMessage, SystemMessage
 
-from esbmc_ai.ai_models import AIModel
 from esbmc_ai.chat_response import ChatResponse
 from esbmc_ai.chats.base_chat_interface import BaseChatInterface
+from tests.test_ai_models import MockAIModel
 
 
 @pytest.fixture
@@ -15,7 +15,7 @@ def setup():
     responses: list[str] = ["OK 1", "OK 2", "OK 3"]
     llm: FakeListChatModel = FakeListChatModel(responses=responses)
 
-    ai_model: AIModel = AIModel("test", 1024)
+    ai_model: MockAIModel = MockAIModel("test", 1024)
 
     system_messages = [
         SystemMessage(content="System message"),

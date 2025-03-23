@@ -3,6 +3,7 @@
 from langchain.prompts.chat import ChatPromptValue
 from langchain.schema import (
     AIMessage,
+    BaseMessage,
     HumanMessage,
     PromptValue,
     SystemMessage,
@@ -14,22 +15,25 @@ from esbmc_ai.ai_models import (
     add_custom_ai_model,
     is_valid_ai_model,
     AIModel,
-    _AIModels,
     get_ai_model_by_name,
-    OllamaAIModel,
 )
 
-"""TODO Find a way to mock the OpenAI API and test GPT LLM code."""
 
+class MockAIModel(AIModel):
+    """Used to test AIModels, it implements some mock versions of abstract
+    methods."""
 
-# def test_is_valid_ai_model() -> None:
-# assert is_valid_ai_model(_AIModels.FALCON_7B.value)
-# assert is_valid_ai_model(_AIModels.STARCHAT_BETA.value)
-# assert is_valid_ai_model("falcon-7b")
+    def get_num_tokens(self, content: str) -> int:
+        _ = content
+        return len(content)
+
+    def get_num_tokens_from_messages(self, messages: list[BaseMessage]) -> int:
+        _ = messages
+        return sum(len(str(msg.content)) for msg in messages)
 
 
 def test_is_not_valid_ai_model() -> None:
-    custom_model: AIModel = AIModel(
+    custom_model: MockAIModel = MockAIModel(
         name="custom_ai",
         tokens=999,
     )
@@ -38,7 +42,7 @@ def test_is_not_valid_ai_model() -> None:
 
 
 def test_add_custom_ai_model() -> None:
-    custom_model: AIModel = AIModel(
+    custom_model: MockAIModel = MockAIModel(
         name="custom_ai",
         tokens=999,
     )
@@ -62,7 +66,7 @@ def test_get_ai_model_by_name() -> None:
 
     # Try with custom AI.
     # Add custom AI model if not added by previous tests.
-    custom_model: AIModel = AIModel(
+    custom_model: MockAIModel = MockAIModel(
         name="custom_ai",
         tokens=999,
     )
@@ -83,7 +87,7 @@ def test_apply_chat_template() -> None:
     ]
 
     # Test the identity method.
-    custom_model_1: AIModel = AIModel(
+    custom_model_1: MockAIModel = MockAIModel(
         name="custom",
         tokens=999,
     )
@@ -91,17 +95,6 @@ def test_apply_chat_template() -> None:
     prompt: PromptValue = custom_model_1.apply_chat_template(messages=messages)
 
     assert prompt == ChatPromptValue(messages=messages)
-
-    # Test the text gen method
-    custom_model_2: OllamaAIModel = OllamaAIModel(
-        name="custom",
-        tokens=999,
-        url="",
-    )
-
-    prompt_text: str = custom_model_2.apply_chat_template(messages=messages).to_string()
-
-    assert prompt_text == "System: M1\nHuman: M2\nAI: M3"
 
 
 def test_escape_messages() -> None:
@@ -131,7 +124,7 @@ def test_escape_messages() -> None:
         ),
     ]
 
-    result = list(AIModel.escape_messages(messages, allowed))
+    result = list(MockAIModel.escape_messages(messages, allowed))
 
     assert result[0] == filtered[0]
     assert result[1] == filtered[1]

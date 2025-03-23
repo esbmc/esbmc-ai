@@ -9,6 +9,6 @@ ai: OK 2
 human: Test 3
 ai: OK 3
 Responses:
-ai(15 - FinishReason.stop): OK 1
-ai(23 - FinishReason.stop): OK 2
-ai(31 - FinishReason.stop): OK 3
+ai(26 - FinishReason.stop): OK 1
+ai(36 - FinishReason.stop): OK 2
+ai(46 - FinishReason.stop): OK 3

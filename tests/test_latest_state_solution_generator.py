@@ -7,10 +7,10 @@ import pytest
 from langchain.schema import BaseMessage, HumanMessage, AIMessage, SystemMessage
 
 from esbmc_ai.config import FixCodeScenario, default_scenario
-from esbmc_ai.ai_models import AIModel
 from esbmc_ai.chat_response import ChatResponse
 from esbmc_ai.chats.latest_state_solution_generator import LatestStateSolutionGenerator
 from esbmc_ai.verifiers.dummy_verifier import DummyVerifier
+from tests.test_ai_models import MockAIModel
 
 
 @pytest.fixture(scope="function")
@@ -23,7 +23,7 @@ def setup_llm_model():
             "One more!",
         ],
     )
-    model = AIModel("test model", 1000)
+    model = MockAIModel("test model", 1000)
     return llm, model
 
 

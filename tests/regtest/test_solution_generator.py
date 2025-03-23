@@ -4,10 +4,10 @@
 from langchain.schema import HumanMessage, SystemMessage
 from langchain_core.language_models import FakeListChatModel
 
-from esbmc_ai.ai_models import AIModel
 from esbmc_ai.verifiers.dummy_verifier import DummyVerifier
 from esbmc_ai.chats.solution_generator import SolutionGenerator
 from esbmc_ai.config import FixCodeScenario
+from tests.test_ai_models import MockAIModel
 
 
 def test_generate_solution(regtest) -> None:
@@ -32,7 +32,7 @@ def test_generate_solution(regtest) -> None:
             )
         },
         verifier=verifier,
-        ai_model=AIModel("test", 10000000),
+        ai_model=MockAIModel("test", 10000000),
         llm=FakeListChatModel(responses=["22222", "33333"]),
         source_code_format="full",
         esbmc_output_type="full",

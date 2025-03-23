@@ -105,7 +105,7 @@ class BaseChatInterface:
 
         # Check if token limit has been exceeded.
         all_messages.append(response_message)
-        new_tokens: int = self.llm.get_num_tokens_from_messages(
+        new_tokens: int = self.ai_model.get_num_tokens_from_messages(
             messages=all_messages,
         )
 
