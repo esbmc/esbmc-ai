@@ -1,9 +1,6 @@
 ---
 title: Architecture
 type: docs
-weight: 1
-prev: /docs
-next: Initial-Setup
 ---
 
 ESBMC-AI is composed of multiple parts, ESBMC-AI is composed of __User Chat Mode__ and __Solution Generation Mode__ (activated by the `fix-code` command) [1]. Each component of ESBMC-AI interacts with ESBMC and the LLM separately and contains its own message history, system message, and initial message to accomplish its requirements [1].

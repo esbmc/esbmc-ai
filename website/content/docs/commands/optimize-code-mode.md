@@ -1,3 +1,12 @@
+---
+title: Optimize Code Mode
+weight: 3
+draft: true
+---
+
+>[!NOTICE]
+>This is depracated and no longer maintained.
+
 Optimize Code Mode (OCM) is an experimental new mode added into ESBMC-AI that optimizes functions into smaller, more efficient forms. The mode attempts to optimize the function as best as possible without changing the layout of the code, so ideally, it is a drop-in optimizer for C/C++ functions. OCM relies on the ClangAST backend developed for interacting with source code in order to ensure that the optimized code is partially equivalent with the original source code. OCM can be summarized as the following steps:
 
 1. Initialize a ClangAST instance for the old source code.

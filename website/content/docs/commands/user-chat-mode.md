@@ -1,3 +1,9 @@
+---
+title: User Chat Mode
+weight: 1
+---
+
+
 User chat mode is the default interaction mode once ESBMC-AI is started. The user can enter prompts, that the LLM will attempt to answer. During initialization, the LLM is informed of the source code, the ESBMC output, and given instructions to answer questions from the user. The user can also enter chat commands to switch modes of operation.
 
 The following is a normal question that can be asked:
