@@ -46,10 +46,23 @@ class BaseLoadingWidget:
         """Stops the animation."""
 
 
+class LoggingWidget(BaseLoadingWidget):
+    """Simply prints the messages on the screen."""
+
+    @override
+    def start(self, text: str = "") -> None:
+        if text:
+            print(text)
+
+
 class _StdoutInterceptor(TextIO):
     """Intercepts writes to sys.stdout so that printing clears and redraws the widget."""
 
-    def __init__(self, original: TextIO, widget: BaseLoadingWidget) -> None:
+    def __init__(
+        self,
+        original: TextIO,
+        widget: BaseLoadingWidget,
+    ) -> None:
         self.original: TextIO = original
         self.widget: BaseLoadingWidget = widget
 
@@ -207,13 +220,18 @@ loading_widget_anim_5: list[str] = [
 class LoadingWidget(BaseLoadingWidget):
     """Loading widget that can display an animation along with some text.
 
-    * anim_speed: Delay in seconds between each frame.
-    * ephemeral: True to print the message on screen after animation stops."""
+    Args:
+        anim_speed: Delay in seconds between each frame.
+        ephemeral: False to print the text on screen before new text is printed,
+            then stop the animation. True to always play the loading animation
+            and show the text at the last line of the terminal and new text will
+            be shown above.
+    """
 
     def __init__(
         self,
         anim_speed: float = 0.1,
-        ephemeral: bool = False,
+        ephemeral: bool = True,
         animation: list[str] | None = None,
     ) -> None:
         super().__init__()
@@ -223,6 +241,12 @@ class LoadingWidget(BaseLoadingWidget):
         self.loading_text: str
         self._running: bool = False
         self._terminal: Terminal = Terminal()
+
+        # Last drawn text, is used for _clear_draw
+        self._last_text: str = ""
+        # Used to track non-ephemeral printing, this variable means that the
+        # loading text is already printed.
+        self._non_ephemeral_print: bool = False
 
         # Multi-threading
         self.thread: Thread | None = None
@@ -242,30 +266,32 @@ class LoadingWidget(BaseLoadingWidget):
             self.loading_text = text
         return self
 
+    def _clear_draw(self) -> None:
+        """Clear the drawn text."""
+        self._interceptor.original.write(
+            " " * len(self._last_text) + self._terminal.move_left(len(self._last_text)),
+        )
+
     def _animate(self) -> None:
         """We use the original stdout stream because if we call stdout in here
         we will go into the StdoutInterceptor, if that happens during
         thread.join(), then stop() will be called in the write() of interceptor
         and then that will cause a crash because a thread can't call join on
         itself."""
-        text: str = ""
+        self._last_text = ""
         for c in cycle(self.animation):
             if not self._running:
-                # Clear drawn text
-                self._interceptor.original.write(
-                    " " * len(text) + self._terminal.move_left(len(text)),
-                )
-                if self.ephemeral:
-                    self._interceptor.original.write(self.loading_text + "\n")
                 break
             # Calculate how much extra space to clear after anim frame is shown.
             extra_space_clear: int = self.anim_clear_length - len(c)
-            text = f"{self.loading_text} {c}" + " " * extra_space_clear
+            self._last_text = f"{self.loading_text} {c}" + " " * extra_space_clear
             # Write + Reset cursor
-            self._interceptor.original.write(text)
+            self._interceptor.original.write(self._last_text)
             self._interceptor.flush()
             sleep(self.anim_speed)
-            self._interceptor.original.write(self._terminal.move_left(len(text)))
+            self._interceptor.original.write(
+                self._terminal.move_left(len(self._last_text))
+            )
 
     @override
     def start(self, text: str = "Please Wait") -> None:
@@ -286,8 +312,21 @@ class LoadingWidget(BaseLoadingWidget):
         if self.thread:
             self.thread.join()
 
+        self._clear_draw()
+
+        if not self.ephemeral and not self._non_ephemeral_print:
+            print(self.loading_text)
+            self._non_ephemeral_print = True
+
+        self._interceptor.original.flush()
+
+    @override
+    def __enter__(self):
+        self._non_ephemeral_print = False
+        return super().__enter__()
+
 
 if __name__ == "__main__":
-    LoadingWidget(animation=loading_widget_anim_2).start()
+    LoadingWidget(animation=loading_widget_anim_2, ephemeral=True).start()
     while True:
         pass

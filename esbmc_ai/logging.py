@@ -5,6 +5,7 @@
 from os import get_terminal_size
 
 _verbose: int = 0
+_enable_horizontal_lines: bool = True
 _default_label: str = "ESBMC-AI"
 
 
@@ -81,8 +82,8 @@ def printvvv(*m: object) -> None:
 
 def print_horizontal_line(verbosity: int = 0) -> None:
     """Prints a horizontal line if at a given verbosity level."""
-    if _verbose >= verbosity:
+    if _enable_horizontal_lines and _verbose >= verbosity:
         try:
             print("-" * get_terminal_size().columns)
         except OSError:
-            pass
+            print("-" * 80)
