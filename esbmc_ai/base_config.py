@@ -22,24 +22,19 @@ class BaseConfig(ABC):
 
     def __init__(self) -> None:
         super().__init__()
-        self._fields: List[ConfigField]
-        self._values: Dict[str, Any]
-        self.cfg_path: Path
+        self._fields: List[ConfigField] = []
+        self._values: Dict[str, Any] = {}
         self.original_config_file: dict[str, Any]
         self.config_file: dict[str, Any]
 
-    def base_init(self, cfg_path: Path, fields: list[ConfigField]) -> None:
+    def load_config_fields(self, cfg_path: Path, fields: list[ConfigField]) -> None:
         """Initializes the base config structures. Loads the config file and fields."""
-        self._fields = fields
-        self._values = {}
 
-        self.cfg_path = cfg_path
-
-        if not (self.cfg_path.exists() and self.cfg_path.is_file()):
-            print(f"Error: Config not found: {self.cfg_path}")
+        if not (cfg_path.exists() and cfg_path.is_file()):
+            print(f"Error: Config not found: {cfg_path}")
             sys.exit(1)
 
-        with open(self.cfg_path, "r") as file:
+        with open(cfg_path, "r") as file:
             self.original_config_file = toml.loads(file.read())
 
         # Flatten dict as the _fields are defined in a flattened format for
@@ -47,12 +42,13 @@ class BaseConfig(ABC):
         self.config_file = self.flatten_dict(self.original_config_file)
 
         # Load all the config file field entries
-        for field in self._fields:
+        for field in fields:
             self.add_config_field(field)
 
     def add_config_field(self, field: ConfigField) -> None:
         """Loads a new field from the config. Init needs to be called before
         calling this to initialize the base config."""
+        self._fields.append(field)
 
         # If on_read is overwritten, then the reading process is manually
         # defined so fallback to that.
@@ -90,6 +86,33 @@ class BaseConfig(ABC):
         else:
             # Use default value
             self._values[field.name] = field.default_value
+
+    def set_custom_field(self, field: ConfigField, value: Any) -> None:
+        """Loads a new field from a custom source. Still validates the value given
+        to it."""
+        # Check if None and not allowed!
+        if (
+            field.default_value is None
+            and not field.default_value_none
+            and value is None
+        ):
+            raise ValueError(
+                f"Failed too add field from custom source: {field.name} has a "
+                "None value when it can't be"
+            )
+
+        # Validate field
+        if not field.validate(value):
+            msg = f"Field: {field.name} is invalid: {value}"
+            if field.get_error_message is not None:
+                msg += ": " + field.get_error_message(value)
+            elif field.error_message:
+                msg += ": " + field.error_message
+            raise ValueError(f"Config loading error: {msg}")
+
+        # Assign field from config file
+        self._fields.append(field)
+        self._values[field.name] = field.on_load(value)
 
     def get_value(self, name: str) -> Any:
         """Gets the value of key name"""

@@ -105,9 +105,12 @@ def main() -> None:
         "command",
         type=str,
         nargs="?",
-        help="The command to run using the program. Options: {"
-        + ", ".join(command_runner.builtin_commands_names)
-        + "}. To see addon commands available: Run with 'help' as the default command.",
+        help=(
+            "The command to run using the program. Options: {"
+            + ", ".join(command_runner.builtin_commands_names)
+            + "}. To see addon commands available: Run with 'help' as the "
+            "default command."
+        ),
     )
 
     parser.add_argument(
@@ -139,14 +142,21 @@ def main() -> None:
         "--verbose",
         action="count",
         default=0,
-        help="Show up to 3 levels of verbose output. Level 1: extra information. Level 2: show failed generations, show ESBMC output. Level 3: print hidden pushes to the message stack.",
+        help=(
+            "Show up to 3 levels of verbose output. Level 1: extra information."
+            " Level 2: show failed generations, show ESBMC output. Level 3: "
+            "print hidden pushes to the message stack."
+        ),
     )
 
     parser.add_argument(
         "-m",
         "--ai-model",
         default="",
-        help="Which AI model to use.",
+        help=(
+            "Which AI model to use. Specify any OpenAI model, Anthropic model, "
+            "or custom defined model."
+        ),
     )
 
     parser.add_argument(
@@ -182,9 +192,9 @@ def main() -> None:
     print(f"Made by {__author__}")
     print()
 
-    printvv("Loading main config")
+    printvv("Loading config")
     Config().init(args)
-    printv(f"Config File: {Config().cfg_path}")
+    printv(f"Config File: {Config().get_value("ESBMCAI_CONFIG_FILE")}")
     _check_health()
     # Load addons
     printvv("Loading addons")
