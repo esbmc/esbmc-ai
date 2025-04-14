@@ -35,10 +35,21 @@ class AddonLoader(BaseConfig):
     addon_prefix: str = "addons"
 
     def __new__(cls):
-        if not hasattr(cls, "instance"):
-            cls.instance = super(AddonLoader, cls).__new__(cls)
-        return cls.instance
+        if cls._instance:
+            return cls._instance
 
+        cls._instance = super(AddonLoader, cls).__new__(cls)
+        return cls._instance
+
+    def __init__(self) -> None:
+        if AddonLoader._initialized:
+            return
+
+        AddonLoader._initialized = True
+        super().__init__()
+
+    _instance: "AddonLoader | None" = None
+    _initialized: bool = False
     _config: Config
     chat_command_addons: dict[str, ChatCommand] = {}
     verifier_addons: dict[str, BaseSourceVerifier] = {}
@@ -47,7 +58,7 @@ class AddonLoader(BaseConfig):
         """Call to initialize the addon loader. It will load the addons and
         register them with the command runner and verifier runner."""
 
-        self.base_init(config.cfg_path, [])
+        self.load_config_fields(config.get_value("ESBMCAI_CONFIG_FILE"), [])
 
         self._config = config
 

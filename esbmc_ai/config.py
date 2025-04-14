@@ -3,7 +3,6 @@
 
 import argparse
 from dataclasses import dataclass
-from datetime import timedelta, datetime
 import os
 import sys
 from platform import system as system_name
@@ -12,26 +11,19 @@ from typing import (
     Any,
     Dict,
     List,
-    Optional,
 )
 
-from platformdirs import user_cache_dir
 from dotenv import load_dotenv, find_dotenv
-from langchain.schema import HumanMessage
+from langchain.schema import HumanMessage, BaseMessage
 
 from esbmc_ai.config_field import ConfigField
 from esbmc_ai.base_config import BaseConfig, default_scenario
 from esbmc_ai.chat_response import list_to_base_messages
 from esbmc_ai.logging import set_verbose
-from .ai_models import (
-    BaseMessage,
-    add_open_ai_model,
-    is_valid_ai_model,
-    get_ai_model_by_name,
-    add_custom_ai_model,
+from esbmc_ai.ai_models import (
     AIModel,
+    AIModels,
     OllamaAIModel,
-    download_openai_model_names,
 )
 
 
@@ -75,16 +67,26 @@ def _validate_prompt_template(conv: Dict[str, List[Dict]]) -> bool:
 class Config(BaseConfig):
     """Config loader for ESBMC-AI"""
 
-    def __new__(cls):
-        if not hasattr(cls, "instance"):
-            cls.instance = super(Config, cls).__new__(cls)
-        return cls.instance
-
+    _instance: "Config | None" = None
+    _initialized: bool = False
     _args: argparse.Namespace
-    api_keys: dict[str, str] = {}
     raw_conversation: bool = False
     generate_patches: bool
     output_dir: Path | None = None
+
+    def __new__(cls):
+        if cls._instance:
+            return cls._instance
+
+        cls._instance = super(Config, cls).__new__(cls)
+        return cls._instance
+
+    def __init__(self) -> None:
+        if Config._initialized:
+            return
+
+        Config._initialized = True
+        super().__init__()
 
     # Define some shortcuts for the values here (instead of having to use get_value)
 
@@ -121,13 +123,42 @@ class Config(BaseConfig):
         """Gets the filanames that are to be loaded"""
         return self.get_value("solution.filenames")
 
-    def init(self, args: Any) -> None:
+    @classmethod
+    def init(cls, args: Any) -> None:
         """Will load the config from the args, the env file and then from config file.
         Call once to initialize."""
 
-        self._args = args
+        config: Config = Config()
+        config._args = args
 
-        self._load_envs()
+        config._load_envs(
+            ConfigField.from_env(
+                name="ESBMCAI_CONFIG_FILE",
+                default_value=None,
+                on_load=lambda v: Path(os.path.expanduser(os.path.expandvars(str(v)))),
+            ),
+            ConfigField.from_env(
+                name="OPENAI_API_KEY",
+                default_value=None,
+                default_value_none=True,
+            ),
+            ConfigField.from_env(
+                name="ANTHROPIC_API_KEY",
+                default_value=None,
+                default_value_none=True,
+            ),
+        )
+
+        config.set_custom_field(
+            ConfigField(
+                name="api_keys",
+                default_value={},
+            ),
+            value={
+                "openai": config.get_value("OPENAI_API_KEY"),
+                "anthropic": config.get_value("ANTHROPIC_API_KEY"),
+            },
+        )
 
         fields: list[ConfigField] = [
             ConfigField(
@@ -137,18 +168,24 @@ class Config(BaseConfig):
                 "directory so addons can be developed.",
             ),
             ConfigField(
+                name="show_horizontal_lines",
+                default_value=True,
+                help_message="True to print horizontal lines to segment the output. "
+                "Makes it easier to read.",
+            ),
+            ConfigField(
                 name="ai_custom",
                 default_value=[],
-                on_read=lambda cfg: self._load_custom_ai(cfg["ai_custom"]),
+                on_read=lambda cfg: config._load_custom_ai(cfg["ai_custom"]),
                 error_message="Invalid custom AI specification",
             ),
-            # This needs to be before "ai_model"
+            # This needs to be before "ai_model" - Loads the AI Models
             ConfigField(
                 name="llm_requests.open_ai.model_refresh_seconds",
                 # Default is to refresh once a day
-                default_value=self._load_openai_model_names(86400),
+                default_value=config._init_ai_models(86400),
                 validate=lambda v: isinstance(v, int),
-                on_load=self._load_openai_model_names,
+                on_load=config._init_ai_models,
                 help_message="How often to refresh the models list provided by OpenAI. "
                 "Make sure not to spam them as they can IP block. Default is once a day.",
                 error_message="Invalid value, needs to be an int in seconds",
@@ -159,8 +196,9 @@ class Config(BaseConfig):
                 default_value=None,
                 # Api keys are loaded from system env so they are already
                 # available
-                validate=lambda v: isinstance(v, str) and is_valid_ai_model(v),
-                on_load=get_ai_model_by_name,
+                validate=lambda v: isinstance(v, str)
+                and AIModels().is_valid_ai_model(v),
+                on_load=AIModels().get_ai_model,
                 help_message="Which AI model to use.",
             ),
             ConfigField(
@@ -212,11 +250,11 @@ class Config(BaseConfig):
                 )
                 # Validate arg values
                 and (
-                    len(self._args.filenames) == 0
-                    or all(Path(f).exists() for f in self._args.filenames)
+                    len(config._args.filenames) == 0
+                    or all(Path(f).exists() for f in config._args.filenames)
                 ),
-                on_load=self._filenames_load,
-                get_error_message=self._filenames_error_msg,
+                on_load=config._filenames_load,
+                get_error_message=config._filenames_error_msg,
             ),
             ConfigField(
                 name="solution.include_dirs",
@@ -237,12 +275,12 @@ class Config(BaseConfig):
                 and (
                     # This impliments logical implication A => B
                     # So if entry_function arg is set then it must be a string
-                    not self._args.entry_function
-                    or isinstance(self._args.entry_function, str)
+                    not config._args.entry_function
+                    or isinstance(config._args.entry_function, str)
                 ),
                 on_load=lambda v: (
-                    self._args.entry_function
-                    if self._args.entry_function != "main" or not v
+                    config._args.entry_function
+                    if config._args.entry_function != "main" or not v
                     else v
                 ),
                 error_message="The entry function name needs to be a string",
@@ -381,47 +419,41 @@ class Config(BaseConfig):
         ]
 
         # Base init needs to be called last (only before load args)
-        super().base_init(self.cfg_path, fields)
-        self._load_args()
+        config.load_config_fields(config.get_value("ESBMCAI_CONFIG_FILE"), fields)
+        config._load_args()
 
         # Config Pseudo-Entries - In the future have different type of config field
         # that won't be read from the config file.
-        self.add_config_field(
+        config.add_config_field(
             ConfigField(
                 name="generate_patches",
-                default_value=self.generate_patches,
+                default_value=config.generate_patches,
                 default_value_none=True,
                 help_message="Should the repaired result be returned as a patch "
                 "instead of a new file.",
             )
         )
-        self.add_config_field(
+        config.add_config_field(
             ConfigField(
                 name="fix_code.raw_conversation",
-                default_value=self.raw_conversation,
+                default_value=config.raw_conversation,
                 default_value_none=True,
                 help_message="Print the raw conversation at different parts of execution.",
             )
         )
-        self.add_config_field(
+        config.add_config_field(
             ConfigField(
                 name="solution.output_dir",
-                default_value=self.output_dir,
+                default_value=config.output_dir,
                 default_value_none=True,
                 help_message="Set the output directory to save successfully repaired "
                 "files in. Leave empty to not use.",
             )
         )
-        self.add_config_field(
-            ConfigField(
-                name="api_keys",
-                default_value=self.api_keys,
-                default_value_none=True,
-            )
-        )
 
-    def _load_envs(self) -> None:
-        """Environment variables are loaded in the following order:
+    def _load_envs(self, *fields: ConfigField) -> None:
+        """Loads the environment variables.
+        Environment variables are loaded in the following order:
 
         1. Environment variables already loaded. Any variable not present will be looked for in
         .env files in the following locations.
@@ -433,17 +465,21 @@ class Config(BaseConfig):
         variable expansion.
         """
 
-        config_env_name: str = "ESBMCAI_CONFIG_FILE"
+        for field in fields:
+            assert (
+                field.on_read is None
+            ), f"ConfigField on_read for envs is not supported: {field.name}"
+
+        keys: dict[str, ConfigField] = {field.name: field for field in fields}
 
         def get_env_vars() -> None:
-            """Gets all the system environment variables that are currently loaded."""
-            for k in keys:
-                value: Optional[str] = os.getenv(k)
-                if value is not None:
-                    values[k] = value
+            """Gets all the system environment variables that are currently in the env
+            and loads them. Will only load keys that have not already been loaded."""
+            for field_name, field in keys.items():
+                value: str | None = os.getenv(field_name)
 
-        keys: list[str] = ["OPENAI_API_KEY", config_env_name]
-        values: dict[str, str] = {}
+                # Assign field from config file
+                self._values[field_name] = field.on_load(value)
 
         # Load from system env
         get_env_vars()
@@ -474,17 +510,26 @@ class Config(BaseConfig):
 
         get_env_vars()
 
-        # Check if all the values are set, else error.
-        for key in keys:
-            if key not in values:
-                print(f"Error: No ${key} in environment.")
-                sys.exit(1)
+        # Check all field values are set, if they aren't then error.
+        for field_name, field in keys.items():
+            # If field name is not loaded in the end...
+            if field_name not in self._values:
+                if field.default_value is None and not field.default_value_none:
+                    print(f"Error: No ${field_name} in environment.")
+                    sys.exit(1)
+                self._values[field_name] = field.default_value
 
-        self.api_keys["openai"] = str(os.getenv("OPENAI_API_KEY"))
+            # Validate field
+            value: Any = self._values[field_name]
+            if not field.validate(value):
+                msg = f"Field: {field.name} is invalid: {value}"
+                if field.get_error_message is not None:
+                    msg += ": " + field.get_error_message(value)
+                elif field.error_message:
+                    msg += ": " + field.error_message
+                raise ValueError(f"Env loading error: {msg}")
 
-        self.cfg_path: Path = Path(
-            os.path.expanduser(os.path.expandvars(str(os.getenv(config_env_name))))
-        )
+        self._fields.extend(fields)
 
     def _load_args(self) -> None:
         args: argparse.Namespace = self._args
@@ -493,8 +538,8 @@ class Config(BaseConfig):
 
         # AI Model -m
         if args.ai_model != "":
-            if is_valid_ai_model(args.ai_model):
-                ai_model = get_ai_model_by_name(args.ai_model)
+            if AIModels().is_valid_ai_model(args.ai_model):
+                ai_model = AIModels().get_ai_model(args.ai_model)
                 self.set_value("ai_model", ai_model)
             else:
                 print(f"Error: invalid --ai-model parameter {args.ai_model}")
@@ -577,7 +622,7 @@ class Config(BaseConfig):
 
             # Add the custom AI.
             custom_ai.append(llm)
-            add_custom_ai_model(llm)
+            AIModels().add_ai_model(llm)
 
         return custom_ai
 
@@ -613,45 +658,6 @@ class Config(BaseConfig):
 
         return "Error while loading files..."
 
-    def _load_openai_model_names(self, refresh_duration_seconds: int) -> timedelta:
-        """Loads the OpenAI models from cache or refreshes them from the internet."""
-
-        def write_cache(cache: Path) -> list[str]:
-            with open(cache / "openai_models.txt", "w") as file:
-                models_list: list[str] = download_openai_model_names(self.api_keys)
-                file.seek(0)
-                file.write(datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "\n")
-                file.writelines(model_name + "\n" for model_name in models_list)
-            return models_list
-
-        duration = timedelta(seconds=refresh_duration_seconds)
-        if "openai" in self.api_keys:
-            print("Loading OpenAI models list")
-            models_list: list[str] = []
-            cache: Path = Path(user_cache_dir("esbmc-ai", "Yiannis Charalambous"))
-            cache.mkdir(parents=True, exist_ok=True)
-
-            # Read the last updated date to determine if a new update is required
-            try:
-                with open(cache / "openai_models.txt", "r") as file:
-                    last_update: datetime = datetime.strptime(
-                        file.readline().strip(), "%Y-%m-%d %H:%M:%S"
-                    )
-                    models_list = file.readlines()
-
-                # Write new & updated cache file
-                if datetime.now() >= last_update + duration:
-                    print("\tModels list outdated, refreshing...")
-                    models_list = write_cache(cache)
-            except ValueError as e:
-                print("Error while loading OpenAI models list:", e)
-                print("\tCreating new models list.")
-                models_list = write_cache(cache)
-            except FileNotFoundError:
-                print("\tModels list not found, creating new...")
-                models_list = write_cache(cache)
-
-            # Add models that have been loaded.
-            for model_name in models_list:
-                add_open_ai_model(model_name.strip())
-        return duration
+    def _init_ai_models(self, refresh_duration: int) -> int:
+        AIModels().load_models(self.get_value("api_keys"), refresh_duration)
+        return refresh_duration

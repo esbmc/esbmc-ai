@@ -2,6 +2,8 @@
 
 """This module can be used by other modules to declare config entries."""
 
+import os
+from dotenv import load_dotenv, find_dotenv
 from typing import (
     Any,
     Callable,
@@ -45,3 +47,29 @@ class ConfigField(NamedTuple):
     """Optional string to provide a generic error message."""
     get_error_message: Callable[[Any], str] | None = None
     """Optionsl function to get more verbose output than error_message."""
+
+    @staticmethod
+    def from_env(
+        name: str,
+        default_value: Any,
+        default_value_none: bool = False,
+        validate: Callable[[Any], bool] = lambda _: True,
+        on_load: Callable[[Any], Any] = lambda v: v,
+        help_message: str | None = None,
+        error_message: str | None = None,
+        get_error_message: (
+            Callable[[Any], str] | None
+        ) = lambda v: f"Error: No ${v} in environment.",
+    ) -> "ConfigField":
+        """Defines an env var loaded from the environment. Will prefix name with
+        'env.'"""
+        return ConfigField(
+            name=name,
+            default_value=default_value,
+            default_value_none=default_value_none,
+            validate=validate,
+            on_load=on_load,
+            help_message=help_message,
+            error_message=error_message,
+            get_error_message=get_error_message,
+        )
