@@ -91,6 +91,33 @@ class BaseChatInterface:
         )
         return tuple(message_prompts.to_messages())
 
+    @staticmethod
+    def send_messages(
+        ai_model: AIModel, llm: BaseChatModel, messages: list[BaseMessage]
+    ) -> ChatResponse:
+        """Static method to send messages."""
+        response_message: BaseMessage = llm.invoke(input=messages)
+        # Check if token limit has been exceeded.
+        new_tokens: int = ai_model.get_num_tokens_from_messages(
+            messages=messages + [response_message],
+        )
+
+        response: ChatResponse
+        if new_tokens > ai_model.tokens:
+            response = ChatResponse(
+                finish_reason=FinishReason.length,
+                message=response_message,
+                total_tokens=ai_model.tokens,
+            )
+        else:
+            response = ChatResponse(
+                finish_reason=FinishReason.stop,
+                message=response_message,
+                total_tokens=new_tokens,
+            )
+
+        return response
+
     def send_message(self, message: Optional[str] = None) -> ChatResponse:
         """Sends a message to the AI model. Returns solution."""
         if message:
@@ -99,28 +126,10 @@ class BaseChatInterface:
         all_messages = self._system_messages.copy()
         all_messages.extend(self.messages.copy())
 
-        response_message: BaseMessage = self.llm.invoke(input=all_messages)
-
-        self.push_to_message_stack(message=response_message)
-
-        # Check if token limit has been exceeded.
-        all_messages.append(response_message)
-        new_tokens: int = self.ai_model.get_num_tokens_from_messages(
-            messages=all_messages,
+        response: ChatResponse = self.send_messages(
+            self.ai_model, self.llm, all_messages
         )
 
-        response: ChatResponse
-        if new_tokens > self.ai_model.tokens:
-            response = ChatResponse(
-                finish_reason=FinishReason.length,
-                message=response_message,
-                total_tokens=self.ai_model.tokens,
-            )
-        else:
-            response = ChatResponse(
-                finish_reason=FinishReason.stop,
-                message=response_message,
-                total_tokens=new_tokens,
-            )
+        self.push_to_message_stack(message=response.message)
 
         return response

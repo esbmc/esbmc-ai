@@ -3,7 +3,7 @@
 from pytest import raises
 
 from esbmc_ai.config import Config
-from esbmc_ai.ai_models import is_valid_ai_model
+from esbmc_ai.ai_models import AIModels
 
 
 def test_load_custom_ai() -> None:
@@ -17,7 +17,7 @@ def test_load_custom_ai() -> None:
 
     Config()._load_custom_ai(custom_ai_config)
 
-    assert is_valid_ai_model("example_ai")
+    assert AIModels().is_valid_ai_model("example_ai")
 
 
 def test_load_custom_ai_fail() -> None:

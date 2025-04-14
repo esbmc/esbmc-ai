@@ -85,7 +85,7 @@ class ESBMC(BaseSourceVerifier):
     @property
     def esbmc_path(self) -> Path:
         """Returns the ESBMC path from config."""
-        return self.get_config_value("verifier.esbmc.path")
+        return self.get_config_value("verifier.esbmc.path").absolute()
 
     @override
     def verify_source(

@@ -8,6 +8,8 @@ from typing import Optional
 from pathlib import Path
 from subprocess import PIPE, STDOUT, run, CompletedProcess
 from tempfile import NamedTemporaryFile, TemporaryDirectory
+from shutil import copytree
+
 import lizard
 
 from esbmc_ai.ai_models import AIModel
@@ -44,6 +46,8 @@ class SourceFile:
     @staticmethod
     def load(file_path: Path, base_path: Path) -> "SourceFile":
         """Creates a new source file by loading the content from disk."""
+        if file_path.is_relative_to(base_path):
+            file_path = file_path.relative_to(base_path)
         with open(base_path / file_path, "r") as file:
             return SourceFile(file_path, base_path, file.read())
 
@@ -167,6 +171,8 @@ class Solution:
         include_dirs: list[Path] | None = None,
     ) -> "Solution":
         """Creates a solution from a base directory. Can override with files manually."""
+        path = path.absolute()
+
         if file_paths:
             return Solution(file_paths, path)
 
@@ -174,7 +180,7 @@ class Solution:
         for dir_path, _, files in walk(path):
             result.extend(Path(dir_path) / file for file in files)
 
-        return Solution(result, path, include_dirs=include_dirs)
+        return Solution(files=result, base_dir=path, include_dirs=include_dirs)
 
     def __init__(
         self,
@@ -193,7 +199,7 @@ class Solution:
         if files:
             for file_path in files:
                 assert file_path.is_file(), f"Path is not a file: {file_path}"
-                self.load_source_file(file_path.absolute())
+                self.load_source_file(file_path)
 
         if include_dirs:
             for d in include_dirs:
@@ -234,6 +240,8 @@ class Solution:
         """Saves the solution to path, and then returns it. The solution's base
         directory is replaced by the final component of path."""
         base_dir_path: Path = path
+
+        # Copy individual source files.
         new_file_paths: list[Path] = []
         for source_file in self.files:
             relative_path: Path = source_file.file_path
@@ -242,7 +250,19 @@ class Solution:
             new_file_paths.append(new_path)
             new_path.parent.mkdir(parents=True, exist_ok=True)
             source_file.save_file(new_path)
-        return Solution(new_file_paths, Path(base_dir_path))
+
+        # Copy include directories there
+        new_include_dirs: list[Path] = []
+        for d in self.include_dirs:
+            new_dir: Path = base_dir_path / d
+            copytree(src=d, dst=new_dir, symlinks=True, dirs_exist_ok=True)
+            new_include_dirs.append(new_dir)
+
+        return Solution(
+            new_file_paths,
+            Path(base_dir_path),
+            include_dirs=new_include_dirs,
+        )
 
     def verify_solution_integrity(self) -> bool:
         """Verifies if the content of the solution match with the files on disk.
@@ -275,6 +295,7 @@ class Solution:
     def load_source_file(self, file_path: Path) -> None:
         """Add a source file to the solution. If content is provided then it will
         not be loaded."""
+        file_path = file_path.absolute()
         # Get the relative path to the base dir.
         rel_path: Path = file_path.relative_to(self.base_dir)
         with open(file_path, "r") as file:

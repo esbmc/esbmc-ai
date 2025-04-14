@@ -11,11 +11,9 @@ from langchain.schema import (
 from pytest import raises
 
 from esbmc_ai.ai_models import (
-    AIModelOpenAI,
-    add_custom_ai_model,
-    is_valid_ai_model,
     AIModel,
-    get_ai_model_by_name,
+    AIModelOpenAI,
+    AIModels,
 )
 
 
@@ -37,8 +35,8 @@ def test_is_not_valid_ai_model() -> None:
         name="custom_ai",
         tokens=999,
     )
-    assert not is_valid_ai_model(custom_model)
-    assert not is_valid_ai_model("doesn't exist")
+    assert not AIModels().is_valid_ai_model(custom_model)
+    assert not AIModels().is_valid_ai_model("doesn't exist")
 
 
 def test_add_custom_ai_model() -> None:
@@ -47,17 +45,17 @@ def test_add_custom_ai_model() -> None:
         tokens=999,
     )
 
-    add_custom_ai_model(custom_model)
+    AIModels().add_ai_model(custom_model)
 
-    assert is_valid_ai_model(custom_model.name)
+    assert AIModels().is_valid_ai_model(custom_model.name)
 
     # Test add again.
 
-    if is_valid_ai_model(custom_model.name):
+    if AIModels().is_valid_ai_model(custom_model.name):
         with raises(Exception):
-            add_custom_ai_model(custom_model)
+            AIModels().add_ai_model(custom_model)
 
-    assert is_valid_ai_model(custom_model.name)
+    assert AIModels().is_valid_ai_model(custom_model.name)
 
 
 def test_get_ai_model_by_name() -> None:
@@ -70,13 +68,13 @@ def test_get_ai_model_by_name() -> None:
         name="custom_ai",
         tokens=999,
     )
-    if not is_valid_ai_model(custom_model.name):
-        add_custom_ai_model(custom_model)
-    assert get_ai_model_by_name("custom_ai") is not None
+    if not AIModels().is_valid_ai_model(custom_model.name):
+        AIModels().add_ai_model(custom_model)
+    assert AIModels().get_ai_model("custom_ai") is not None
 
     # Try with non existent.
     with raises(Exception):
-        get_ai_model_by_name("not-exists")
+        AIModels().get_ai_model("not-exists")
 
 
 def test_apply_chat_template() -> None:
@@ -135,14 +133,12 @@ def test_escape_messages() -> None:
 
 
 def test__get_openai_model_max_tokens() -> None:
-    assert AIModelOpenAI.get_openai_model_max_tokens("gpt-4o") == 128000
-    assert AIModelOpenAI.get_openai_model_max_tokens("gpt-4-turbo") == 8192
-    assert AIModelOpenAI.get_openai_model_max_tokens("gpt-3.5-turbo") == 16385
-    assert AIModelOpenAI.get_openai_model_max_tokens("gpt-3.5-turbo-instruct") == 4096
-    assert AIModelOpenAI.get_openai_model_max_tokens("gpt-3.5-turbo-aaaaaa") == 16385
-    assert (
-        AIModelOpenAI.get_openai_model_max_tokens("gpt-3.5-turbo-instruct-bbb") == 4096
-    )
+    assert AIModelOpenAI.get_max_tokens("gpt-4o") == 128000
+    assert AIModelOpenAI.get_max_tokens("gpt-4-turbo") == 8192
+    assert AIModelOpenAI.get_max_tokens("gpt-3.5-turbo") == 16385
+    assert AIModelOpenAI.get_max_tokens("gpt-3.5-turbo-instruct") == 4096
+    assert AIModelOpenAI.get_max_tokens("gpt-3.5-turbo-aaaaaa") == 16385
+    assert AIModelOpenAI.get_max_tokens("gpt-3.5-turbo-instruct-bbb") == 4096
 
     with raises(ValueError):
-        AIModelOpenAI.get_openai_model_max_tokens("aaaaa")
+        AIModelOpenAI.get_max_tokens("aaaaa")
