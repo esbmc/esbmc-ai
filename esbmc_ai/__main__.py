@@ -20,11 +20,11 @@ from esbmc_ai.commands import (
     ChatCommand,
     FixCodeCommand,
     HelpCommand,
+    ListModelsCommand,
     ConfigInfoCommand,
     ExitCommand,
 )
 from esbmc_ai.logging import printv, printvv, set_default_label
-from esbmc_ai.ai_models import _ai_model_names
 
 # Enables arrow key functionality for input(). Do not remove import.
 _ = readline
@@ -35,12 +35,14 @@ fix_code_command: FixCodeCommand = FixCodeCommand()
 exit_command: ExitCommand = ExitCommand()
 user_chat_command: UserChatCommand = UserChatCommand()
 config_info_command: ConfigInfoCommand = ConfigInfoCommand()
+list_models_command: ListModelsCommand = ListModelsCommand()
 
 verifier_runner: VerifierRunner = VerifierRunner()
 command_runner: CommandRunner = CommandRunner().init(
     builtin_commands=[
         help_command,
         config_info_command,
+        list_models_command,
         exit_command,
         fix_code_command,
         user_chat_command,
@@ -144,9 +146,7 @@ def main() -> None:
         "-m",
         "--ai-model",
         default="",
-        help="Which AI model to use. Built-in models: {OpenAI GPT models, "
-        + ", ".join(_ai_model_names)
-        + ", +custom models}",
+        help="Which AI model to use.",
     )
 
     parser.add_argument(
