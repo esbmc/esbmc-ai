@@ -138,7 +138,6 @@ class UserChatCommand(ChatCommand):
             Config()
             .get_ai_model()
             .create_llm(
-                api_keys=Config().api_keys,
                 temperature=Config().get_value("user_chat.temperature"),
                 requests_max_tries=Config().get_value("llm_requests.max_tries"),
                 requests_timeout=Config().get_value("llm_requests.timeout"),

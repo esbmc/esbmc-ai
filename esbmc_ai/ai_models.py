@@ -311,7 +311,7 @@ class AIModelAnthropic(AIModelService):
         # anthropic.BadRequestError: Error code: 400
         # final assistant content cannot end with trailing whitespace.
         if messages:
-            messages[-1].content = messages[-1].content.strip()
+            messages[-1].content = str(messages[-1].content).strip()
         return super().get_num_tokens_from_messages(messages)
 
 
@@ -335,8 +335,8 @@ class AIModels:
         AIModels._initialized = True
         super().__init__()
 
-        self._api_keys: dict[str, str]
-        self._ai_models: dict[str, AIModel]
+        self._api_keys: dict[str, str] = {}
+        self._ai_models: dict[str, AIModel] = {}
         self._cache_dir.mkdir(parents=True, exist_ok=True)
 
     def load_models(

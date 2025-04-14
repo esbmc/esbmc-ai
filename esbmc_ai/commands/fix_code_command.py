@@ -93,7 +93,6 @@ class FixCodeCommand(ChatCommand):
         )
         generate_patches: bool = self.get_config_value("generate_patches")
         message_history: str = self.get_config_value("fix_code.message_history")
-        api_keys = self.get_config_value("api_keys")
         ai_model: AIModel = self.get_config_value("ai_model")
         temperature: float = self.get_config_value("fix_code.temperature")
         max_tries: int = self.get_config_value("fix_code.max_attempts")
@@ -134,7 +133,6 @@ class FixCodeCommand(ChatCommand):
                 solution_generator = SolutionGenerator(
                     ai_model=ai_model,
                     llm=ai_model.create_llm(
-                        api_keys=api_keys,
                         temperature=temperature,
                         requests_max_tries=max_tries,
                         requests_timeout=timeout,
@@ -148,7 +146,6 @@ class FixCodeCommand(ChatCommand):
                 solution_generator = LatestStateSolutionGenerator(
                     ai_model=ai_model,
                     llm=ai_model.create_llm(
-                        api_keys=api_keys,
                         temperature=temperature,
                         requests_max_tries=max_tries,
                         requests_timeout=timeout,
@@ -162,7 +159,6 @@ class FixCodeCommand(ChatCommand):
                 solution_generator = ReverseOrderSolutionGenerator(
                     ai_model=ai_model,
                     llm=ai_model.create_llm(
-                        api_keys=api_keys,
                         temperature=temperature,
                         requests_max_tries=max_tries,
                         requests_timeout=timeout,

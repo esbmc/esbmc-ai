@@ -131,6 +131,9 @@ class Config(BaseConfig):
         config: Config = Config()
         config._args = args
 
+        # Huggingface warning supress
+        os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
         config._load_envs(
             ConfigField.from_env(
                 name="ESBMCAI_CONFIG_FILE",
