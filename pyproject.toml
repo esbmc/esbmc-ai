@@ -18,30 +18,18 @@ classifiers = [
   "Programming Language :: Python :: 3",
 ]
 dependencies = [
-  "aiosignal",
-  "async-timeout",
-  "attrs",
   "blessed",
-  "certifi",
-  "charset-normalizer",
-  "idna==3.4",
   "langchain",
   "langchain-anthropic",
   "langchain-community",
   "langchain-ollama",
   "langchain-openai",
   "lizard",
-  "openai",
   "platformdirs",
   "python-dotenv",
   "regex",
-  "requests",
-  "tiktoken",
-  "tiktoken",
-  "torch",
-  "transformers",  # Needed by langchain to calculate get_token_ids
-  "urllib3",
-  "yarl",
+  "torch",  # Needed by transformers
+  "transformers",  # Needed by langchain-core to calculate get_token_ids
 ]
 # https://hatch.pypa.io/latest/version/
 dynamic = ["version"]
