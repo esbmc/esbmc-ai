@@ -20,3 +20,7 @@ ESBMC-AI is an Automated Program Repair Platform that allows for quick and fast 
   {{< card link="https://pypi.org/project/esbmc-ai/" title="Download" icon="download" >}}
   {{< card link="https://github.com/esbmc/esbmc-ai/discussions" title="Discussions" icon="chat" >}}
 {{< /cards >}}
+
+## References
+
+* [arXiv:2305.14752](https://arxiv.org/abs/2305.14752) [[PDF](https://arxiv.org/pdf/2305.14752), [other](https://arxiv.org/format/2305.14752)]
