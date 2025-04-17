@@ -15,7 +15,7 @@ class ConfigInfoCommand(ChatCommand):
 
     def __init__(self) -> None:
         super().__init__(
-            command_name="help_config",
+            command_name="help-config",
             help_message="Print information about the config fields.",
         )
 

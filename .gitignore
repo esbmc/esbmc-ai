@@ -168,3 +168,4 @@ config_dev.toml
 uav_test.sh
 
 addons/
+.hugo_build.lock

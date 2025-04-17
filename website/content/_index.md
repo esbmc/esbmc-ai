@@ -14,14 +14,13 @@ ESBMC-AI is an Automated Program Repair Platform that allows for quick and fast 
 ## Explore
 
 {{< cards >}}
-  {{< card link="https://github.com/esbmc/esbmc-ai" title="Source Code" icon="code" >}}
   {{< card link="docs" title="Docs" icon="book-open" >}}
   {{< card link="about" title="About" icon="user" >}}
-  {{< card link="https://pypi.org/project/esbmc-ai/" title="Download" icon="external-link" >}}
+  {{< card link="https://github.com/esbmc/esbmc-ai" title="Source Code" icon="github" >}}
+  {{< card link="https://pypi.org/project/esbmc-ai/" title="Download" icon="download" >}}
   {{< card link="https://github.com/esbmc/esbmc-ai/discussions" title="Discussions" icon="chat" >}}
 {{< /cards >}}
 
-## Acknowledgements
+## References
 
-* Website is using the [Hextra](https://imfing.github.io/hextra) Hugo template.
-* Website is using the [Heroicons](https://v1.heroicons.com/) icon set.
+* [arXiv:2305.14752](https://arxiv.org/abs/2305.14752) [[PDF](https://arxiv.org/pdf/2305.14752), [other](https://arxiv.org/format/2305.14752)]
