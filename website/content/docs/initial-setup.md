@@ -60,15 +60,20 @@ You can add those fields and their desired values in the config file.
 
 ### Set Environment Variables
 
-Upon running ESBMC-AI you will notice it gives you warning that some environment variables need to be set. The default location that the config 
+Upon running ESBMC-AI you will notice it gives you an error that some environment variables need to be set. The following environment files need to be set.
 
 ```bash
-export ESBMCAI_CONFIG_PATH="..."
+export ESBMCAI_CONFIG_FILE="..."
 export OPENAI_API_KEY="..." # If you want to use an OpenAI model
+export ANTHROPIC_API_KEY="..." # If you want to use an Anthropic model
 ```
 
 ### Install a Verifier
 
-ESBMC-AI supports multiple verifiers. There is a built-in verifier, ESBMC. ESBMC-AI does not come with the original ESBMC binary. In order to use ESBMC-AI you must download ESBMC. Download the [ESBMC](http://esbmc.org/) executable or build from [source](https://github.com/esbmc/esbmc).
+ESBMC-AI supports multiple verifiers. There is a built-in support for ESBMC. ESBMC-AI does not come with the original ESBMC binary. In order to use ESBMC-AI you must download ESBMC. Download the [ESBMC](http://esbmc.org/) executable or build from [source](https://github.com/esbmc/esbmc).
+
+### Configuring ESBMC-AI
+
+See [Configuring](/docs/configuring-esbmc-ai) for how to setup the config file.
 
 {{% /steps %}}
