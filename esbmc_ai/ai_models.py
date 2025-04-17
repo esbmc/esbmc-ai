@@ -231,13 +231,14 @@ class AIModelOpenAI(AIModelService):
         tokens: dict[str, int] = {
             "o1-mini": 128000,
             "o1": 200000,
-            "o3-mini": 200000,
-            "gpt-4o": 128000,
-            "chatgpt-4o": 128000,
-            "gpt-4": 8192,
-            "gpt-4.5": 128000,
+            "o3": 200000,
+            "o4-mini": 200000,
             "gpt-3.5-turbo": 16385,
-            "gpt-3.5-turbo-instruct": 4096,
+            "gpt-4o": 128000,
+            "gpt-4": 8192,
+            "gpt-4-turbo": 128000,
+            "gpt-4.1": 1047576,
+            "gpt-4.5": 128000,
         }
         return cls._get_max_tokens(name, tokens)
 
@@ -278,13 +279,12 @@ class AIModelAnthropic(AIModelService):
         requests_max_tries: int = 5,
         requests_timeout: float = 60,
     ) -> BaseChatModel:
-        kwargs = {
-            "model": self.name,
-            "temperature": temperature,
-            "timeout": requests_timeout,
-            "max_retries": requests_max_tries,
-        }
-        return ChatAnthropic(**kwargs)
+        return ChatAnthropic(
+            model_name=self.name,
+            temperature=temperature,
+            timeout=requests_timeout,
+            max_retries=requests_max_tries,
+        )
 
     @classmethod
     def get_max_tokens(cls, name: str) -> int:
@@ -463,6 +463,7 @@ class AIModels:
 
     def _get_openai_models_list(self) -> list[str]:
         """Gets the open AI models from the API service and returns them."""
+
         if "openai" not in self._api_keys:
             return []
         # Check if needs refreshing
