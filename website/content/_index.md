@@ -3,9 +3,6 @@ title: ESBMC-AI
 toc: false
 ---
 
-> [!NOTE]
-> These docs are going a major reconstruction, so they are outdated. Don't use them.
-
 ESBMC-AI is an Automated Program Repair Platform that allows for quick and fast development of automated program repair methods. ESBMC-AI provides useful functionality abstraction layers for interacting with Large Language Models, source code, and external tools (such as test-suites).
 
 
