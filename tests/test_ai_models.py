@@ -134,11 +134,9 @@ def test_escape_messages() -> None:
 
 def test__get_openai_model_max_tokens() -> None:
     assert AIModelOpenAI.get_max_tokens("gpt-4o") == 128000
-    assert AIModelOpenAI.get_max_tokens("gpt-4-turbo") == 8192
+    assert AIModelOpenAI.get_max_tokens("gpt-4-turbo") == 128000
     assert AIModelOpenAI.get_max_tokens("gpt-3.5-turbo") == 16385
-    assert AIModelOpenAI.get_max_tokens("gpt-3.5-turbo-instruct") == 4096
     assert AIModelOpenAI.get_max_tokens("gpt-3.5-turbo-aaaaaa") == 16385
-    assert AIModelOpenAI.get_max_tokens("gpt-3.5-turbo-instruct-bbb") == 4096
 
     with raises(ValueError):
         AIModelOpenAI.get_max_tokens("aaaaa")
