@@ -1,6 +1,6 @@
 # Author: Yiannis Charalambous
 
-from typing import Any, override
+from typing import Any, DefaultDict, override
 from esbmc_ai.ai_models import AIModels
 from esbmc_ai.commands.chat_command import ChatCommand
 from esbmc_ai.commands.command_result import CommandResult
@@ -20,7 +20,16 @@ class ListModelsCommand(ChatCommand):
     def execute(self, **kwargs: Any | None) -> CommandResult | None:
         _ = kwargs
 
-        for name, model in AIModels().ai_models.items():
-            print(f"* {type(model).__name__}: {name}")
+        # Sort models into categories based on type: OpenAI, Anthropic, Ollama...
+        model_types: dict[str, list[str]] = DefaultDict(list)
+        for n, m in sorted(
+            AIModels().ai_models.items(), key=lambda v: type(v[1]).__name__
+        ):
+            model_types[type(m).__name__].append(n)
+
+        # Show in ordered list
+        for model_type, models in model_types.items():
+            for model_name in sorted(models):
+                print(f"* {model_type}: {model_name}")
 
         return None
