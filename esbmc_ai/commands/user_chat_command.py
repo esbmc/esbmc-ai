@@ -12,8 +12,8 @@ from langchain_core.language_models import BaseChatModel
 from esbmc_ai.chat_response import ChatResponse, FinishReason
 from esbmc_ai.chats.user_chat import UserChat
 from esbmc_ai.command_runner import CommandRunner
-from esbmc_ai.commands.chat_command import ChatCommand
-from esbmc_ai.commands.command_result import CommandResult
+from esbmc_ai.chat_command import ChatCommand
+from esbmc_ai.command_result import CommandResult
 from esbmc_ai.commands.fix_code_command import FixCodeCommand, FixCodeCommandResult
 from esbmc_ai.config import Config
 from esbmc_ai.loading_widget import BaseLoadingWidget, LoadingWidget
@@ -96,16 +96,10 @@ class UserChatCommand(ChatCommand):
 
     @override
     def execute(self, **kwargs: Optional[Any]) -> Optional[CommandResult]:
+        _ = kwargs
 
-        assert "command_runner" in kwargs and isinstance(
-            kwargs["command_runner"], CommandRunner
-        )
-        assert "verifier_runner" in kwargs and isinstance(
-            kwargs["verifier_runner"], VerifierRunner
-        )
-
-        self.command_runner = kwargs["command_runner"]
-        self.verifier_runner = kwargs["verifier_runner"]
+        self.command_runner = CommandRunner()
+        self.verifier_runner = VerifierRunner()
         self.anim = (
             LoadingWidget()
             if Config().get_value("loading_hints")

@@ -6,7 +6,7 @@ import sys
 from typing import Any, Optional
 from typing_extensions import override
 
-from .chat_command import ChatCommand
+from esbmc_ai.chat_command import ChatCommand
 
 
 class ExitCommand(ChatCommand):

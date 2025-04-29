@@ -13,10 +13,11 @@ from typing_extensions import Optional
 
 from esbmc_ai.base_component import BaseComponent
 from esbmc_ai.base_config import BaseConfig
-from esbmc_ai.commands.chat_command import ChatCommand
+from esbmc_ai.chat_command import ChatCommand
 from esbmc_ai.logging import printv
 from esbmc_ai.verifiers.base_source_verifier import BaseSourceVerifier
-from esbmc_ai.config import Config, ConfigField
+from esbmc_ai.config_field import ConfigField
+from esbmc_ai.config import Config
 
 
 class AddonLoader(BaseConfig):
@@ -56,14 +57,19 @@ class AddonLoader(BaseConfig):
 
     def init(self, config: Config, builtin_verifier_names: list[str]):
         """Call to initialize the addon loader. It will load the addons and
-        register them with the command runner and verifier runner."""
+        register them with the command runner and verifier runner.
+
+        Args:
+            - config: already initialized base config."""
+
+        assert config.initialized, "Config has not been initialized."
 
         self.load_config_fields(config.get_value("ESBMCAI_CONFIG_FILE"), [])
 
         self._config = config
 
-        # Ensure the current directory is in sys.path in order for relative
-        # addon modules to be imported (used for dev purposes).
+        # Dev mode: Ensure the current directory is in sys.path in order for
+        # relative addon modules to be imported (used for dev purposes).
         if self._config.get_value("dev_mode") and "" not in sys.path:
             sys.path.insert(0, "")
 

@@ -6,7 +6,7 @@ from abc import abstractmethod
 from typing import Any
 
 from esbmc_ai.base_component import BaseComponent
-from esbmc_ai.commands.command_result import CommandResult
+from esbmc_ai.command_result import CommandResult
 
 
 class ChatCommand(BaseComponent):
