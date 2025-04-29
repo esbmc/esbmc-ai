@@ -88,6 +88,13 @@ class Config(BaseConfig):
         Config._initialized = True
         super().__init__()
 
+    @property
+    def initialized(self) -> bool:
+        """Returns true if the class has been initialized. Usually we don't make
+        this field public, but it's used by the AddonLoader config class to
+        ensure that this object is initialized before it initializes."""
+        return self._initialized
+
     # Define some shortcuts for the values here (instead of having to use get_value)
 
     def get_ai_model(self) -> AIModel:
@@ -179,7 +186,7 @@ class Config(BaseConfig):
             ConfigField(
                 name="ai_custom",
                 default_value=[],
-                on_read=lambda cfg: config._load_custom_ai(cfg["ai_custom"]),
+                on_read=config._load_custom_ai,
                 error_message="Invalid custom AI specification",
             ),
             # This needs to be before "ai_model" - Loads the AI Models
@@ -407,15 +414,19 @@ class Config(BaseConfig):
                     _validate_prompt_template(prompt_template)
                     for prompt_template in v.values()
                 ),
-                on_read=lambda config_file: {
-                    scenario: FixCodeScenario(
-                        initial=HumanMessage(content=conv["initial"]),
-                        system=list_to_base_messages(conv["system"]),
-                    )
-                    for scenario, conv in config_file["prompt_templates"][
-                        "fix_code"
-                    ].items()
-                },
+                on_read=lambda config_file: (
+                    {
+                        scenario: FixCodeScenario(
+                            initial=HumanMessage(content=conv["initial"]),
+                            system=list_to_base_messages(conv["system"]),
+                        )
+                        for scenario, conv in config_file["prompt_templates"][
+                            "fix_code"
+                        ].items()
+                    }
+                    if "prompt_templates" in config_file
+                    else {}
+                ),
                 help_message="Scenario prompt templates for differnet types of bugs "
                 "for the fix code command.",
             ),
@@ -592,10 +603,14 @@ class Config(BaseConfig):
 
         return True
 
-    def _load_custom_ai(self, ai_config_list: dict) -> list[AIModel]:
+    def _load_custom_ai(self, config_file: dict) -> list[AIModel]:
         """Loads custom AI defined in the config and ascociates it with the AIModels
         module."""
 
+        if "ai_custom" not in config_file:
+            return []
+
+        ai_config_list: dict = config_file["ai_custom"]
         self._validate_custom_ai(ai_config_list)
 
         custom_ai: list[AIModel] = []
