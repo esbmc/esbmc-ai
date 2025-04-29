@@ -8,10 +8,12 @@ from esbmc_ai.ai_models import AIModels
 
 def test_load_custom_ai() -> None:
     custom_ai_config: dict = {
-        "example_ai": {
-            "max_tokens": 4096,
-            "url": "www.example.com",
-            "server_type": "ollama",
+        "ai_custom": {
+            "example_ai": {
+                "max_tokens": 4096,
+                "url": "www.example.com",
+                "server_type": "ollama",
+            }
         }
     }
 
