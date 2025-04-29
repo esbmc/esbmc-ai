@@ -39,7 +39,7 @@ class HelpConfigCommand(ChatCommand):
         for field in Config()._fields:
             self._print_config_field(field)
 
-        print("ESBMC-AI Config Fields:")
+        print("ESBMC-AI Addon Fields:")
         for field in AddonLoader()._fields:
             self._print_config_field(field)
 
