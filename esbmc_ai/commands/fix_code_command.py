@@ -13,15 +13,15 @@ from esbmc_ai.verifiers.base_source_verifier import (
     VerifierTimedOutException,
     BaseSourceVerifier,
 )
-from esbmc_ai.commands.command_result import CommandResult
+from esbmc_ai.command_result import CommandResult
 from esbmc_ai.config import Config, FixCodeScenario
 from esbmc_ai.chats.reverse_order_solution_generator import (
     ReverseOrderSolutionGenerator,
 )
 from esbmc_ai.verifier_runner import VerifierRunner
 from esbmc_ai.verifier_output import VerifierOutput
+from esbmc_ai.chat_command import ChatCommand
 
-from .chat_command import ChatCommand
 from ..msg_bus import Signal
 from ..loading_widget import BaseLoadingWidget, LoadingWidget
 from ..logging import print_horizontal_line, logv, logvvv
@@ -48,11 +48,10 @@ class FixCodeCommandResult(CommandResult):
 
     @override
     def __str__(self) -> str:
-        return (
-            self.repaired_source
-            if self._successful and self.repaired_source is not None
-            else "ESBMC-AI Notice: Failed all attempts..."
-        )
+        if self._successful and self.repaired_source is not None:
+            return self.repaired_source
+
+        return "ESBMC-AI Notice: Failed all attempts..."
 
 
 class FixCodeCommand(ChatCommand):

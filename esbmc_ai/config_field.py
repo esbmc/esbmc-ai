@@ -2,8 +2,6 @@
 
 """This module can be used by other modules to declare config entries."""
 
-import os
-from dotenv import load_dotenv, find_dotenv
 from typing import (
     Any,
     Callable,

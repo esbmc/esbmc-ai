@@ -4,13 +4,12 @@
 from typing import Any
 from typing_extensions import override
 
-from esbmc_ai.config import Config
+from esbmc_ai.addon_loader import Config, AddonLoader
 from esbmc_ai.config_field import ConfigField
+from esbmc_ai.chat_command import ChatCommand
 
-from .chat_command import ChatCommand
 
-
-class ConfigInfoCommand(ChatCommand):
+class HelpConfigCommand(ChatCommand):
     """Command that prints the help messages of the acceptable config fields."""
 
     def __init__(self) -> None:
@@ -38,6 +37,10 @@ class ConfigInfoCommand(ChatCommand):
 
         print("ESBMC-AI Config Fields:")
         for field in Config()._fields:
+            self._print_config_field(field)
+
+        print("ESBMC-AI Addon Fields:")
+        for field in AddonLoader()._fields:
             self._print_config_field(field)
 
         return None

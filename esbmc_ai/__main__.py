@@ -8,20 +8,17 @@ import sys
 import readline
 import argparse
 
+from esbmc_ai import Config, ChatCommand, __author__, __version__
 from esbmc_ai.addon_loader import AddonLoader
+from esbmc_ai.command_result import CommandResult
 from esbmc_ai.commands.user_chat_command import UserChatCommand
-from esbmc_ai.solution import Solution
 from esbmc_ai.verifier_runner import VerifierRunner
 from esbmc_ai.command_runner import CommandRunner
-from esbmc_ai.commands.fix_code_command import FixCodeCommandResult
-from esbmc_ai import Config
-from esbmc_ai import __author__, __version__
 from esbmc_ai.commands import (
-    ChatCommand,
     FixCodeCommand,
     HelpCommand,
     ListModelsCommand,
-    ConfigInfoCommand,
+    HelpConfigCommand,
     ExitCommand,
 )
 from esbmc_ai.logging import printv, printvv, set_default_label
@@ -29,23 +26,16 @@ from esbmc_ai.logging import printv, printvv, set_default_label
 # Enables arrow key functionality for input(). Do not remove import.
 _ = readline
 
-# Init built-in commands
-help_command: HelpCommand = HelpCommand()
-fix_code_command: FixCodeCommand = FixCodeCommand()
-exit_command: ExitCommand = ExitCommand()
-user_chat_command: UserChatCommand = UserChatCommand()
-config_info_command: ConfigInfoCommand = ConfigInfoCommand()
-list_models_command: ListModelsCommand = ListModelsCommand()
-
 verifier_runner: VerifierRunner = VerifierRunner()
+# Init built-in commands
 command_runner: CommandRunner = CommandRunner().init(
     builtin_commands=[
-        help_command,
-        config_info_command,
-        list_models_command,
-        exit_command,
-        fix_code_command,
-        user_chat_command,
+        HelpCommand(),
+        HelpConfigCommand(),
+        ListModelsCommand(),
+        ExitCommand(),
+        FixCodeCommand(),
+        UserChatCommand(),
     ]
 )
 
@@ -69,27 +59,9 @@ def _check_health() -> None:
 
 def _run_command_mode(command: ChatCommand, args: argparse.Namespace) -> None:
     set_default_label("ESBMC-AI")
-    match command.command_name:
-        case user_chat_command.command_name:
-            user_chat_command.execute(
-                command_runner=command_runner,
-                verifier_runner=verifier_runner,
-                fix_code_command=fix_code_command,
-            )
-        # Basic fix mode: Supports only 1 file repair.
-        case fix_code_command.command_name:
-            print("Reading source code...")
-            solution: Solution = Solution(Config().filenames)
-            print(f"Running ESBMC with {Config().get_value('verifier.esbmc.params')}\n")
-
-            for source_file in solution.files:
-                result: FixCodeCommandResult = fix_code_command.execute(
-                    source_file=source_file
-                )
-
-                print(result)
-        case _:
-            command.execute()
+    result: CommandResult | None = command.execute()
+    if result:
+        print(result)
     sys.exit(0)
 
 

@@ -5,5 +5,6 @@ features such as automatic code fixing and more."""
 from esbmc_ai.__about__ import __version__, __author__
 
 from esbmc_ai.config import Config
+from esbmc_ai.chat_command import ChatCommand
 
-__all__ = ["Config"]
+__all__ = ["Config", "ChatCommand"]

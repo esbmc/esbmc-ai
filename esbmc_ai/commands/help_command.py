@@ -5,7 +5,7 @@
 from typing import Any
 from typing_extensions import override
 
-from .chat_command import ChatCommand
+from esbmc_ai.chat_command import ChatCommand
 
 
 class HelpCommand(ChatCommand):
@@ -25,7 +25,7 @@ class HelpCommand(ChatCommand):
         print("Commands:")
 
         for command in self.commands:
-            print(f"/{command.command_name}: {command.help_message}")
+            print(f"* {command.command_name}: {command.help_message}")
             if command.authors:
                 print(f"\tAuthors: {command.authors}")
 

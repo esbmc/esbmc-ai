@@ -2,8 +2,8 @@
 
 from typing import Any, DefaultDict, override
 from esbmc_ai.ai_models import AIModels
-from esbmc_ai.commands.chat_command import ChatCommand
-from esbmc_ai.commands.command_result import CommandResult
+from esbmc_ai.chat_command import ChatCommand
+from esbmc_ai.command_result import CommandResult
 
 
 class ListModelsCommand(ChatCommand):
