@@ -169,3 +169,4 @@ uav_test.sh
 
 addons/
 .hugo_build.lock
+esbmc_ai.svg
