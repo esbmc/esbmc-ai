@@ -24,6 +24,11 @@ def set_default_label(label: str) -> None:
     _default_label = label
 
 
+def set_horizontal_lines(value: bool) -> None:
+    global _enable_horizontal_lines
+    _enable_horizontal_lines = value
+
+
 def print_verbose(
     *m: object,
     level: int = 0,
