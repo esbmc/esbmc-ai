@@ -8,6 +8,12 @@ The basic repair implementation passes the output from ESBMC to an AI model with
 
 ![ESBMC-AI Platform](website/content/docs/images/platform_diag.png)
 
+## Quick Start
+
+```sh
+hatch run esbmc-ai ...
+```
+
 ## Demonstration
 
 [![Fix Code Demo](https://img.youtube.com/vi/anpRa6GpVdU/0.jpg)](https://www.youtube.com/watch?v=anpRa6GpVdU)

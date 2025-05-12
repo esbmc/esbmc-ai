@@ -19,7 +19,7 @@ from langchain.schema import HumanMessage, BaseMessage
 from esbmc_ai.config_field import ConfigField
 from esbmc_ai.base_config import BaseConfig, default_scenario
 from esbmc_ai.chat_response import list_to_base_messages
-from esbmc_ai.logging import set_verbose
+from esbmc_ai.logging import set_verbose, set_horizontal_lines
 from esbmc_ai.ai_models import (
     AIModel,
     AIModels,
@@ -180,6 +180,7 @@ class Config(BaseConfig):
             ConfigField(
                 name="show_horizontal_lines",
                 default_value=True,
+                on_load=set_horizontal_lines,
                 help_message="True to print horizontal lines to segment the output. "
                 "Makes it easier to read.",
             ),
