@@ -59,6 +59,23 @@ dependencies = [
   "twine",
 ]
 
+[tool.hatch.envs.default.scripts]
+podman-build = """
+if [ -z $(command -v podman) ]; then
+  echo "Podman not installed..."
+  exit 1
+fi
+podman build --tag esbmc-ai --build-arg EXTRA_PIP_PACKAGES="{args}" .
+"""
+
+docker-build = """
+if [ -z $(command -v docker) ]; then
+  echo "Docker not installed..."
+  exit 1
+fi
+docker build --tag esbmc-ai --build-arg EXTRA_PIP_PACKAGES="{args}" .
+"""
+
 [tool.hatch.envs.hatch-test]
 description = "Used when running pytest. Using hatch test..."
 extra-dependencies = [
