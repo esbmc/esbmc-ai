@@ -5,7 +5,7 @@ on:
   release:
     types: [published]
   workflow_run:
-    workflows: ["Development"] # This MUST be the exact 'name:' field from your Development workflow
+    workflows: ["Development"]
     types:
       - completed
 
