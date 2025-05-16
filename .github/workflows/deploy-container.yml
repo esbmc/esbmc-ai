@@ -12,8 +12,8 @@ on:
 jobs:
   build-and-push:
     # Only run if:
-    #  • it’s a release publish
-    #  • or a completed Development workflow for the 'master' branch succeeded
+    # * it’s a release publish
+    # * or a completed Development workflow for the 'master' branch succeeded
     if: |
       github.event_name == 'release' ||
       (
