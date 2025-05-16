@@ -1,6 +1,7 @@
 name: Build & Push to Quay
 
 on:
+  workflow_dispatch:
   release:
     types: [published]
   workflow_run:
