@@ -1,4 +1,4 @@
-FROM ubuntu:22.04
+FROM docker.io/library/ubuntu:25.10
 
 # Prevent interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
@@ -7,7 +7,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         python-is-python3 \
-        python3-pip \
+        pipx \
         git \
         ccache \
         unzip \
@@ -36,13 +36,31 @@ RUN apt-get update \
 RUN update-alternatives --install /usr/bin/clang clang /usr/bin/clang-14 100 \
     && update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-14 100
 
+# Download and install ESBMC
+ARG ESBMC_VERSION="latest"
+RUN if [ "$ESBMC_VERSION" = "latest" ]; then \
+        wget https://github.com/esbmc/esbmc/releases/latest/download/esbmc-linux.zip -O esbmc-linux.zip; \
+    else \
+        wget https://github.com/esbmc/esbmc/releases/download/"$ESBMC_VERSION"/esbmc-linux.zip -O esbmc-linux.zip; \
+    fi \
+    && unzip esbmc-linux.zip -d esbmc-linux \
+    && mv esbmc-linux/bin/esbmc /bin/esbmc \
+    && rm -rf esbmc-linux esbmc-linux.zip \
+    && chmod +x /bin/esbmc
+
+
+# Install ESBMC-AI
+ARG ESBMCAI_WHEEL
+COPY ${ESBMCAI_WHEEL} /tmp/esbmc_ai.whl
+
+# Install ESBMC-AI using pipx from the copied wheel
+RUN pipx install /tmp/esbmc_ai.whl \
+    && rm /tmp/esbmc_ai.whl # Clean up the copied wheel after installation
+
 # Accept build-time extra pip packages (pass --build-arg EXTRA_PIP_PACKAGES="pkg1 pkg2" if needed)
-
 ARG EXTRA_PIP_PACKAGES=""
-
-# Install ESBMC-AI and any additional pip packages
-RUN pip3 install --no-cache-dir esbmc-ai
-RUN if [ -n "$EXTRA_PIP_PACKAGES" ]; then pip3 install --no-cache-dir $EXTRA_PIP_PACKAGES; fi
+# Inject any additional pip packages into the esbmc-ai environment
+RUN if [ -n "$EXTRA_PIP_PACKAGES" ]; then pipx inject esbmc-ai $EXTRA_PIP_PACKAGES; fi
 
 # Declare environment variables to be set at runtime
 ENV ESBMCAI_CONFIG_FILE=""

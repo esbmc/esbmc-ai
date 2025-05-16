@@ -1,0 +1,128 @@
+# .github/workflows/push-to-quay.yml
+name: Build & Push to Quay
+
+on:
+  release:
+    types: [published]
+  workflow_run:
+    workflows: ["Development"] # This MUST be the exact 'name:' field from your Development workflow
+    types:
+      - completed
+
+jobs:
+  build-and-push:
+    # Only run if:
+    #  • it’s a release publish
+    #  • or a completed Development workflow for the 'master' branch succeeded
+    if: |
+      github.event_name == 'release' ||
+      (
+        github.event_name == 'workflow_run' &&
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.head_branch == 'master' # Ensure this matches your main development branch
+      )
+    runs-on: ubuntu-latest
+    # Permissions needed for actions/checkout and actions/download-artifact (from other workflows)
+    permissions:
+      contents: read
+      actions: read # Required to download artifacts from other workflow runs
+
+    steps:
+      # Checkout repository:
+      # For 'release', github.ref is the tag (e.g., refs/tags/v1.0.0).
+      # For 'workflow_run', we checkout the specific commit that triggered the Development workflow.
+      - name: Checkout repository
+        uses: actions/checkout@v4 # Using v4 for consistency with your Development workflow
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
+
+      # --- Prepare the .whl artifact ---
+
+      # Scenario 1: Triggered by Development workflow completion -> Download the artifact
+      - name: Download ESBMC-AI Wheel from Development workflow
+        if: github.event_name == 'workflow_run' # The job 'if' already checks for conclusion == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          name: build # This is the artifact name specified in the Development workflow's 'upload-artifact' step
+          path: dist  # Download content into the ./dist directory
+          run-id: ${{ github.event.workflow_run.id }} # ID of the Development workflow run
+
+      # Scenario 2: Triggered by a release -> Build the artifact locally
+      - name: Setup Python for release build
+        if: github.event_name == 'release'
+        uses: actions/setup-python@v5 # Using v5 for setup-python
+        with:
+          python-version: "3.12.0" # Matches your Development workflow
+
+      - name: Install Hatch for release build
+        if: github.event_name == 'release'
+        run: python -m pip install --upgrade hatch # Add short comment
+
+      - name: Get Hatch Dependency Hash for release build
+        if: github.event_name == 'release'
+        id: hatch_release_hash # ID to reference output
+        run: echo "hash=$(hatch dep hash)" >> $GITHUB_OUTPUT # Calculate and output hash
+
+      - name: Cache Hatch environment for release build
+        if: github.event_name == 'release'
+        uses: actions/cache@v4 # Using v4 for cache
+        with:
+          path: | # Paths to cache for Hatch
+            ~/.cache/hatch
+            ~/.local/share/hatch
+          key: ${{ runner.os }}-hatch-release-${{ steps.hatch_release_hash.outputs.hash }} # Cache key
+          restore-keys: | # Fallback restore keys
+            ${{ runner.os }}-hatch-release-
+
+      - name: Perform Hatch build for release
+        if: github.event_name == 'release'
+        run: python -m hatch build # This creates the .whl in ./dist/
+
+      # --- Find the built/downloaded wheel file path ---
+      - name: Find the wheel file path
+        id: find_wheel # ID to reference output
+        run: |
+          # Find the latest .whl file in the dist directory
+          # Use ls -t to sort by modification time (newest first) and head -n 1 to get the top one.
+          # 2>/dev/null suppresses errors if no .whl files are found initially.
+          WHEEL_FILE=$(ls -t dist/*.whl 2>/dev/null | head -n 1)
+
+          # Check if a wheel file was found
+          if [ -z "$WHEEL_FILE" ]; then
+            echo "Error: No .whl file found in dist/."
+            exit 1
+          fi
+
+          echo "Found wheel file: $WHEEL_FILE"
+          # Set the output variable to the found path
+          echo "wheel_path=$WHEIL_FILE" >> $GITHUB_OUTPUT
+
+
+      # --- Docker build and push steps (common for both scenarios) ---
+      - name: Log in to Quay.io
+        uses: docker/login-action@v2 # As per your original file
+        with:
+          registry: quay.io
+          username: ${{ secrets.QUAY_USERNAME }}
+          password: ${{ secrets.QUAY_PASSWORD }}
+
+      - name: Set Docker image tags
+        id: docker_tags
+        run: | # Script to set tags based on event
+          if [ "${{ github.event_name }}" == "release" ]; then
+            echo "tags=quay.io/${{ secrets.QUAY_REPO }}:latest,quay.io/${{ secrets.QUAY_REPO }}:${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event_name }}" == "workflow_run" ]; then
+            # For master branch builds via workflow_run, tag as latest
+            echo "tags=quay.io/${{ secrets.QUAY_REPO }}:latest" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build & push Docker image
+        uses: docker/build-push-action@v3 # As per your original file, consider updating to v5 eventually
+        with:
+          context: . # The ./dist directory with the .whl will be in this context
+          file: Containerfile
+          push: true
+          tags: ${{ steps.docker_tags.outputs.tags }}
+          # Pass the wheel file path as a build argument
+          build-args: |
+            ESBMCAI_WHEEL=${{ steps.find_wheel.outputs.wheel_path }}
