@@ -1,4 +1,3 @@
-# .github/workflows/push-to-quay.yml
 name: Build & Push to Quay
 
 on:
