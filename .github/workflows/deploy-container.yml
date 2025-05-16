@@ -44,7 +44,7 @@ jobs:
         with:
           name: build
           path: dist
-          run-id: ${{ github.event.workflow_run.run_id }}
+          run-id: ${{ github.event.workflow_run.id }}
 
       # --- Find the built/downloaded wheel file path ---
       - name: Find the wheel file path
