@@ -40,11 +40,11 @@ jobs:
       # Download artifact if triggered by a workflow_run (this includes the workflow_run that precedes a release)
       - name: Download ESBMC-AI Wheel from Development workflow
         if: github.event_name == 'workflow_run' # Download artifact for any successful workflow_run
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v4.3.0
         with:
-          name: build # This is the artifact name specified in the Development workflow's 'upload-artifact' step
-          path: dist  # Download content into the ./dist directory
-          run-id: ${{ github.event.workflow_run.id }} # ID of the Development workflow run
+          name: build
+          path: dist
+          run-id: ${{ github.event.workflow_run.run_id }}
 
       # --- Find the built/downloaded wheel file path ---
       - name: Find the wheel file path
