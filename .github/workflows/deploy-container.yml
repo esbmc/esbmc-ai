@@ -13,13 +13,12 @@ jobs:
   build-and-push:
     # Only run if:
     # * it’s a release publish
-    # * or a completed Development workflow for the 'master' branch succeeded
+    # * or a completed Development workflow for any branch succeeded
     if: |
       github.event_name == 'release' ||
       (
         github.event_name == 'workflow_run' &&
-        github.event.workflow_run.conclusion == 'success' &&
-        github.event.workflow_run.head_branch == 'master' # Ensure this matches your main development branch
+        github.event.workflow_run.conclusion == 'success'
       )
     runs-on: ubuntu-latest
     # Permissions needed for actions/checkout and actions/download-artifact (from other workflows)
@@ -36,47 +35,16 @@ jobs:
         with:
           ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
 
-      # --- Prepare the .whl artifact ---
+      # --- Prepare the .whl artifact by downloading from the preceding workflow_run ---
 
-      # Scenario 1: Triggered by Development workflow completion -> Download the artifact
+      # Download artifact if triggered by a workflow_run (this includes the workflow_run that precedes a release)
       - name: Download ESBMC-AI Wheel from Development workflow
-        if: github.event_name == 'workflow_run' # The job 'if' already checks for conclusion == 'success'
+        if: github.event_name == 'workflow_run' # Download artifact for any successful workflow_run
         uses: actions/download-artifact@v4
         with:
           name: build # This is the artifact name specified in the Development workflow's 'upload-artifact' step
           path: dist  # Download content into the ./dist directory
           run-id: ${{ github.event.workflow_run.id }} # ID of the Development workflow run
-
-      # Scenario 2: Triggered by a release -> Build the artifact locally
-      - name: Setup Python for release build
-        if: github.event_name == 'release'
-        uses: actions/setup-python@v5 # Using v5 for setup-python
-        with:
-          python-version: "3.12.0" # Matches your Development workflow
-
-      - name: Install Hatch for release build
-        if: github.event_name == 'release'
-        run: python -m pip install --upgrade hatch # Add short comment
-
-      - name: Get Hatch Dependency Hash for release build
-        if: github.event_name == 'release'
-        id: hatch_release_hash # ID to reference output
-        run: echo "hash=$(hatch dep hash)" >> $GITHUB_OUTPUT # Calculate and output hash
-
-      - name: Cache Hatch environment for release build
-        if: github.event_name == 'release'
-        uses: actions/cache@v4 # Using v4 for cache
-        with:
-          path: | # Paths to cache for Hatch
-            ~/.cache/hatch
-            ~/.local/share/hatch
-          key: ${{ runner.os }}-hatch-release-${{ steps.hatch_release_hash.outputs.hash }} # Cache key
-          restore-keys: | # Fallback restore keys
-            ${{ runner.os }}-hatch-release-
-
-      - name: Perform Hatch build for release
-        if: github.event_name == 'release'
-        run: python -m hatch build # This creates the .whl in ./dist/
 
       # --- Find the built/downloaded wheel file path ---
       - name: Find the wheel file path
@@ -90,17 +58,19 @@ jobs:
           # Check if a wheel file was found
           if [ -z "$WHEEL_FILE" ]; then
             echo "Error: No .whl file found in dist/."
+            # For a release event, the artifact *must* exist from the preceding workflow_run.
+            # For a workflow_run event, it should also exist if the 'Development' workflow uploaded it.
             exit 1
           fi
 
           echo "Found wheel file: $WHEEL_FILE"
           # Set the output variable to the found path
-          echo "wheel_path=$WHEIL_FILE" >> $GITHUB_OUTPUT
+          echo "wheel_path=$WHEEL_FILE" >> $GITHUB_OUTPUT
 
 
       # --- Docker build and push steps (common for both scenarios) ---
       - name: Log in to Quay.io
-        uses: docker/login-action@v2 # As per your original file
+        uses: docker/login-action@v2 # Log in to Quay.io registry
         with:
           registry: quay.io
           username: ${{ secrets.QUAY_USERNAME }}
@@ -108,16 +78,30 @@ jobs:
 
       - name: Set Docker image tags
         id: docker_tags
-        run: | # Script to set tags based on event
+        run: | # Script to set tags based on event and branch
+          REPO="quay.io/${{ secrets.QUAY_REPO }}"
+          TAGS=""
           if [ "${{ github.event_name }}" == "release" ]; then
-            echo "tags=quay.io/${{ secrets.QUAY_REPO }}:latest,quay.io/${{ secrets.QUAY_REPO }}:${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
+            # Tag release builds with 'latest' and the release tag
+            TAGS="$REPO:latest,$REPO:${{ github.event.release.tag_name }}"
           elif [ "${{ github.event_name }}" == "workflow_run" ]; then
-            # For master branch builds via workflow_run, tag as latest
-            echo "tags=quay.io/${{ secrets.QUAY_REPO }}:latest" >> $GITHUB_OUTPUT
+            BRANCH="${{ github.event.workflow_run.head_branch }}"
+            if [ "$BRANCH" == "master" ]; then
+              # Master branch workflow_run builds are tagged as 'latest'
+              TAGS="$REPO:latest"
+            else
+              # Other branch workflow_run builds are tagged with the branch name
+              # Sanitize branch name for use as a Docker tag
+              SANITIZED_BRANCH=$(echo "$BRANCH" | sed -e 's/[^a-zA-Z0-9._-]/-/g' | sed -e 's/^-*//' -e 's/-*$//')
+              # Also include the commit SHA for non-master workflow_run tags for better traceability
+              COMMIT_SHORT_SHA=$(echo "${{ github.event.workflow_run.head_sha }}" | cut -c1-7)
+              TAGS="$REPO:$SANITIZED_BRANCH-$COMMIT_SHORT_SHA"
+            fi
           fi
+          echo "tags=$TAGS" >> $GITHUB_OUTPUT # Set the output variable
 
       - name: Build & push Docker image
-        uses: docker/build-push-action@v3 # As per your original file, consider updating to v5 eventually
+        uses: docker/build-push-action@v6 # Build and push the Docker image using v6
         with:
           context: . # The ./dist directory with the .whl will be in this context
           file: Containerfile
