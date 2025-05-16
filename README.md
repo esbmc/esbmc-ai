@@ -1,5 +1,8 @@
 # ESBMC AI
 
+[![Development](https://github.com/esbmc/esbmc-ai/actions/workflows/workflow.yml/badge.svg?branch=master)](https://github.com/esbmc/esbmc-ai/actions/workflows/workflow.yml)
+[![Docker Repository on Quay](https://quay.io/repository/yiannis128/esbmc-ai/status "Docker Repository on Quay")](https://quay.io/repository/yiannis128/esbmc-ai)
+
 Automated LLM Integrated Workflow Platform. Primarily oriented around Automated Program Repair (APR) research. There are different commands that can be executed with ESBMC-AI. There are different commands that ESBMC-AI can run, and can also be extended with Addons (see [below](#wiki)).
 
 The basic repair implementation passes the output from ESBMC to an AI model with instructions to repair the code. As the output from ESBMC can be quite technical in nature.

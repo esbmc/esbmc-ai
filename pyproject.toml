@@ -4,15 +4,8 @@ description = "LLM driven development and automatic repair kit."
 readme = "README.md"
 requires-python = ">=3.12"
 license-files = ["LICENSE"]
-authors = [
-  { name = "Yiannis Charalambous", email = "yiannis128@hotmail.com" },
-]
-keywords = [
-  "AI",
-  "LLM",
-  "automated code repair",
-  "esbmc",
-]
+authors = [{ name = "Yiannis Charalambous", email = "yiannis128@hotmail.com" }]
+keywords = ["AI", "LLM", "automated code repair", "esbmc"]
 classifiers = [
   "License :: OSI Approved :: GNU Affero General Public License v3",
   "Programming Language :: Python :: 3",
@@ -28,8 +21,8 @@ dependencies = [
   "platformdirs",
   "python-dotenv",
   "regex",
-  "torch",  # Needed by transformers
-  "transformers",  # Needed by langchain-core to calculate get_token_ids
+  "torch",               # Needed by transformers
+  "transformers",        # Needed by langchain-core to calculate get_token_ids
 ]
 # https://hatch.pypa.io/latest/version/
 dynamic = ["version"]
@@ -55,25 +48,87 @@ description = "Default environment. Used for development."
 dependencies = [
   "pylint",
   "ipykernel",
-  "py",  # Dependency of pytest-regtest
+  "py",        # Dependency of pytest-regtest
   "twine",
 ]
 
 [tool.hatch.envs.default.scripts]
 podman-build = """
+# Check if Podman is installed
 if [ -z $(command -v podman) ]; then
-  echo "Podman not installed..."
+  echo "Error: Podman not installed."
   exit 1
 fi
-podman build --tag esbmc-ai --build-arg EXTRA_PIP_PACKAGES="{args}" .
+
+echo "Building project artifacts..."
+# Run hatch build to generate dist/ contents (including the wheel)
+hatch build
+# Check if build was successful
+if [ $? -ne 0 ]; then
+  echo "Error: Hatch build failed."
+  exit 1
+fi
+
+echo "Finding wheel file in dist/..."
+# Find the latest generated wheel file in the dist/ directory.
+# We assume only one .whl file is relevant after a build.
+# Use 'ls -t' to sort by modification time, newest first.
+WHEEL_FILE=$(ls -t dist/*.whl 2>/dev/null | head -n 1)
+
+# Check if a wheel file was found
+if [ -z "$WHEEL_FILE" ]; then
+  echo "Error: No wheel file found in dist/ after build."
+  exit 1
+fi
+
+echo "Found wheel: $WHEEL_FILE"
+
+echo "Building Podman image..."
+# Build the Podman image, passing the wheel file path and extra pip packages as build arguments
+podman build \\
+  --tag esbmc-ai \\
+  --build-arg ESBMCAI_WHEEL="$WHEEL_FILE" \\
+  --build-arg EXTRA_PIP_PACKAGES="{args}" \\
+  .
 """
 
 docker-build = """
+# Check if Docker is installed
 if [ -z $(command -v docker) ]; then
-  echo "Docker not installed..."
+  echo "Error: Docker not installed."
   exit 1
 fi
-docker build --tag esbmc-ai --build-arg EXTRA_PIP_PACKAGES="{args}" .
+
+echo "Building project artifacts..."
+# Run hatch build to generate dist/ contents (including the wheel)
+hatch build
+# Check if build was successful
+if [ $? -ne 0 ]; then
+  echo "Error: Hatch build failed."
+  exit 1
+fi
+
+echo "Finding wheel file in dist/..."
+# Find the latest generated wheel file in the dist/ directory.
+# We assume only one .whl file is relevant after a build.
+# Use 'ls -t' to sort by modification time, newest first.
+WHEEL_FILE=$(ls -t dist/*.whl 2>/dev/null | head -n 1)
+
+# Check if a wheel file was found
+if [ -z "$WHEEL_FILE" ]; then
+  echo "Error: No wheel file found in dist/ after build."
+  exit 1
+fi
+
+echo "Found wheel: $WHEEL_FILE"
+
+echo "Building Docker image..."
+# Build the Docker image, passing the wheel file path and extra pip packages as build arguments
+docker build \\
+  --tag esbmc-ai \\
+  --build-arg ESBMCAI_WHEEL="$WHEEL_FILE" \\
+  --build-arg EXTRA_PIP_PACKAGES="{args}" \\
+  .
 """
 
 [tool.hatch.envs.hatch-test]
@@ -96,6 +151,4 @@ include = ["/esbmc_ai"]
 # packages = ["esbmc_ai"]
 
 [tool.pytest.ini_options]
-addopts = [
-  "--import-mode=importlib",
-]
+addopts = ["--import-mode=importlib"]
