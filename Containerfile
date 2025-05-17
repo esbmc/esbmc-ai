@@ -48,14 +48,16 @@ RUN if [ "$ESBMC_VERSION" = "latest" ]; then \
     && rm -rf esbmc-linux esbmc-linux.zip \
     && chmod +x /bin/esbmc
 
+# Add pipx binaries to PATH
+RUN pipx ensurepath
 
 # Install ESBMC-AI
 ARG ESBMCAI_WHEEL
-COPY ${ESBMCAI_WHEEL} /tmp/esbmc_ai.whl
+COPY ${ESBMCAI_WHEEL} /tmp/
 
 # Install ESBMC-AI using pipx from the copied wheel
-RUN pipx install /tmp/esbmc_ai.whl \
-    && rm /tmp/esbmc_ai.whl # Clean up the copied wheel after installation
+RUN pipx install /tmp/$(basename "$ESBMCAI_WHEEL") \
+    && rm /tmp/$(basename "$ESBMCAI_WHEEL")
 
 # Accept build-time extra pip packages (pass --build-arg EXTRA_PIP_PACKAGES="pkg1 pkg2" if needed)
 ARG EXTRA_PIP_PACKAGES=""
