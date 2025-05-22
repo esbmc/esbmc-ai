@@ -15,10 +15,12 @@ class ChatCommand(BaseComponent):
     def __init__(
         self,
         command_name: str = "",
-        help_message: str = "",
         authors: str = "",
+        help_message: str = "",
     ) -> None:
-        super().__init__(name=command_name, authors=authors)
+        super().__init__()
+        self._name = command_name
+        self._authors = authors
 
         self.help_message = help_message
 

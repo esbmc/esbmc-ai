@@ -146,7 +146,7 @@ class Config(BaseConfig, metaclass=makecls(SingletonMeta)):
             ),
             # This needs to be before "ai_model" - Loads the AI Models
             ConfigField(
-                name="llm_requests.open_ai.model_refresh_seconds",
+                name="llm_requests.model_refresh_seconds",
                 # Default is to refresh once a day
                 default_value=self._init_ai_models(86400),
                 validate=lambda v: isinstance(v, int),
@@ -235,7 +235,7 @@ class Config(BaseConfig, metaclass=makecls(SingletonMeta)):
             # If argument is passed, then the config value is ignored.
             ConfigField(
                 name="solution.entry_function",
-                default_value=None,
+                default_value="main",
                 validate=lambda v: isinstance(v, str)
                 and (
                     # This impliments logical implication A => B

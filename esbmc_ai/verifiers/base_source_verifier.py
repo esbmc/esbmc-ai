@@ -44,7 +44,10 @@ class BaseSourceVerifier(BaseComponent):
 
     def __init__(self, verifier_name: str, authors: str) -> None:
         """Verifier name needs to be a valid TOML key."""
-        super().__init__(name=verifier_name, authors=authors)
+        super().__init__()
+        self._name = verifier_name
+        self._authors = authors
+        
         pattern = re.compile(r"[a-zA-Z_]\w*")
         assert pattern.match(
             verifier_name

@@ -3,7 +3,7 @@
 """This module contains code regarding configuring and loading addon modules."""
 
 import inspect
-from typing import Any, override
+from typing import Any
 import traceback
 import sys
 import importlib
@@ -12,7 +12,6 @@ from importlib.machinery import ModuleSpec
 from typing_extensions import Optional
 
 from esbmc_ai.base_component import BaseComponent
-from esbmc_ai.base_config import BaseConfig
 from esbmc_ai.chat_command import ChatCommand
 from esbmc_ai.logging import printv
 from esbmc_ai.verifiers.base_source_verifier import BaseSourceVerifier
@@ -36,7 +35,7 @@ class AddonLoader(metaclass=SingletonMeta):
 
     addon_prefix: str = "addons"
 
-    def __init__(self, config: Config = None) -> None:
+    def __init__(self, config: Config | None = None) -> None:
         assert config
         self._config: Config = config
         self._config.on_load_value.append(self._on_get_config_value)
@@ -84,21 +83,31 @@ class AddonLoader(metaclass=SingletonMeta):
         )
 
     @property
+    def chat_command_addons(self) -> dict[str, ChatCommand]:
+        """Returns all the addon chat commands."""
+        return {addon_name: addon for addon_name, addon in self.loaded_addons.items() if isinstance(addon, ChatCommand)}
+
+    @property
     def chat_command_addon_names(self) -> list[str]:
         """Returns all the addon chat command names."""
-        return list(addon for addon in self.loaded_addons.values() if isinstance(addon, ChatCommand))
+        return list(addon.name for addon in self.loaded_addons.values() if isinstance(addon, ChatCommand))
+
+    @property
+    def verifier_addons(self) -> dict[str, BaseSourceVerifier]:
+        """Returns all the addon verifiers."""
+        return {addon_name: addon for addon_name, addon in self.loaded_addons.items() if isinstance(addon, BaseSourceVerifier)}
 
     @property
     def verifier_addon_names(self) -> list[str]:
         """Returns all the addon verifier names."""
-        return list(addon for addon in self.loaded_addons if isinstance(addon, BaseSourceVerifier))
+        return list(addon.name for addon in self.loaded_addons if isinstance(addon, BaseSourceVerifier))
 
     @property
     def loaded_addons(self) -> dict[str, BaseComponent]:
         return self._loaded_addons 
 
     @staticmethod
-    def _validate_addon_modules(validate_module: str) -> bool:
+    def _validate_addon_modules(mods: str) -> bool:
         """Validates that a module exists."""
         for m in mods:
             if not isinstance(m, str):
@@ -188,7 +197,7 @@ class AddonLoader(metaclass=SingletonMeta):
                 # Check if valid addon type and import
                 if issubclass(exposed_class, BaseComponent):
                     # Initialize class.
-                    addon: BaseComponent = exposed_class()
+                    addon: BaseComponent = exposed_class.create()
                     printv(f"Loading addon: {exposed_class_name}")
                     
                     # Register config with modules
@@ -218,6 +227,6 @@ class AddonLoader(metaclass=SingletonMeta):
             if f.name in added_field_names:
                 raise KeyError(f"AddonLoader: field already loaded: {f.name}")
             try:
-                self._config.add_config_field(field)
+                self._config.add_config_field(f)
             except Exception:
-                print(f"AddonLoader: Failed to register config field: {field.name}")
+                print(f"AddonLoader: Failed to register config field: {f.name}")

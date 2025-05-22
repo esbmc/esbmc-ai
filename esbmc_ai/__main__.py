@@ -27,9 +27,11 @@ from esbmc_ai.logging import printv, printvv, set_default_label
 # Enables arrow key functionality for input(). Do not remove import.
 _ = readline
 
-VerifierRunner([ESBMC()])
+# Built-in verifiers
+VerifierRunner().add_verifier(ESBMC())
+VerifierRunner().set_verifier_by_name("esbmc")
 # Init built-in commands
-command_runner: CommandRunner = CommandRunner(
+CommandRunner(
     builtin_commands=[
         HelpCommand(),
         HelpConfigCommand(),
@@ -80,7 +82,7 @@ def main() -> None:
         nargs="?",
         help=(
             "The command to run using the program. Options: {"
-            + ", ".join(command_runner.builtin_commands_names)
+            + ", ".join(CommandRunner().builtin_commands_names)
             + "}. To see addon commands available: Run with 'help' as the "
             "default command."
         ),
@@ -172,23 +174,23 @@ def main() -> None:
 
     # Load addons
     printvv("Loading addons")
-    AddonLoader().init(Config(), verifier_runner.builtin_verifier_names)
+    AddonLoader(Config())
     # Bind addons to command runner and verifier runner.
-    command_runner.addon_commands = AddonLoader().chat_command_addons
-    verifier_runner.addon_verifiers = AddonLoader().verifier_addons
+    CommandRunner.addon_commands = AddonLoader().chat_command_addons
+    VerifierRunner()._verifiers = VerifierRunner()._verifiers | AddonLoader().verifier_addons
     # Set verifier to use
-    printvv(f"Verifier: {verifier_runner.verfifier.verifier_name}")
-    verifier_runner.set_verifier_by_name(Config().get_value("verifier.name"))
+    printvv(f"Verifier: {VerifierRunner().verfifier.verifier_name}")
+    VerifierRunner().set_verifier_by_name(Config().get_value("verifier.name"))
 
     printv(f"Source code format: {Config().get_value('source_code_format')}")
     printv(f"ESBMC output type: {Config().get_value('verifier.esbmc.output_type')}")
 
     # Run the command
     command = args.command
-    command_names: list[str] = command_runner.command_names
+    command_names: list[str] = CommandRunner().command_names
     if command in command_names:
         print("Running Command:", command, "\n")
-        _run_command_mode(command=command_runner.commands[command], args=args)
+        _run_command_mode(command=CommandRunner().commands[command], args=args)
         sys.exit(0)
     else:
         print(
