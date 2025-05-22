@@ -23,14 +23,11 @@ from esbmc_ai.singleton import SingletonMeta
 class AddonLoader(metaclass=SingletonMeta):
     """The addon loader manages loading addon modules. This includes:
     * Managing the config fields of the addons.
-    * Binding the loaded addons with CommandRunner and VerifierRunner.
+    * Dynamically loading the fields when the addons request them.
 
-    It hooks into the main config loader and adds config fields for selecting
-    the modules. Additionally it behaves like a config loader, this is because
-    it puts all the configs that the addons use into a namespace called "addons".
-
-    The exception to this are the built-in modules which directly hook into the
-    main config object.
+    When an addon requests a config value from an addon that is not loaded, that
+    addon's config fields get loaded. This means that addons will have dependency
+    management (as long as there's no loops).
     """
 
     addon_prefix: str = "addons"
