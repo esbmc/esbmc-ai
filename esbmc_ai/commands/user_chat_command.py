@@ -170,12 +170,12 @@ class UserChatCommand(ChatCommand):
 
         # Show the initial output.
         response: ChatResponse
-        if len(str(Config().get_user_chat_initial().content)) > 0:
+        if len(str(self.get_user_chat_initial().content)) > 0:
             logv("Using initial prompt from file...\n")
             with self.anim("Model is parsing ESBMC output... Please Wait"):
                 try:
                     response = self.chat.send_message(
-                        message=str(Config().get_user_chat_initial().content),
+                        message=str(self.get_user_chat_initial().content),
                     )
                 except Exception as e:
                     print(f"There was an error while generating a response: {e}")
