@@ -9,6 +9,7 @@ import sys
 from typing import Any, Optional, override
 
 from langchain_core.language_models import BaseChatModel
+from langchain.schema import BaseMessage
 from esbmc_ai.chat_response import ChatResponse, FinishReason
 from esbmc_ai.chats.user_chat import UserChat
 from esbmc_ai.command_runner import CommandRunner
@@ -94,6 +95,21 @@ class UserChatCommand(ChatCommand):
                 f"finish reason: {response.finish_reason}",
             )
 
+    @staticmethod
+    def get_user_chat_initial() -> BaseMessage:
+        """Value of field: prompt_templates.user_chat.initial"""
+        return Config().get_value("prompt_templates.user_chat.initial")
+
+    @staticmethod
+    def get_user_chat_system_messages() -> list[BaseMessage]:
+        """Value of field: prompt_templates.user_chat.system"""
+        return Config().get_value("prompt_templates.user_chat.system")
+
+    @staticmethod
+    def get_user_chat_set_solution() -> list[BaseMessage]:
+        """Value of field: prompt_templates.user_chat.set_solution"""
+        return Config().get_value("prompt_templates.user_chat.set_solution")
+
     @override
     def execute(self, **kwargs: Optional[Any]) -> Optional[CommandResult]:
         _ = kwargs
@@ -127,10 +143,10 @@ class UserChatCommand(ChatCommand):
         logvv(esbmc_output)
         print_horizontal_line(2)
 
-        logv(f"Initializing the LLM: {Config().get_ai_model().name}\n")
+        logv(f"Initializing the LLM: {Config().get_value("ai_model").name}\n")
         chat_llm: BaseChatModel = (
             Config()
-            .get_ai_model()
+            .get_value("ai_model")
             .create_llm(
                 temperature=Config().get_value("user_chat.temperature"),
                 requests_max_tries=Config().get_value("llm_requests.max_tries"),
@@ -140,13 +156,13 @@ class UserChatCommand(ChatCommand):
 
         logv("Creating user chat")
         self.chat = UserChat(
-            ai_model=Config().get_ai_model(),
+            ai_model=Config().get_value("ai_model"),
             llm=chat_llm,
             verifier=self.verifier_runner.verifier,
             solution=self.solution,
             esbmc_output=esbmc_output,
-            system_messages=Config().get_user_chat_system_messages(),
-            set_solution_messages=Config().get_user_chat_set_solution(),
+            system_messages=UserChatCommand().get_user_chat_system_messages(),
+            set_solution_messages=UserChatCommand().get_user_chat_set_solution(),
         )
 
         logv("Initializing commands...")

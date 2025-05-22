@@ -23,6 +23,7 @@ from langchain.schema import (
     PromptValue,
 )
 
+from esbmc_ai.singleton import SingletonMeta
 
 class AIModel:
     """This base class represents an abstract AI model."""
@@ -315,24 +316,10 @@ class AIModelAnthropic(AIModelService):
         return super().get_num_tokens_from_messages(messages)
 
 
-class AIModels:
+class AIModels(metaclass=SingletonMeta):
     """Manages the loading of AI Models from different sources."""
 
-    _instance: "AIModels | None" = None
-    _initialized: bool = False
-
-    def __new__(cls):
-        if cls._instance:
-            return cls._instance
-
-        cls._instance = super(AIModels, cls).__new__(cls)
-        return cls._instance
-
     def __init__(self) -> None:
-        if AIModels._initialized:
-            return
-
-        AIModels._initialized = True
         super().__init__()
 
         self._api_keys: dict[str, str] = {}

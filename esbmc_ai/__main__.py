@@ -12,6 +12,7 @@ from esbmc_ai import Config, ChatCommand, __author__, __version__
 from esbmc_ai.addon_loader import AddonLoader
 from esbmc_ai.command_result import CommandResult
 from esbmc_ai.commands.user_chat_command import UserChatCommand
+from esbmc_ai.verifiers.esbmc import ESBMC
 from esbmc_ai.verifier_runner import VerifierRunner
 from esbmc_ai.command_runner import CommandRunner
 from esbmc_ai.commands import (
@@ -26,9 +27,9 @@ from esbmc_ai.logging import printv, printvv, set_default_label
 # Enables arrow key functionality for input(). Do not remove import.
 _ = readline
 
-verifier_runner: VerifierRunner = VerifierRunner()
+VerifierRunner([ESBMC()])
 # Init built-in commands
-command_runner: CommandRunner = CommandRunner().init(
+command_runner: CommandRunner = CommandRunner(
     builtin_commands=[
         HelpCommand(),
         HelpConfigCommand(),
@@ -165,9 +166,10 @@ def main() -> None:
     print()
 
     printvv("Loading config")
-    Config().init(args)
+    Config().load(args)
     printv(f"Config File: {Config().get_value("ESBMCAI_CONFIG_FILE")}")
     _check_health()
+
     # Load addons
     printvv("Loading addons")
     AddonLoader().init(Config(), verifier_runner.builtin_verifier_names)

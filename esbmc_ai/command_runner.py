@@ -3,31 +3,19 @@
 import re
 from esbmc_ai.chat_command import ChatCommand
 from esbmc_ai.commands.help_command import HelpCommand
+from esbmc_ai.singleton import SingletonMeta
 
 
-class CommandRunner:
+class CommandRunner(metaclass=SingletonMeta):
     """Command runner manages running and storing commands. Singleton class."""
 
-    _initialized: bool = False
-    _instance: "CommandRunner | None" = None
-
-    _builtin_commands: dict[str, ChatCommand]
-    _addon_commands: dict[str, ChatCommand]
-
-    def __new__(cls):
-        if not cls._instance:
-            cls.instance = super(CommandRunner, cls).__new__(cls)
-        return cls.instance
-
-    def init(self, builtin_commands: list[ChatCommand]) -> "CommandRunner":
-        """Initializes the singleton."""
-        self._builtin_commands = {cmd.command_name: cmd for cmd in builtin_commands}
-        self._addon_commands = {}
+    def __init__(self, builtin_commands: list[ChatCommand] = []):
+        super().__init__()
+        self._builtin_commands: dict[str, ChatCommand] = {cmd.command_name: cmd for cmd in builtin_commands}
+        self._addon_commands: dict[str, ChatCommand] = {}
 
         # Set the help command commands
         self._update_help_command()
-
-        return self
 
     @property
     def commands(self) -> dict[str, ChatCommand]:

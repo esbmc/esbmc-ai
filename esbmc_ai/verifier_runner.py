@@ -1,30 +1,18 @@
 # Author: Yiannis Charalambous
 
 from esbmc_ai.verifiers.base_source_verifier import BaseSourceVerifier
-from esbmc_ai.verifiers.esbmc import ESBMC
+from esbmc_ai.singleton import SingletonMeta
 
 
-class VerifierRunner:
+class VerifierRunner(metaclass=SingletonMeta):
     """Manages all the verifiers that are used. Can get the appropriate one based
     on the config."""
 
-    def __new__(cls):
-        if not hasattr(cls, "instance"):
-            cls.instance = super(VerifierRunner, cls).__new__(cls)
-            cls.instance._init([ESBMC()])
-        return cls.instance
-
-    _builtin_verifiers: dict[str, BaseSourceVerifier]
-    """Builtin loaded verifiers"""
-    _addon_verifiers: dict[str, BaseSourceVerifier] = {}
-    """Additional loaded verifiers"""
-    _verifier: BaseSourceVerifier
-    """Default verifier"""
-
-    def _init(self, builtin_verifiers: list[BaseSourceVerifier]) -> "VerifierRunner":
-        self._builtin_verifiers = {v.verifier_name: v for v in builtin_verifiers}
-        self._verifier = builtin_verifiers[0]
-        return self
+    def __init__(self, builtin_verifiers: list[BaseSourceVerifier] = []):
+        super().__init__()
+        self._builtin_verifiers: dict[str, BaseSourceVerifier] = {v.verifier_name: v for v in builtin_verifiers}
+        self._verifier: BaseSourceVerifier = builtin_verifiers[0]
+        _addon_verifiers: dict[str, BaseSourceVerifier] = {}
 
     @property
     def verfifier(self) -> BaseSourceVerifier:

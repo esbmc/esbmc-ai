@@ -16,10 +16,11 @@ from typing import (
 from dotenv import load_dotenv, find_dotenv
 from langchain.schema import HumanMessage, BaseMessage
 
+from esbmc_ai.singleton import SingletonMeta, makecls
 from esbmc_ai.config_field import ConfigField
 from esbmc_ai.base_config import BaseConfig, default_scenario
 from esbmc_ai.chat_response import list_to_base_messages
-from esbmc_ai.logging import set_verbose, set_horizontal_lines
+from esbmc_ai.logging import set_verbose, set_horizontal_lines, set_horizontal_line_width
 from esbmc_ai.ai_models import (
     AIModel,
     AIModels,
@@ -64,84 +65,28 @@ def _validate_prompt_template(conv: Dict[str, List[Dict]]) -> bool:
     return True
 
 
-class Config(BaseConfig):
+class Config(BaseConfig, metaclass=makecls(SingletonMeta)):
     """Config loader for ESBMC-AI"""
 
-    _instance: "Config | None" = None
-    _initialized: bool = False
-    _args: argparse.Namespace
-    raw_conversation: bool = False
-    generate_patches: bool
-    output_dir: Path | None = None
-
-    def __new__(cls):
-        if cls._instance:
-            return cls._instance
-
-        cls._instance = super(Config, cls).__new__(cls)
-        return cls._instance
-
     def __init__(self) -> None:
-        if Config._initialized:
-            return
 
-        Config._initialized = True
         super().__init__()
 
-    @property
-    def initialized(self) -> bool:
-        """Returns true if the class has been initialized. Usually we don't make
-        this field public, but it's used by the AddonLoader config class to
-        ensure that this object is initialized before it initializes."""
-        return self._initialized
-
-    # Define some shortcuts for the values here (instead of having to use get_value)
-
-    def get_ai_model(self) -> AIModel:
-        """Value of field: ai_model"""
-        return self.get_value("ai_model")
-
-    def get_llm_requests_max_tries(self) -> int:
-        """Value of field: llm_requests.max_tries"""
-        return self.get_value("llm_requests.max_tries")
-
-    def get_llm_requests_timeout(self) -> float:
-        """Max timeout for a request when prompting the LLM"""
-        return self.get_value("llm_requests.timeout")
-
-    def get_user_chat_initial(self) -> BaseMessage:
-        """Value of field: prompt_templates.user_chat.initial"""
-        return self.get_value("prompt_templates.user_chat.initial")
-
-    def get_user_chat_system_messages(self) -> list[BaseMessage]:
-        """Value of field: prompt_templates.user_chat.system"""
-        return self.get_value("prompt_templates.user_chat.system")
-
-    def get_user_chat_set_solution(self) -> list[BaseMessage]:
-        """Value of field: prompt_templates.user_chat.set_solution"""
-        return self.get_value("prompt_templates.user_chat.set_solution")
-
-    def get_fix_code_scenarios(self) -> dict[str, FixCodeScenario]:
-        """Value of field: prompt_templates.fix_code"""
-        return self.get_value("prompt_templates.fix_code")
-
-    @property
-    def filenames(self) -> list[Path]:
-        """Gets the filanames that are to be loaded"""
-        return self.get_value("solution.filenames")
-
-    @classmethod
-    def init(cls, args: Any) -> None:
-        """Will load the config from the args, the env file and then from config file.
-        Call once to initialize."""
-
-        config: Config = Config()
-        config._args = args
+        self._args: argparse.Namespace
+        self.raw_conversation: bool = False
+        self.generate_patches: bool
+        self.output_dir: Path | None = None
 
         # Huggingface warning supress
         os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-        config._load_envs(
+
+    def load(self, args: Any) -> None:
+        """Will load the config from the args, the env file and then from config file."""
+
+        self._args = args
+
+        self._load_envs(
             ConfigField.from_env(
                 name="ESBMCAI_CONFIG_FILE",
                 default_value=None,
@@ -159,14 +104,14 @@ class Config(BaseConfig):
             ),
         )
 
-        config.set_custom_field(
+        self.set_custom_field(
             ConfigField(
                 name="api_keys",
                 default_value={},
             ),
             value={
-                "openai": config.get_value("OPENAI_API_KEY"),
-                "anthropic": config.get_value("ANTHROPIC_API_KEY"),
+                "openai": self.get_value("OPENAI_API_KEY"),
+                "anthropic": self.get_value("ANTHROPIC_API_KEY"),
             },
         )
 
@@ -185,18 +130,27 @@ class Config(BaseConfig):
                 "Makes it easier to read.",
             ),
             ConfigField(
+                name="horizontal_line_width",
+                default_value=None,
+                default_value_none=True,
+                on_load=set_horizontal_line_width,
+                help_message="Sets the width of the horizontal lines to draw. "
+                "Don't set a value to use the terminal width. Needs to have "
+                "show_horizontal_lines set to true."
+            ),
+            ConfigField(
                 name="ai_custom",
                 default_value=[],
-                on_read=config._load_custom_ai,
+                on_read=self._load_custom_ai,
                 error_message="Invalid custom AI specification",
             ),
             # This needs to be before "ai_model" - Loads the AI Models
             ConfigField(
                 name="llm_requests.open_ai.model_refresh_seconds",
                 # Default is to refresh once a day
-                default_value=config._init_ai_models(86400),
+                default_value=self._init_ai_models(86400),
                 validate=lambda v: isinstance(v, int),
-                on_load=config._init_ai_models,
+                on_load=self._init_ai_models,
                 help_message="How often to refresh the models list provided by OpenAI. "
                 "Make sure not to spam them as they can IP block. Default is once a day.",
                 error_message="Invalid value, needs to be an int in seconds",
@@ -261,11 +215,11 @@ class Config(BaseConfig):
                 )
                 # Validate arg values
                 and (
-                    len(config._args.filenames) == 0
-                    or all(Path(f).exists() for f in config._args.filenames)
+                    len(self._args.filenames) == 0
+                    or all(Path(f).exists() for f in self._args.filenames)
                 ),
-                on_load=config._filenames_load,
-                get_error_message=config._filenames_error_msg,
+                on_load=self._filenames_load,
+                get_error_message=self._filenames_error_msg,
             ),
             ConfigField(
                 name="solution.include_dirs",
@@ -286,12 +240,12 @@ class Config(BaseConfig):
                 and (
                     # This impliments logical implication A => B
                     # So if entry_function arg is set then it must be a string
-                    not config._args.entry_function
-                    or isinstance(config._args.entry_function, str)
+                    not self._args.entry_function
+                    or isinstance(self._args.entry_function, str)
                 ),
                 on_load=lambda v: (
-                    config._args.entry_function
-                    if config._args.entry_function != "main" or not v
+                    self._args.entry_function
+                    if self._args.entry_function != "main" or not v
                     else v
                 ),
                 error_message="The entry function name needs to be a string",
@@ -434,32 +388,32 @@ class Config(BaseConfig):
         ]
 
         # Base init needs to be called last (only before load args)
-        config.load_config_fields(config.get_value("ESBMCAI_CONFIG_FILE"), fields)
-        config._load_args()
+        self.load_config_fields(self.get_value("ESBMCAI_CONFIG_FILE"), fields)
+        self._load_args()
 
         # Config Pseudo-Entries - In the future have different type of config field
         # that won't be read from the config file.
-        config.add_config_field(
+        self.add_config_field(
             ConfigField(
                 name="generate_patches",
-                default_value=config.generate_patches,
+                default_value=self.generate_patches,
                 default_value_none=True,
                 help_message="Should the repaired result be returned as a patch "
                 "instead of a new file.",
             )
         )
-        config.add_config_field(
+        self.add_config_field(
             ConfigField(
                 name="fix_code.raw_conversation",
-                default_value=config.raw_conversation,
+                default_value=self.raw_conversation,
                 default_value_none=True,
                 help_message="Print the raw conversation at different parts of execution.",
             )
         )
-        config.add_config_field(
+        self.add_config_field(
             ConfigField(
                 name="solution.output_dir",
-                default_value=config.output_dir,
+                default_value=self.output_dir,
                 default_value_none=True,
                 help_message="Set the output directory to save successfully repaired "
                 "files in. Leave empty to not use.",
