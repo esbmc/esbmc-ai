@@ -20,7 +20,12 @@ from esbmc_ai.singleton import SingletonMeta, makecls
 from esbmc_ai.config_field import ConfigField
 from esbmc_ai.base_config import BaseConfig, default_scenario
 from esbmc_ai.chat_response import list_to_base_messages
-from esbmc_ai.logging import set_verbose, set_horizontal_lines, set_horizontal_line_width
+from esbmc_ai.log_utils import (
+    get_log_level,
+    init_logging,
+    set_horizontal_lines,
+    set_horizontal_line_width,
+)
 from esbmc_ai.ai_models import (
     AIModel,
     AIModels,
@@ -80,7 +85,6 @@ class Config(BaseConfig, metaclass=makecls(SingletonMeta)):
         # Huggingface warning supress
         os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-
     def load(self, args: Any) -> None:
         """Will load the config from the args, the env file and then from config file."""
 
@@ -136,7 +140,7 @@ class Config(BaseConfig, metaclass=makecls(SingletonMeta)):
                 on_load=set_horizontal_line_width,
                 help_message="Sets the width of the horizontal lines to draw. "
                 "Don't set a value to use the terminal width. Needs to have "
-                "show_horizontal_lines set to true."
+                "show_horizontal_lines set to true.",
             ),
             ConfigField(
                 name="ai_custom",
@@ -503,7 +507,7 @@ class Config(BaseConfig, metaclass=makecls(SingletonMeta)):
     def _load_args(self) -> None:
         args: argparse.Namespace = self._args
 
-        set_verbose(args.verbose)
+        init_logging(get_log_level(args.verbose))
 
         # AI Model -m
         if args.ai_model != "":

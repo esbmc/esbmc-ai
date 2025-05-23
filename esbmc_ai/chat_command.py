@@ -3,14 +3,22 @@
 """Contains things related to chat commands."""
 
 from abc import abstractmethod
-from typing import Any
+from typing import Any, override
 
 from esbmc_ai.base_component import BaseComponent
 from esbmc_ai.command_result import CommandResult
+from esbmc_ai.log_utils import Categories
 
 
 class ChatCommand(BaseComponent):
     """Abstract Base Class for implementing chat commands."""
+
+    @override
+    @classmethod
+    def create(cls) -> "BaseComponent":
+        obj: BaseComponent = super().create()
+        obj._logger = obj.logger.bind(category=Categories.COMMAND)
+        return obj
 
     def __init__(
         self,

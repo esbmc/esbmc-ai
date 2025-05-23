@@ -13,7 +13,7 @@ from shutil import copytree
 import lizard
 
 from esbmc_ai.ai_models import AIModel
-from esbmc_ai.logging import print_horizontal_line
+from esbmc_ai.log_utils import get_log_level, print_horizontal_line
 from esbmc_ai.verifier_output import VerifierOutput
 
 
@@ -364,7 +364,7 @@ class Solution:
             # conflicts, and 2 if there is more serious trouble.
             match process.returncode:
                 case 1:
-                    print_horizontal_line(0)
+                    print_horizontal_line(get_log_level(0))
                     print(
                         f"The patch:\n\n{patch}\n\nThe diff output:\n\n"
                         + process.stdout.decode("utf-8")
@@ -373,7 +373,7 @@ class Solution:
                         f"Patch failed for some files in solution {self.base_dir}"
                     )
                 case 2:
-                    print_horizontal_line(0)
+                    print_horizontal_line(get_log_level(0))
                     print(
                         f"The patch:\n\n{patch}\n\nThe diff output:\n\n"
                         + process.stdout.decode("utf-8")

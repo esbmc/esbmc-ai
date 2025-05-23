@@ -23,14 +23,16 @@ class HelpCommand(ChatCommand):
 
     @override
     def execute(self, **_: Any) -> Any:
-
         print("Commands:")
         for command in CommandRunner().builtin_commands.values():
             print(f"* {command.command_name}: {command.help_message}")
             if command.authors:
                 print(f"\tAuthors: {command.authors}")
 
-        print("\nAddon Commands:")
+        if CommandRunner().addon_commands:
+            print("\nAddon Commands:")
+        else:
+            self.logger.info("No addon commands to show...")
         for command in CommandRunner().addon_commands.values():
             print(f"* {command.command_name}: {command.help_message}")
             if command.authors:

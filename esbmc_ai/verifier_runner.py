@@ -1,5 +1,7 @@
 # Author: Yiannis Charalambous
 
+import structlog
+from esbmc_ai.log_utils import Categories
 from esbmc_ai.verifiers.base_source_verifier import BaseSourceVerifier
 from esbmc_ai.singleton import SingletonMeta
 
@@ -12,6 +14,9 @@ class VerifierRunner(metaclass=SingletonMeta):
         super().__init__()
         self._verifiers: dict[str, BaseSourceVerifier] = {}
         self._verifier: BaseSourceVerifier | None = None
+        self._logger: structlog.stdlib.BoundLogger = structlog.get_logger(
+            self.__class__.__name__
+        ).bind(category=Categories.SYSTEM)
 
     @property
     def verfifier(self) -> BaseSourceVerifier:
@@ -32,3 +37,6 @@ class VerifierRunner(metaclass=SingletonMeta):
 
     def set_verifier_by_name(self, value: str) -> None:
         self.verifier = self._verifiers[value]
+
+    def get_verifier(self, value: str) -> BaseSourceVerifier | None:
+        return self._verifiers.get(value)

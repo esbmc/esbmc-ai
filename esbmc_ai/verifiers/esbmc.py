@@ -9,7 +9,6 @@ from typing_extensions import Any, override
 
 from esbmc_ai.config import Config
 from esbmc_ai.solution import Solution
-from esbmc_ai.logging import printv, log0, logvv
 
 from esbmc_ai.base_config import default_scenario
 from esbmc_ai.verifier_output import VerifierOutput
@@ -103,23 +102,25 @@ class ESBMC(BaseSourceVerifier):
         )
 
         if "--multi-property" in esbmc_params:
-            log0(
+            self._logger.error(
                 "Do not add --multi-property to ESBMC params it is not yet supported!",
                 post_label="ESBMC",
             )
             sys.exit(1)
 
         if "--input-file" in esbmc_params:
-            log0("Do not add --input-file to ESBMC parameters.", post_label="ESBMC")
+            self._logger.error(
+                "Do not add --input-file to ESBMC parameters.", post_label="ESBMC"
+            )
             sys.exit(1)
         if "--timeout" in esbmc_params:
-            log0(
+            self._logger.error(
                 "Do not add --timeout to ESBMC parameters, instead specify it in its own field.",
                 post_label="ESBMC",
             )
             sys.exit(1)
         if "--function" in esbmc_params:
-            log0(
+            self._logger.error(
                 "Don't add --function to ESBMC parameters, instead specify it in its own field.",
                 post_label="ESBMC",
             )
@@ -256,7 +257,7 @@ class ESBMC(BaseSourceVerifier):
         # Add entry function for parameter.
         esbmc_cmd.extend(["--function", entry_function])
 
-        printv("Running ESBMC:", " ".join(esbmc_cmd))
+        self._logger.info("Running ESBMC:", " ".join(esbmc_cmd))
 
         # Add slack time to process to allow verifier to timeout and end gracefully.
         process_timeout: float | None = timeout + 10 if timeout else None
@@ -273,7 +274,7 @@ class ESBMC(BaseSourceVerifier):
 
         # Check segfault.
         if process.returncode == -signal.SIGSEGV:
-            log0(
+            self._logger.error(
                 "ESBMC has segfaulted... Please report the issue",
                 "to developers: https://www.github.com/esbmc/esbmc",
                 post_label="Error",
@@ -426,6 +427,6 @@ class ESBMC(BaseSourceVerifier):
             except ValueError as e:
                 # Gets a value error from the str index method. This is an indicator
                 # that we don't have any more traces to parse.
-                logvv(e)
+                self._logger.debug(str(e))
                 break
         return traces

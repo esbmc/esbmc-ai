@@ -2,66 +2,50 @@
 
 # Author: Yiannis Charalambous 2023
 
-from pathlib import Path
 import sys
 
 import readline
 import argparse
 
+from structlog import get_logger
+from structlog.stdlib import BoundLogger
+
 from esbmc_ai import Config, ChatCommand, __author__, __version__
 from esbmc_ai.addon_loader import AddonLoader
 from esbmc_ai.command_result import CommandResult
-from esbmc_ai.commands.user_chat_command import UserChatCommand
+from esbmc_ai.log_utils import Categories
+from esbmc_ai.verifiers.base_source_verifier import BaseSourceVerifier
 from esbmc_ai.verifiers.esbmc import ESBMC
 from esbmc_ai.verifier_runner import VerifierRunner
 from esbmc_ai.command_runner import CommandRunner
-from esbmc_ai.commands import (
-    FixCodeCommand,
-    HelpCommand,
-    ListModelsCommand,
-    HelpConfigCommand,
-    ExitCommand,
-)
-from esbmc_ai.logging import printv, printvv, set_default_label
+import esbmc_ai.commands
 
 # Enables arrow key functionality for input(). Do not remove import.
 _ = readline
-
-# Built-in verifiers
-VerifierRunner().add_verifier(ESBMC())
-VerifierRunner().set_verifier_by_name("esbmc")
-# Init built-in commands
-CommandRunner(
-    builtin_commands=[
-        HelpCommand(),
-        HelpConfigCommand(),
-        ListModelsCommand(),
-        ExitCommand(),
-        FixCodeCommand(),
-        UserChatCommand(),
-    ]
-)
 
 HELP_MESSAGE: str = """Automated Program Repair platform. To view additional help
 run with the subcommand "help"."""
 
 
-def _check_health() -> None:
-    printv("Performing health check...")
-    # Check that ESBMC exists.
-    esbmc_path: Path = Config().get_value("verifier.esbmc.path")
-    if esbmc_path.exists():
-        printv("ESBMC has been located")
-    else:
-        print(f"Error: ESBMC could not be found in {esbmc_path}")
-        sys.exit(3)
-
-    if Config().get_value("dev_mode"):
-        print("Development Mode Activated")
+def _init_builtin_defaults() -> None:
+    # Built-in verifiers
+    esbmc = ESBMC.create()
+    assert isinstance(esbmc, BaseSourceVerifier)
+    VerifierRunner().add_verifier(esbmc)
+    # Init built-in commands
+    commands: list[ChatCommand] = []
+    for cmd_classname in getattr(esbmc_ai.commands, "__all__"):
+        cmd_type: type = getattr(esbmc_ai.commands, cmd_classname)
+        assert issubclass(cmd_type, ChatCommand), f"{cmd_type} is not a ChatCommand"
+        cmd: object = cmd_type.create()
+        assert isinstance(cmd, ChatCommand)
+        commands.append(cmd)
+    CommandRunner(
+        builtin_commands=commands,
+    )
 
 
 def _run_command_mode(command: ChatCommand, args: argparse.Namespace) -> None:
-    set_default_label("ESBMC-AI")
     result: CommandResult | None = command.execute()
     if result:
         print(result)
@@ -80,6 +64,7 @@ def main() -> None:
         "command",
         type=str,
         nargs="?",
+        default="userchat",
         help=(
             "The command to run using the program. To see addon commands "
             "available: Run with 'help' as the default command."
@@ -157,21 +142,21 @@ def main() -> None:
     )
 
     args: argparse.Namespace = parser.parse_args()
-    # Default command
-    if not args.command:
-        args.command = "userchat"
 
     print(f"ESBMC-AI {__version__}")
     print(f"Made by {__author__}")
     print()
 
-    printvv("Loading config")
     Config().load(args)
-    printv(f"Config File: {Config().get_value("ESBMCAI_CONFIG_FILE")}")
-    _check_health()
+    print(f"Config File: {Config().get_value("ESBMCAI_CONFIG_FILE")}")
+
+    _init_builtin_defaults()
+    logger: BoundLogger = get_logger().bind(category=Categories.SYSTEM)
+
+    if Config().get_value("dev_mode"):
+        logger.warn("Development Mode Activated")
 
     # Load addons
-    printvv("Loading addons")
     AddonLoader(Config())
     # Bind addons to command runner and verifier runner.
     CommandRunner().addon_commands.update(AddonLoader().chat_command_addons)
@@ -179,11 +164,7 @@ def main() -> None:
         VerifierRunner()._verifiers | AddonLoader().verifier_addons
     )
     # Set verifier to use
-    printvv(f"Verifier: {VerifierRunner().verfifier.verifier_name}")
     VerifierRunner().set_verifier_by_name(Config().get_value("verifier.name"))
-
-    printv(f"Source code format: {Config().get_value('source_code_format')}")
-    printv(f"ESBMC output type: {Config().get_value('verifier.esbmc.output_type')}")
 
     # Run the command
     command = args.command
@@ -193,7 +174,7 @@ def main() -> None:
         _run_command_mode(command=CommandRunner().commands[command], args=args)
         sys.exit(0)
     else:
-        print(
+        logger.error(
             f"Error: Unknown command: {command}. Choose from: "
             + ", ".join(command_names)
         )
