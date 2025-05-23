@@ -34,6 +34,20 @@
       ]
     },
     {
+      "name": "List Models",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "esbmc_ai",
+      "justMyCode": true,
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "ESBMCAI_CONFIG_FILE": "${workspaceFolder}/config_dev.toml"
+      },
+      "args": [
+        "list-models"
+      ]
+    },
+    {
       "name": "Python: Current File",
       "type": "debugpy",
       "request": "launch",

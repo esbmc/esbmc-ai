@@ -40,11 +40,14 @@ class HelpConfigCommand(ChatCommand):
         print("ESBMC-AI Config Fields:")
         for field in Config()._fields:
             split_field_name: list[str] = field.name.split(".")
-            if len(split_field_name) > 1 and split_field_name[0] == AddonLoader.addon_prefix:
+            if (
+                len(split_field_name) > 1
+                and split_field_name[0] == AddonLoader.addon_prefix
+            ):
                 addon_fields.append(field)
             else:
                 self._print_config_field(field)
-        
+
         if addon_fields:
             print("\nESBMC-AI Addon Fields:")
             for field in addon_fields:

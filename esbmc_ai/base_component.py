@@ -7,6 +7,8 @@ import inspect
 from abc import ABC
 from typing import Any
 
+import structlog
+
 from esbmc_ai.base_config import BaseConfig
 from esbmc_ai.config_field import ConfigField
 
@@ -36,6 +38,14 @@ class BaseComponent(ABC):
         self._config: BaseConfig
         self._name: str = self.__class__.__name__
         self._authors: str = ""
+        self._logger: structlog.stdlib.BoundLogger = structlog.get_logger(
+            f"{self._name}"
+        )
+
+    @property
+    def logger(self) -> structlog.stdlib.BoundLogger:
+        """Returns the logger of this class."""
+        return self._logger
 
     @property
     def name(self) -> str:

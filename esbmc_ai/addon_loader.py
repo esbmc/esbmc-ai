@@ -9,11 +9,11 @@ import sys
 import importlib
 from importlib.util import find_spec
 from importlib.machinery import ModuleSpec
+import structlog
 from typing_extensions import Optional
 
 from esbmc_ai.base_component import BaseComponent
 from esbmc_ai.chat_command import ChatCommand
-from esbmc_ai.logging import printv
 from esbmc_ai.verifiers.base_source_verifier import BaseSourceVerifier
 from esbmc_ai.config_field import ConfigField
 from esbmc_ai.config import Config
@@ -33,6 +33,11 @@ class AddonLoader(metaclass=SingletonMeta):
     addon_prefix: str = "addons"
 
     def __init__(self, config: Config | None = None) -> None:
+        self._logger: structlog.stdlib.BoundLogger = structlog.get_logger(
+            self.__class__.__name__
+        )
+        self._logger.debug("Loading Addons...")
+
         assert config
         self._config: Config = config
         self._config.on_load_value.append(self._on_get_config_value)
@@ -60,10 +65,12 @@ class AddonLoader(metaclass=SingletonMeta):
         )
 
         # Load the config fields.
+        if self._config.get_value("addon_modules"):
+            print("Loading Addons:")
         for m in self._config.get_value("addon_modules"):
             addons: list[BaseComponent] = self.load_addons(m)
             for addon in addons:
-                print(f"AddonLoader: Loaded: {addon.name} by {addon.authors}")
+                print(f"\t* {addon.name} by {addon.authors}")
 
         # Init the verifier.name field for the main config. The reason this is
         # not part of the main config is that verifiers are treated as addons,
@@ -211,7 +218,7 @@ class AddonLoader(metaclass=SingletonMeta):
                 if issubclass(exposed_class, BaseComponent):
                     # Initialize class.
                     addon: BaseComponent = exposed_class.create()
-                    printv(f"Loading addon: {exposed_class_name}")
+                    self._logger.debug(f"Loading addon: {exposed_class_name}")
 
                     # Register config with modules
                     addon.config = self._config
@@ -221,12 +228,12 @@ class AddonLoader(metaclass=SingletonMeta):
                     result.append(addon)
 
         except ModuleNotFoundError as e:
-            print("Addon Loader: Error while loading module: Traceback:")
+            self._logger.error("error while loading module: traceback:")
             traceback.print_tb(e.__traceback__)
-            print(f"Addon Loader: Could not import module: {module_name}: {e}")
+            self._logger.error(f"could not import module: {module_name}: {e}")
             sys.exit(1)
         except AttributeError as e:
-            print(f"Addon Loader: Module {module_name} is invalid: {e}")
+            self._logger.error(f"module {module_name} is invalid: {e}")
             sys.exit(1)
         return result
 
@@ -242,4 +249,4 @@ class AddonLoader(metaclass=SingletonMeta):
             try:
                 self._config.add_config_field(f)
             except Exception:
-                print(f"AddonLoader: Failed to register config field: {f.name}")
+                self._logger.error(f"failed to register config field: {f.name}")
