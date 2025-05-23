@@ -3,7 +3,7 @@
 """This module contains code regarding configuring and loading addon modules."""
 
 import inspect
-from typing import Any, override
+from typing import Any
 import traceback
 import sys
 import importlib
@@ -12,98 +12,58 @@ from importlib.machinery import ModuleSpec
 from typing_extensions import Optional
 
 from esbmc_ai.base_component import BaseComponent
-from esbmc_ai.base_config import BaseConfig
 from esbmc_ai.chat_command import ChatCommand
 from esbmc_ai.logging import printv
 from esbmc_ai.verifiers.base_source_verifier import BaseSourceVerifier
 from esbmc_ai.config_field import ConfigField
 from esbmc_ai.config import Config
+from esbmc_ai.singleton import SingletonMeta
 
 
-class AddonLoader(BaseConfig):
+class AddonLoader(metaclass=SingletonMeta):
     """The addon loader manages loading addon modules. This includes:
     * Managing the config fields of the addons.
-    * Binding the loaded addons with CommandRunner and VerifierRunner.
+    * Dynamically loading the fields when the addons request them.
 
-    It hooks into the main config loader and adds config fields for selecting
-    the modules. Additionally it behaves like a config loader, this is because
-    it puts all the configs that the addons use into a namespace called "addons".
-
-    The exception to this are the built-in modules which directly hook into the
-    main config object.
+    When an addon requests a config value from an addon that is not loaded, that
+    addon's config fields get loaded. This means that addons will have dependency
+    management (as long as there's no loops).
     """
 
     addon_prefix: str = "addons"
 
-    def __new__(cls):
-        if cls._instance:
-            return cls._instance
+    def __init__(self, config: Config | None = None) -> None:
+        assert config
+        self._config: Config = config
+        self._config.on_load_value.append(self._on_get_config_value)
 
-        cls._instance = super(AddonLoader, cls).__new__(cls)
-        return cls._instance
-
-    def __init__(self) -> None:
-        if AddonLoader._initialized:
-            return
-
-        AddonLoader._initialized = True
-        super().__init__()
-
-    _instance: "AddonLoader | None" = None
-    _initialized: bool = False
-    _config: Config
-    chat_command_addons: dict[str, ChatCommand] = {}
-    verifier_addons: dict[str, BaseSourceVerifier] = {}
-
-    def init(self, config: Config, builtin_verifier_names: list[str]):
-        """Call to initialize the addon loader. It will load the addons and
-        register them with the command runner and verifier runner.
-
-        Args:
-            - config: already initialized base config."""
-
-        assert config.initialized, "Config has not been initialized."
-
-        self.load_config_fields(config.get_value("ESBMCAI_CONFIG_FILE"), [])
-
-        self._config = config
+        # Keeps track of the addons that have been loaded.
+        self._loaded_addons: dict[str, BaseComponent] = {}
+        # Keeps track of the addons that had their config fields initialized.
+        self._initialized_addons: set[BaseComponent] = set()
 
         # Dev mode: Ensure the current directory is in sys.path in order for
         # relative addon modules to be imported (used for dev purposes).
         if self._config.get_value("dev_mode") and "" not in sys.path:
             sys.path.insert(0, "")
 
-        # Register field with Config to know which modules to load. This will
-        # load them automatically.
+        # Register field with Config to know which modules to load.
         config.add_config_field(
             ConfigField(
                 name="addon_modules",
                 default_value=[],
                 validate=self._validate_addon_modules,
-                on_load=self._init_addon_modules,
-                error_message="addon_modules must be a list of Python modules to load",
+                error_message="couldn't find module: must be a list of Python modules to load",
                 help_message="The addon modules to load during startup. Additional "
                 "modules may be loaded by the specified modules as dependencies.",
             ),
         )
 
-        # Load all the addon commands
-        self._load_chat_command_addons()
-
-        # Load all the addon verifiers
-        self._load_verifier_addons()
-
-        # Register config with modules
-        for mod in (self.chat_command_addons | self.verifier_addons).values():
-            mod.config = self
-
-        # Ensure no duplicates
-        field_names: list[str] = []
-        for f in self._fields + self._config._fields:
-            if f.name in field_names:
-                raise KeyError(f"Field is redefined: {f.name}")
-            field_names.append(f.name)
-        del field_names
+        # Load the config fields.
+        for m in self._config.get_value("addon_modules"):
+            addons: list[BaseComponent] = self.load_addons(m)
+            for addon in addons:
+                print(f"AddonLoader: Loaded: {addon.name} by {addon.authors}")
 
         # Init the verifier.name field for the main config. The reason this is
         # not part of the main config is that verifiers are treated as addons,
@@ -113,62 +73,55 @@ class AddonLoader(BaseConfig):
                 name="verifier.name",
                 default_value="esbmc",
                 validate=lambda v: isinstance(v, str)
-                and v in self.verifier_addon_names + builtin_verifier_names,
+                and v in self.verifier_addon_names + ["esbmc"],
                 error_message="Invalid verifier name specified.",
                 help_message="The verifier to use. Default is ESBMC.",
             )
         )
 
     @property
+    def chat_command_addons(self) -> dict[str, ChatCommand]:
+        """Returns all the addon chat commands."""
+        return {
+            addon_name: addon
+            for addon_name, addon in self.loaded_addons.items()
+            if isinstance(addon, ChatCommand)
+        }
+
+    @property
     def chat_command_addon_names(self) -> list[str]:
         """Returns all the addon chat command names."""
-        return list(self.chat_command_addons.keys())
+        return list(
+            addon.name
+            for addon in self.loaded_addons.values()
+            if isinstance(addon, ChatCommand)
+        )
+
+    @property
+    def verifier_addons(self) -> dict[str, BaseSourceVerifier]:
+        """Returns all the addon verifiers."""
+        return {
+            addon_name: addon
+            for addon_name, addon in self.loaded_addons.items()
+            if isinstance(addon, BaseSourceVerifier)
+        }
 
     @property
     def verifier_addon_names(self) -> list[str]:
         """Returns all the addon verifier names."""
-        return list(self.verifier_addons.keys())
+        return list(
+            addon.name
+            for addon in self.loaded_addons
+            if isinstance(addon, BaseSourceVerifier)
+        )
 
-    def _load_chat_command_addons(self) -> None:
-        self.chat_command_addons.clear()
+    @property
+    def loaded_addons(self) -> dict[str, BaseComponent]:
+        return self._loaded_addons
 
-        for m in self._config.get_value("addon_modules"):
-            if isinstance(m, ChatCommand):
-                self.chat_command_addons[m.command_name] = m
-
-        # Init config fields
-        for field in self._get_addons_fields(list(self.chat_command_addons.values())):
-            try:
-                self.add_config_field(field)
-            except Exception:
-                print(f"AddonLoader: Failed to register config field: {field.name}")
-                raise
-
-        if len(self.chat_command_addons) > 0:
-            printv(
-                "ChatCommand Addons:\n"
-                + "\n".join(f"\t* {cm}" for cm in self.chat_command_addon_names),
-            )
-
-    def _load_verifier_addons(self) -> None:
-        """Loads the verifier addons, initializes their config fields."""
-        self.verifier_addons.clear()
-        for m in self._config.get_value("addon_modules"):
-            if isinstance(m, BaseSourceVerifier):
-                self.verifier_addons[m.verifier_name] = m
-
-        # Init config fields
-        for field in self._get_addons_fields(list(self.verifier_addons.values())):
-            self.add_config_field(field)
-
-        if len(self.verifier_addons) > 0:
-            printv(
-                "Verifier Addons:\n"
-                + "".join(f"\t* {k}" for k in self.verifier_addons.keys())
-            )
-
-    def _validate_addon_modules(self, mods: list[str]) -> bool:
-        """Validates that all values are string and that the module exists."""
+    @staticmethod
+    def _validate_addon_modules(mods: str) -> bool:
+        """Validates that a module exists."""
         for m in mods:
             if not isinstance(m, str):
                 return False
@@ -177,65 +130,53 @@ class AddonLoader(BaseConfig):
                 return False
         return True
 
-    def _init_addon_modules(self, mods: list[str]) -> list:
-        """Will import addon modules that exist and iterate through the exposed
-        attributes, will then get all available exposed classes and store them.
+    def _on_get_config_value(self, name: str) -> None:
+        """Checks if an addon's values were loaded prior to it requesting an
+        a value. If they weren't load them. This allows for addon ConfigFields
+        to be loaded dynamically.
 
-        This method will load classes:
-        * ChatCommands
-        * BaseSourceVerifier"""
-
-        allowed_types = ChatCommand | BaseSourceVerifier
-
-        result: list = []
-        for module_name in mods:
-            try:
-                m = importlib.import_module(module_name)
-                for attr_name in getattr(m, "__all__"):
-                    # Get the class
-                    attr_class = getattr(m, attr_name)
-                    # Check if valid addon type and import
-                    if issubclass(attr_class, allowed_types):
-                        # Initialize class.
-                        result.append(attr_class())
-                        printv(f"Loading addon: {attr_name}")
-            except ModuleNotFoundError as e:
-                print("Addon Loader: Error while loading module: Traceback:")
-                traceback.print_tb(e.__traceback__)
-                print(f"Addon Loader: Could not import module: {module_name}: {e}")
-                sys.exit(1)
-            except AttributeError as e:
-                print(f"Addon Loader: Module {module_name} is invalid: {e}")
-                sys.exit(1)
-
-        return result
-
-    @override
-    def get_value(self, name: str) -> Any:
-        """Searches first for a config value in the addon config, if it is
-        not found, searches the global.
-
-        How does it determine if a config field is part of the addon defined
-        fields? Well the AddonConfig class will add a prefix followed by the
-        name of the verifier."""
-
-        # Check if it references an addon.
+        Will only check for ConfigFields that have a name that is prefixed with
+        "addon."."""
+        # Check if it references an addon and is not loaded.
         split_key: list[str] = name.split(".")
-        if split_key[0] == AddonLoader.addon_prefix:
-            if (
-                split_key[1]
-                in self.chat_command_addon_names + self.verifier_addon_names
-            ):
-                # Check if key exists.
-                if name in self._values:
-                    return super().get_value(name)
-                else:
-                    raise KeyError(f"Key: {name} not in AddonConfig")
-        # If the key is not in the addon prefix, then get from global config.
-        return self._config.get_value(name)
+        if split_key[0] == AddonLoader.addon_prefix and len(split_key) > 1:
+            # Check if the addon is valid.
+            addon: BaseComponent | None = self.get_addon_by_name(split_key[1])
+            if addon in self._initialized_addons:
+                return
+            elif addon:
+                self._load_addon_config(addon)
+                self._initialized_addons.add(addon)
+            else:
+                raise KeyError(f"AddonLoader: failed to load config of addon {name}")
+
+    def get_addon_by_name(self, name: str) -> BaseComponent | None:
+        """Returns an addon by the addon name defined in __init__."""
+        for addon in self.loaded_addons.values():
+            if addon.name == name:
+                return addon
+        return None
+
+    def _get_addon_resolved_fields(self, addon: BaseComponent) -> list[ConfigField]:
+        """Returns the addons's config fields. After resolving each field to
+        their namespace using the name of the component."""
+        # If an addon prefix is defined, then add a .
+        addons_prefix: str = (
+            AddonLoader.addon_prefix + "." if AddonLoader.addon_prefix else ""
+        )
+
+        fields_resolved: list[ConfigField] = []
+        # Loop through each field of the verifier addon
+        fields: list[ConfigField] = addon.get_config_fields()
+        for field in fields:
+            new_field: ConfigField = self._resolve_config_field(
+                field, f"{addons_prefix}{addon.name}"
+            )
+            fields_resolved.append(new_field)
+        return fields_resolved
 
     def _resolve_config_field(self, field: ConfigField, prefix: str):
-        """Resolve the name of each field by prefixing it with the verifier name.
+        """Resolve the name of each field by prefixing it with the component name.
         Returns a new config field with the name resolved to the prefix
         supplied. Using inspection all the other fields are copied. The returning
         field is exactly the same as the original, aside from the resolved name."""
@@ -254,21 +195,51 @@ class AddonLoader(BaseConfig):
 
         return ConfigField(**params)
 
-    def _get_addons_fields(self, addons: list[BaseComponent]) -> list[ConfigField]:
-        """Returns each addons's config fields. After resolving each field to
-        their namespace using the name of the component."""
-        # If an addon prefix is defined, then add a .
-        addons_prefix: str = (
-            AddonLoader.addon_prefix + "." if AddonLoader.addon_prefix else ""
-        )
-        fields_resolved: list[ConfigField] = []
-        # Loop through verifier addons
-        for addon in addons:
-            # Loop through each field of the verifier addon
-            fields: list[ConfigField] = addon.get_config_fields()
-            for field in fields:
-                new_field: ConfigField = self._resolve_config_field(
-                    field, f"{addons_prefix}{addon.name}"
-                )
-                fields_resolved.append(new_field)
-        return fields_resolved
+    def load_addons(self, module_name: str) -> list[BaseComponent]:
+        """Loads an addon, needs to expose a BaseComponent.
+
+        Will import addon modules that exist and iterate through the exposed
+        attributes, will then get all available exposed classes and store them."""
+
+        result: list = []
+        try:
+            m = importlib.import_module(module_name)
+            for exposed_class_name in getattr(m, "__all__"):
+                # Get the class from the __all__
+                exposed_class = getattr(m, exposed_class_name)
+                # Check if valid addon type and import
+                if issubclass(exposed_class, BaseComponent):
+                    # Initialize class.
+                    addon: BaseComponent = exposed_class.create()
+                    printv(f"Loading addon: {exposed_class_name}")
+
+                    # Register config with modules
+                    addon.config = self._config
+
+                    # Add to addon list.
+                    self._loaded_addons[addon.name] = addon
+                    result.append(addon)
+
+        except ModuleNotFoundError as e:
+            print("Addon Loader: Error while loading module: Traceback:")
+            traceback.print_tb(e.__traceback__)
+            print(f"Addon Loader: Could not import module: {module_name}: {e}")
+            sys.exit(1)
+        except AttributeError as e:
+            print(f"Addon Loader: Module {module_name} is invalid: {e}")
+            sys.exit(1)
+        return result
+
+    def _load_addon_config(self, addon: BaseComponent) -> None:
+        """Loads the config fields defined by an addon"""
+
+        # Load config fields
+        added_field_names: set[ConfigField] = set()
+        for f in self._get_addon_resolved_fields(addon):
+            # Add config fields
+            if f.name in added_field_names:
+                raise KeyError(f"AddonLoader: field already loaded: {f.name}")
+            try:
+                self._config.add_config_field(f)
+            except Exception:
+                print(f"AddonLoader: Failed to register config field: {f.name}")

@@ -26,6 +26,7 @@ class BaseConfig(ABC):
         self._values: Dict[str, Any] = {}
         self.original_config_file: dict[str, Any]
         self.config_file: dict[str, Any]
+        self.on_load_value: list[Callable[[str], None]] = []
 
     def load_config_fields(self, cfg_path: Path, fields: list[ConfigField]) -> None:
         """Initializes the base config structures. Loads the config file and fields."""
@@ -116,12 +117,18 @@ class BaseConfig(ABC):
 
     def get_value(self, name: str) -> Any:
         """Gets the value of key name"""
+        for cb in self.on_load_value:
+            cb(name)
         return self._values[name]
 
     def set_value(self, name: str, value: Any) -> None:
         """Sets a value in the config, if it does not exist, it will create one.
         This uses toml notation dot notation to namespace the elements."""
         self._values[name] = value
+
+    def contains_field(self, name: str) -> bool:
+        """Check if config has a field."""
+        return any(name == field.name for field in self._fields)
 
     @classmethod
     def flatten_dict(cls, d, parent_key="", sep="."):

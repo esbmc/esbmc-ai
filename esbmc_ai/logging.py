@@ -2,10 +2,12 @@
 
 """Logging module for verbose printing."""
 
+from typing import Optional
 from os import get_terminal_size
 
 _verbose: int = 0
 _enable_horizontal_lines: bool = True
+_horizontal_line_width: Optional[int] = None
 _default_label: str = "ESBMC-AI"
 
 
@@ -28,6 +30,9 @@ def set_horizontal_lines(value: bool) -> None:
     global _enable_horizontal_lines
     _enable_horizontal_lines = value
 
+def set_horizontal_line_width(value: Optional[int]) -> None:
+    global _horizontal_line_width
+    _horizontal_line_width = value
 
 def print_verbose(
     *m: object,
@@ -88,6 +93,10 @@ def printvvv(*m: object) -> None:
 def print_horizontal_line(verbosity: int = 0) -> None:
     """Prints a horizontal line if at a given verbosity level."""
     if _enable_horizontal_lines and _verbose >= verbosity:
+        if _horizontal_line_width:
+            print("-" * _horizontal_line_width)
+            return
+            
         try:
             print("-" * get_terminal_size().columns)
         except OSError:

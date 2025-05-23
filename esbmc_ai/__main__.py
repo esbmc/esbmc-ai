@@ -12,6 +12,7 @@ from esbmc_ai import Config, ChatCommand, __author__, __version__
 from esbmc_ai.addon_loader import AddonLoader
 from esbmc_ai.command_result import CommandResult
 from esbmc_ai.commands.user_chat_command import UserChatCommand
+from esbmc_ai.verifiers.esbmc import ESBMC
 from esbmc_ai.verifier_runner import VerifierRunner
 from esbmc_ai.command_runner import CommandRunner
 from esbmc_ai.commands import (
@@ -26,9 +27,11 @@ from esbmc_ai.logging import printv, printvv, set_default_label
 # Enables arrow key functionality for input(). Do not remove import.
 _ = readline
 
-verifier_runner: VerifierRunner = VerifierRunner()
+# Built-in verifiers
+VerifierRunner().add_verifier(ESBMC())
+VerifierRunner().set_verifier_by_name("esbmc")
 # Init built-in commands
-command_runner: CommandRunner = CommandRunner().init(
+CommandRunner(
     builtin_commands=[
         HelpCommand(),
         HelpConfigCommand(),
@@ -78,10 +81,8 @@ def main() -> None:
         type=str,
         nargs="?",
         help=(
-            "The command to run using the program. Options: {"
-            + ", ".join(command_runner.builtin_commands_names)
-            + "}. To see addon commands available: Run with 'help' as the "
-            "default command."
+            "The command to run using the program. To see addon commands "
+            "available: Run with 'help' as the default command."
         ),
     )
 
@@ -165,28 +166,31 @@ def main() -> None:
     print()
 
     printvv("Loading config")
-    Config().init(args)
+    Config().load(args)
     printv(f"Config File: {Config().get_value("ESBMCAI_CONFIG_FILE")}")
     _check_health()
+
     # Load addons
     printvv("Loading addons")
-    AddonLoader().init(Config(), verifier_runner.builtin_verifier_names)
+    AddonLoader(Config())
     # Bind addons to command runner and verifier runner.
-    command_runner.addon_commands = AddonLoader().chat_command_addons
-    verifier_runner.addon_verifiers = AddonLoader().verifier_addons
+    CommandRunner().addon_commands.update(AddonLoader().chat_command_addons)
+    VerifierRunner()._verifiers = (
+        VerifierRunner()._verifiers | AddonLoader().verifier_addons
+    )
     # Set verifier to use
-    printvv(f"Verifier: {verifier_runner.verfifier.verifier_name}")
-    verifier_runner.set_verifier_by_name(Config().get_value("verifier.name"))
+    printvv(f"Verifier: {VerifierRunner().verfifier.verifier_name}")
+    VerifierRunner().set_verifier_by_name(Config().get_value("verifier.name"))
 
     printv(f"Source code format: {Config().get_value('source_code_format')}")
     printv(f"ESBMC output type: {Config().get_value('verifier.esbmc.output_type')}")
 
     # Run the command
     command = args.command
-    command_names: list[str] = command_runner.command_names
+    command_names: list[str] = CommandRunner().command_names
     if command in command_names:
         print("Running Command:", command, "\n")
-        _run_command_mode(command=command_runner.commands[command], args=args)
+        _run_command_mode(command=CommandRunner().commands[command], args=args)
         sys.exit(0)
     else:
         print(
