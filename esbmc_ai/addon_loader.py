@@ -63,7 +63,7 @@ class AddonLoader(metaclass=SingletonMeta):
         for m in self._config.get_value("addon_modules"):
             addons: list[BaseComponent] = self.load_addons(m)
             for addon in addons:
-                print(f"AddonLoader: Loade: {addon.name} by {addon.authors}")
+                print(f"AddonLoader: Loaded: {addon.name} by {addon.authors}")
 
         # Init the verifier.name field for the main config. The reason this is
         # not part of the main config is that verifiers are treated as addons,
@@ -82,26 +82,42 @@ class AddonLoader(metaclass=SingletonMeta):
     @property
     def chat_command_addons(self) -> dict[str, ChatCommand]:
         """Returns all the addon chat commands."""
-        return {addon_name: addon for addon_name, addon in self.loaded_addons.items() if isinstance(addon, ChatCommand)}
+        return {
+            addon_name: addon
+            for addon_name, addon in self.loaded_addons.items()
+            if isinstance(addon, ChatCommand)
+        }
 
     @property
     def chat_command_addon_names(self) -> list[str]:
         """Returns all the addon chat command names."""
-        return list(addon.name for addon in self.loaded_addons.values() if isinstance(addon, ChatCommand))
+        return list(
+            addon.name
+            for addon in self.loaded_addons.values()
+            if isinstance(addon, ChatCommand)
+        )
 
     @property
     def verifier_addons(self) -> dict[str, BaseSourceVerifier]:
         """Returns all the addon verifiers."""
-        return {addon_name: addon for addon_name, addon in self.loaded_addons.items() if isinstance(addon, BaseSourceVerifier)}
+        return {
+            addon_name: addon
+            for addon_name, addon in self.loaded_addons.items()
+            if isinstance(addon, BaseSourceVerifier)
+        }
 
     @property
     def verifier_addon_names(self) -> list[str]:
         """Returns all the addon verifier names."""
-        return list(addon.name for addon in self.loaded_addons if isinstance(addon, BaseSourceVerifier))
+        return list(
+            addon.name
+            for addon in self.loaded_addons
+            if isinstance(addon, BaseSourceVerifier)
+        )
 
     @property
     def loaded_addons(self) -> dict[str, BaseComponent]:
-        return self._loaded_addons 
+        return self._loaded_addons
 
     @staticmethod
     def _validate_addon_modules(mods: str) -> bool:
@@ -118,7 +134,7 @@ class AddonLoader(metaclass=SingletonMeta):
         """Checks if an addon's values were loaded prior to it requesting an
         a value. If they weren't load them. This allows for addon ConfigFields
         to be loaded dynamically.
-        
+
         Will only check for ConfigFields that have a name that is prefixed with
         "addon."."""
         # Check if it references an addon and is not loaded.
@@ -138,7 +154,7 @@ class AddonLoader(metaclass=SingletonMeta):
         """Returns an addon by the addon name defined in __init__."""
         for addon in self.loaded_addons.values():
             if addon.name == name:
-                return
+                return addon
         return None
 
     def _get_addon_resolved_fields(self, addon: BaseComponent) -> list[ConfigField]:
@@ -181,7 +197,7 @@ class AddonLoader(metaclass=SingletonMeta):
 
     def load_addons(self, module_name: str) -> list[BaseComponent]:
         """Loads an addon, needs to expose a BaseComponent.
-        
+
         Will import addon modules that exist and iterate through the exposed
         attributes, will then get all available exposed classes and store them."""
 
@@ -196,12 +212,12 @@ class AddonLoader(metaclass=SingletonMeta):
                     # Initialize class.
                     addon: BaseComponent = exposed_class.create()
                     printv(f"Loading addon: {exposed_class_name}")
-                    
+
                     # Register config with modules
                     addon.config = self._config
 
                     # Add to addon list.
-                    self._loaded_addons[exposed_class_name] = addon
+                    self._loaded_addons[addon.name] = addon
                     result.append(addon)
 
         except ModuleNotFoundError as e:
@@ -212,7 +228,7 @@ class AddonLoader(metaclass=SingletonMeta):
         except AttributeError as e:
             print(f"Addon Loader: Module {module_name} is invalid: {e}")
             sys.exit(1)
-        return []
+        return result
 
     def _load_addon_config(self, addon: BaseComponent) -> None:
         """Loads the config fields defined by an addon"""

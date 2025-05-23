@@ -31,9 +31,11 @@ class UserChatCommand(ChatCommand):
 
     def __init__(self) -> None:
         super().__init__(
-            "userchat",
-            "Allow the user to ask the LLM questions about the vulnerability."
-            "Currently only supports 1 file.",
+            command_name="userchat",
+            help_message=(
+                "Allow the user to ask the LLM questions about the "
+                "vulnerability. Currently only supports 1 file."
+            ),
         )
 
         self.command_runner: CommandRunner

@@ -6,6 +6,7 @@ from typing import Any
 from typing_extensions import override
 
 from esbmc_ai.chat_command import ChatCommand
+from esbmc_ai.command_runner import CommandRunner
 
 
 class HelpCommand(ChatCommand):
@@ -22,15 +23,15 @@ class HelpCommand(ChatCommand):
 
     @override
     def execute(self, **_: Any) -> Any:
-        print("Commands:")
 
-        for command in self.commands:
+        print("Commands:")
+        for command in CommandRunner().builtin_commands.values():
             print(f"* {command.command_name}: {command.help_message}")
             if command.authors:
                 print(f"\tAuthors: {command.authors}")
 
-        print()
-        print("User Chat Mode Prompts:")
-        print("1) What is the exact error?")
-        print("2) Please explain the error to me.")
-        print("3) What is the cause of this error?")
+        print("\nAddon Commands:")
+        for command in CommandRunner().addon_commands.values():
+            print(f"* {command.command_name}: {command.help_message}")
+            if command.authors:
+                print(f"\tAuthors: {command.authors}")

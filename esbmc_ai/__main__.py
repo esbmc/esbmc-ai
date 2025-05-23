@@ -81,10 +81,8 @@ def main() -> None:
         type=str,
         nargs="?",
         help=(
-            "The command to run using the program. Options: {"
-            + ", ".join(CommandRunner().builtin_commands_names)
-            + "}. To see addon commands available: Run with 'help' as the "
-            "default command."
+            "The command to run using the program. To see addon commands "
+            "available: Run with 'help' as the default command."
         ),
     )
 
@@ -176,8 +174,10 @@ def main() -> None:
     printvv("Loading addons")
     AddonLoader(Config())
     # Bind addons to command runner and verifier runner.
-    CommandRunner.addon_commands = AddonLoader().chat_command_addons
-    VerifierRunner()._verifiers = VerifierRunner()._verifiers | AddonLoader().verifier_addons
+    CommandRunner().addon_commands.update(AddonLoader().chat_command_addons)
+    VerifierRunner()._verifiers = (
+        VerifierRunner()._verifiers | AddonLoader().verifier_addons
+    )
     # Set verifier to use
     printvv(f"Verifier: {VerifierRunner().verfifier.verifier_name}")
     VerifierRunner().set_verifier_by_name(Config().get_value("verifier.name"))
