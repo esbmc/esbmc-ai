@@ -8,6 +8,7 @@ from pathlib import Path
 import tomllib as toml
 from typing import (
     Any,
+    Callable,
     Dict,
     List,
 )
@@ -49,7 +50,8 @@ class BaseConfig(ABC):
     def add_config_field(self, field: ConfigField) -> None:
         """Loads a new field from the config. Init needs to be called before
         calling this to initialize the base config."""
-        self._fields.append(field)
+        if field not in self._fields:
+            self._fields.append(field)
 
         # If on_read is overwritten, then the reading process is manually
         # defined so fallback to that.
@@ -112,7 +114,8 @@ class BaseConfig(ABC):
             raise ValueError(f"Config loading error: {msg}")
 
         # Assign field from config file
-        self._fields.append(field)
+        if field not in self._fields:
+            self._fields.append(field)
         self._values[field.name] = field.on_load(value)
 
     def get_value(self, name: str) -> Any:
