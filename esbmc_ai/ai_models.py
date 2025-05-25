@@ -25,6 +25,7 @@ from langchain.schema import (
 
 from esbmc_ai.singleton import SingletonMeta
 
+
 class AIModel:
     """This base class represents an abstract AI model."""
 
@@ -280,7 +281,7 @@ class AIModelAnthropic(AIModelService):
         requests_max_tries: int = 5,
         requests_timeout: float = 60,
     ) -> BaseChatModel:
-        return ChatAnthropic(
+        return ChatAnthropic(  # pyright: ignore [reportCallIssue]
             model_name=self.name,
             temperature=temperature,
             timeout=requests_timeout,
