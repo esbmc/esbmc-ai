@@ -58,17 +58,22 @@ def _run_command_mode(command: ChatCommand, args: argparse.Namespace) -> None:
 def _init_args(
     parser: argparse.ArgumentParser,
     map_field_names: dict[str, list[str]],
-    ignore_fields: list[str],
-    manual_mappings: dict[str, list[str]],
+    ignore_fields: dict[str, list[str]],
 ) -> None:
     """Initializes the Config's ConfigFields to be accepted by the argument
-    parser, this allows all ConfigFields to be loaded as arguments.
+    parser, this allows all ConfigFields to be loaded as arguments. The Config
+    will then use the map_field_names to automatically pre-load values before
+    loading the rest of the config.
 
     Args:
         * parser: The parser to add the arguments into.
-        * map_fields: The parser will map the config fields to use alternative names.
-        * ignore_fields: List of field names to not encode. This takes precedence over
-        map_fields."""
+        * map_field_names: The parser will map the config fields to use
+        alternative names.
+        * ignore_fields: Dictionary of field names to not encode automatically.
+        This takes precedence over map_fields. The field that matches the key
+        in this dictionary will not be mapped. It is a dictionary because they
+        can optionally be manually initialized and mapped in the Config, so it
+        is worth keeping track of the aliases."""
 
     parser.add_argument(
         "command",
@@ -82,7 +87,7 @@ def _init_args(
     )
 
     parser.add_argument(
-        *manual_mappings["solution.filenames"],
+        *ignore_fields["solution.filenames"],
         default=[],
         type=str,
         # nargs=argparse.REMAINDER,
@@ -201,8 +206,7 @@ def main() -> None:
     _init_args(
         parser=parser,
         map_field_names=arg_mappings,
-        ignore_fields=["solution.filenames"],
-        manual_mappings=manual_mappings,
+        ignore_fields=manual_mappings,
     )
 
     args: argparse.Namespace = parser.parse_args()
