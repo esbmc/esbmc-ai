@@ -3,6 +3,7 @@
 """Horizontal line logging integrated with Structlog."""
 
 from enum import Enum
+from pathlib import Path
 from typing import Optional
 from os import get_terminal_size
 import logging
@@ -12,6 +13,7 @@ from structlog.typing import EventDict
 _enable_horizontal_lines: bool = True
 _horizontal_line_width: Optional[int] = None
 _verbose_level: int = logging.INFO
+_logging_format: str = "%(message)s"  # "%(name)s: %(message)s"
 
 
 class LogCategories(Enum):
@@ -42,7 +44,10 @@ def get_log_level(verbosity: int | None = None) -> int:
         return logging.ERROR  # Default least verbose
 
 
-def init_logging(level: int = logging.INFO):
+def init_logging(
+    level: int = logging.INFO,
+    logging_format: str = _logging_format,
+):
     global _verbose_level
     _verbose_level = level
 
@@ -56,7 +61,7 @@ def init_logging(level: int = logging.INFO):
     structlog.configure(
         processors=[
             structlog.processors.add_log_level,
-            # _add_category_field,
+            _add_category_field,
             _render_prefix_category_to_event,
             structlog.dev.ConsoleRenderer(),
             # structlog.processors.KeyValueRenderer(),
@@ -69,8 +74,7 @@ def init_logging(level: int = logging.INFO):
     # Configure standard logging level
     logging.basicConfig(
         level=level,
-        # format="%(message)s",
-        format="%(name)s: %(message)s",
+        format=logging_format,
     )
 
 
@@ -159,30 +163,50 @@ def _add_category_field(logger: object, method_name: str, event_dict: EventDict)
 
 
 class CategoryFileHandler(logging.Handler):
-    base_path: str
-    handlers: dict[str, logging.FileHandler]
-    skip_uncategorized: bool
+    """Logger that will save by category."""
 
-    def __init__(self, base_path: str, skip_uncategorized: bool = False) -> None:
+    def __init__(self, base_path: Path, skip_uncategorized: bool = False) -> None:
         super().__init__()
-        self.base_path = base_path
-        self.handlers = {}
-        self.skip_uncategorized = skip_uncategorized
+        self.base_path: Path = base_path
+        self.handlers: dict[str, logging.FileHandler] = {}
+        self.skip_uncategorized: bool = skip_uncategorized
         # Handler for stdout
-        self.stdout_handler = logging.StreamHandler()
+        self.stdout_handler: logging.StreamHandler = logging.StreamHandler()
 
     def emit(self, record: logging.LogRecord) -> None:
         # Extract the category from the record if present
         category = getattr(record, "category", None)
-        if not category:
-            category = LogCategories.NONE.value
         # If skipping uncategorized, only emit to stdout
-        if category == LogCategories.NONE.value and self.skip_uncategorized:
+        if (
+            not category or category == LogCategories.NONE.value
+        ) and self.skip_uncategorized:
             self.stdout_handler.emit(record)
             return
+        if not category:
+            category = LogCategories.NONE.value
         # Write to file (and also to stdout, if desired)
         if category not in self.handlers:
-            handler = logging.FileHandler(f"{self.base_path}/{category}.log")
+            handler = logging.FileHandler(f"{self.base_path}-{category}.log")
             handler.setFormatter(self.formatter)
             self.handlers[category] = handler
         self.handlers[category].emit(record)
+
+
+class NameFileHandler(logging.Handler):
+    """Logging file handler that will write by logger name."""
+
+    def __init__(self, base_path: Path, skip_unnamed: bool = False) -> None:
+        super().__init__()
+        self.base_path: Path = base_path
+        self.handlers: dict[str, logging.FileHandler] = {}
+        self.skip_unnamed: bool = skip_unnamed
+        self.stdout_handler: logging.StreamHandler = logging.StreamHandler()
+
+    def emit(self, record: logging.LogRecord) -> None:
+        logger_name: str = record.name
+        # Write to file (and also to stdout, if desired)
+        if logger_name not in self.handlers:
+            handler = logging.FileHandler(f"{self.base_path}-{logger_name}.log")
+            handler.setFormatter(self.formatter)
+            self.handlers[logger_name] = handler
+        self.handlers[logger_name].emit(record)

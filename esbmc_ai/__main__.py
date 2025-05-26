@@ -25,8 +25,8 @@ import esbmc_ai.commands
 _ = readline
 
 HELP_MESSAGE: str = (
-    "Automated Program Repair platform. To view possible subcommands, run with "
-    '"help".'
+    "Automated Program Repair platform. To view help on subcommands, run with "
+    'the subcommand "help".'
 )
 
 

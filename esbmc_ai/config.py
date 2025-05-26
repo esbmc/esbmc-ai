@@ -3,6 +3,7 @@
 
 import argparse
 from dataclasses import dataclass
+import logging
 import os
 import sys
 from platform import system as system_name
@@ -24,7 +25,9 @@ from esbmc_ai.config_field import ConfigField
 from esbmc_ai.base_config import BaseConfig, default_scenario
 from esbmc_ai.chat_response import list_to_base_messages
 from esbmc_ai.log_utils import (
+    CategoryFileHandler,
     LogCategories,
+    NameFileHandler,
     get_log_level,
     init_logging,
     set_horizontal_lines,
@@ -173,6 +176,29 @@ class Config(BaseConfig, metaclass=makecls(SingletonMeta)):
                 help_message="Should the repaired result be returned as a patch "
                 "instead of a new file. Generate patch files and place them in "
                 "the same folder as the source files.",
+            ),
+            ConfigField(
+                name="log.output",
+                default_value=None,
+                default_value_none=True,
+                validate=lambda v: Path(v).exists(),
+                on_load=lambda v: Path(v),
+                help_message="Save the output logs to a location. Do not add "
+                ".log suffix, it will be added automatically.",
+            ),
+            ConfigField(
+                name="log.by_cat",
+                default_value=False,
+                help_message="Will split the logs by category and write them to"
+                " different files. They will have the same base log.output path"
+                " but will have an extension to differentiate them.",
+            ),
+            ConfigField(
+                name="log.by_name",
+                default_value=False,
+                help_message="Will split the logs by name and write them to"
+                " different files. They will have the same base log.output path"
+                " but will have an extension to differentiate them.",
             ),
             # This is the parameters that the user passes as args which are the
             # file names of the source code to target. It can also be a directory.
@@ -416,6 +442,18 @@ class Config(BaseConfig, metaclass=makecls(SingletonMeta)):
         self.load_config_fields(self.get_value("ESBMCAI_CONFIG_FILE"), fields)
 
         # =============== Post Init - Set to good values to fields ============
+        # Add logging handlers with config options
+        if self.get_value("log.output"):
+            log_path: Path = self.get_value("log.output")
+            base_logger: logging.Logger = logging.getLogger()
+            if self.get_value("log.by_cat"):
+                base_logger.addHandler(CategoryFileHandler(log_path, True))
+
+            if self.get_value("log.by_name"):
+                base_logger.addHandler(NameFileHandler(log_path))
+
+            base_logger.addHandler(logging.FileHandler(str(log_path) + ".log"))
+
         self.set_custom_field(
             ConfigField(
                 name="api_keys",
