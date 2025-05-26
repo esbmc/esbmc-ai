@@ -7,7 +7,7 @@ from typing import Any, override
 
 from esbmc_ai.base_component import BaseComponent
 from esbmc_ai.command_result import CommandResult
-from esbmc_ai.log_utils import Categories
+from esbmc_ai.log_utils import LogCategories
 
 
 class ChatCommand(BaseComponent):
@@ -17,7 +17,7 @@ class ChatCommand(BaseComponent):
     @classmethod
     def create(cls) -> "BaseComponent":
         obj: BaseComponent = super().create()
-        obj._logger = obj.logger.bind(category=Categories.COMMAND)
+        obj._logger = obj.logger.bind(category=LogCategories.COMMAND)
         return obj
 
     def __init__(

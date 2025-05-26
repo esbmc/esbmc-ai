@@ -3,7 +3,7 @@
 """Horizontal line logging integrated with Structlog."""
 
 from enum import Enum
-from typing import Any, Optional
+from typing import Optional
 from os import get_terminal_size
 import logging
 import structlog
@@ -14,14 +14,15 @@ _horizontal_line_width: Optional[int] = None
 _verbose_level: int = logging.INFO
 
 
-class Categories(Enum):
+class LogCategories(Enum):
+    NONE = "none"
     SYSTEM = "esbmc_ai"
     VERIFIER = "verifier"
     COMMAND = "command"
     CONFIG = "config"
 
 
-_largest_cat_len: int = min(10, max(len(cat.value) for cat in Categories))
+_largest_cat_len: int = min(10, max(len(cat.value) for cat in LogCategories))
 
 
 def get_log_level(verbosity: int | None = None) -> int:
@@ -55,6 +56,7 @@ def init_logging(level: int = logging.INFO):
     structlog.configure(
         processors=[
             structlog.processors.add_log_level,
+            # _add_category_field,
             _render_prefix_category_to_event,
             structlog.dev.ConsoleRenderer(),
             # structlog.processors.KeyValueRenderer(),
@@ -132,10 +134,12 @@ def _render_prefix_category_to_event(
     then remove 'category' from the event dict.
     """
     _ = logger, method_name
-    category_raw: Categories | str | None = event_dict.pop("category", None)
+    category_raw: LogCategories | str | None = event_dict.pop("category", None)
     if category_raw is not None:
         category: str = (
-            category_raw.value if isinstance(category_raw, Categories) else category_raw
+            category_raw.value
+            if isinstance(category_raw, LogCategories)
+            else category_raw
         )
 
         event = event_dict.get("event")
@@ -145,3 +149,40 @@ def _render_prefix_category_to_event(
                 f"[ {category:<{_largest_cat_len}.{_largest_cat_len}} ] {event}"
             )
     return event_dict
+
+
+def _add_category_field(logger: object, method_name: str, event_dict: EventDict):
+    _ = logger, method_name
+    # Ensure 'category' is in the event_dict, or set a default
+    event_dict.setdefault("category", "none")
+    return event_dict
+
+
+class CategoryFileHandler(logging.Handler):
+    base_path: str
+    handlers: dict[str, logging.FileHandler]
+    skip_uncategorized: bool
+
+    def __init__(self, base_path: str, skip_uncategorized: bool = False) -> None:
+        super().__init__()
+        self.base_path = base_path
+        self.handlers = {}
+        self.skip_uncategorized = skip_uncategorized
+        # Handler for stdout
+        self.stdout_handler = logging.StreamHandler()
+
+    def emit(self, record: logging.LogRecord) -> None:
+        # Extract the category from the record if present
+        category = getattr(record, "category", None)
+        if not category:
+            category = LogCategories.NONE.value
+        # If skipping uncategorized, only emit to stdout
+        if category == LogCategories.NONE.value and self.skip_uncategorized:
+            self.stdout_handler.emit(record)
+            return
+        # Write to file (and also to stdout, if desired)
+        if category not in self.handlers:
+            handler = logging.FileHandler(f"{self.base_path}/{category}.log")
+            handler.setFormatter(self.formatter)
+            self.handlers[category] = handler
+        self.handlers[category].emit(record)

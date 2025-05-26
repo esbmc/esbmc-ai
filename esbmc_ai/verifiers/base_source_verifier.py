@@ -12,7 +12,7 @@ from platformdirs import user_cache_dir
 
 from esbmc_ai.__about__ import __version__ as esbmc_ai_version
 from esbmc_ai.base_component import BaseComponent
-from esbmc_ai.log_utils import Categories
+from esbmc_ai.log_utils import LogCategories
 from esbmc_ai.solution import Solution
 from esbmc_ai.base_config import BaseConfig, default_scenario
 from esbmc_ai.verifier_output import VerifierOutput
@@ -46,7 +46,7 @@ class BaseSourceVerifier(BaseComponent):
     @classmethod
     def create(cls) -> "BaseComponent":
         obj: BaseComponent = super().create()
-        obj._logger = obj.logger.bind(category=Categories.VERIFIER)
+        obj._logger = obj.logger.bind(category=LogCategories.VERIFIER)
         return obj
 
     def __init__(self, verifier_name: str, authors: str) -> None:

@@ -24,7 +24,7 @@ from langchain.schema import (
     PromptValue,
 )
 
-from esbmc_ai.log_utils import Categories
+from esbmc_ai.log_utils import LogCategories
 from esbmc_ai.singleton import SingletonMeta
 
 
@@ -326,7 +326,7 @@ class AIModels(metaclass=SingletonMeta):
         super().__init__()
 
         self._logger: structlog.stdlib.BoundLogger = structlog.get_logger().bind(
-            category=Categories.SYSTEM,
+            category=LogCategories.SYSTEM,
         )
         self._api_keys: dict[str, str] = {}
         self._ai_models: dict[str, AIModel] = {}

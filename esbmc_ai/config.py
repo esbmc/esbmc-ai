@@ -24,7 +24,7 @@ from esbmc_ai.config_field import ConfigField
 from esbmc_ai.base_config import BaseConfig, default_scenario
 from esbmc_ai.chat_response import list_to_base_messages
 from esbmc_ai.log_utils import (
-    Categories,
+    LogCategories,
     get_log_level,
     init_logging,
     set_horizontal_lines,
@@ -389,7 +389,7 @@ class Config(BaseConfig, metaclass=makecls(SingletonMeta)):
 
         # Init logging
         init_logging(get_log_level(args.verbose))
-        self._logger = structlog.get_logger().bind(category=Categories.CONFIG)
+        self._logger = structlog.get_logger().bind(category=LogCategories.CONFIG)
 
         # Load config fields from environment
         self._load_envs(
