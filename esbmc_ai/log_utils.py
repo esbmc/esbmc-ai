@@ -47,6 +47,11 @@ def init_logging(level: int = logging.INFO):
 
     # Configure Structlog with standard logging integration
     structlog.reset_defaults()
+
+    # Suppress noisy libraries after setting global log level.
+    for noisy_lib in ("httpx", "openai", "httpcore"):
+        logging.getLogger(noisy_lib).setLevel(logging.WARN)
+
     structlog.configure(
         processors=[
             structlog.processors.add_log_level,
@@ -62,8 +67,8 @@ def init_logging(level: int = logging.INFO):
     # Configure standard logging level
     logging.basicConfig(
         level=level,
-        format="%(message)s",
-        # format="%(name)s: %(message)s",
+        # format="%(message)s",
+        format="%(name)s: %(message)s",
     )
 
 
