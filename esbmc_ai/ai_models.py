@@ -7,6 +7,7 @@ from typing import Any, Callable, Iterable
 from platformdirs import user_cache_dir
 from typing_extensions import override
 import tiktoken
+import structlog
 
 from anthropic import Anthropic as AnthropicClient
 from openai import Client as OpenAIClient
@@ -23,6 +24,7 @@ from langchain.schema import (
     PromptValue,
 )
 
+from esbmc_ai.log_utils import Categories
 from esbmc_ai.singleton import SingletonMeta
 
 
@@ -231,16 +233,15 @@ class AIModelOpenAI(AIModelService):
         """Dynamically resolves the max tokens from a base model."""
         # https://platform.openai.com/docs/models
         tokens: dict[str, int] = {
-            "o1-mini": 128000,
-            "o1": 200000,
-            "o3": 200000,
-            "o4-mini": 200000,
-            "gpt-3.5-turbo": 16385,
-            "gpt-4o": 128000,
+            "gpt-3.5": 16385,
             "gpt-4": 8192,
             "gpt-4-turbo": 128000,
             "gpt-4.1": 1047576,
             "gpt-4.5": 128000,
+            "gpt-4o": 128000,
+            "o1": 200000,
+            "o3": 200000,
+            "o4-mini": 200000,
         }
         return cls._get_max_tokens(name, tokens)
 
@@ -290,10 +291,11 @@ class AIModelAnthropic(AIModelService):
 
     @classmethod
     def get_max_tokens(cls, name: str) -> int:
-        # https://docs.anthropic.com/en/docs/about-claude/models/all-models
+        # docs.anthropic.com/en/docs/about-claude/models/overview#model-names
         tokens = {
-            "claude-3-7-sonnet": 200000,
-            "claude-3-5-haiku": 200000,
+            "claude-3": 200000,
+            "claude-sonnet-4": 200000,
+            "claude-opus-4": 200000,
         }
 
         return cls._get_max_tokens(name, tokens)
@@ -323,6 +325,9 @@ class AIModels(metaclass=SingletonMeta):
     def __init__(self) -> None:
         super().__init__()
 
+        self._logger: structlog.stdlib.BoundLogger = structlog.get_logger().bind(
+            category=Categories.SYSTEM,
+        )
         self._api_keys: dict[str, str] = {}
         self._ai_models: dict[str, AIModel] = {}
         self._cache_dir.mkdir(parents=True, exist_ok=True)
@@ -429,8 +434,9 @@ class AIModels(metaclass=SingletonMeta):
         for model_name in models_list:
             try:
                 self.add_ai_model(new_ai_model(model_name))
-            except ValueError:
+            except ValueError as e:
                 # Ignore models that don't count, like image only models.
+                self._logger.debug(f"Could not add model: {e}")
                 pass
 
     def _write_cache(self, name: str, models_list: list[str]):
@@ -467,6 +473,11 @@ class AIModels(metaclass=SingletonMeta):
         return [str(i.id) for i in client.models.list()] + [
             # Include also latest models ID not returned by the API but can be
             # used to use the latest version of a model.
+            # docs.anthropic.com/en/docs/about-claude/models/overview#model-aliases
+            "claude-opus-4-0",
+            "claude-sonnet-4-0",
             "claude-3-7-sonnet-latest",
+            "claude-3-5-sonnet-latest",
             "claude-3-5-haiku-latest",
+            "claude-3-opus-latest",
         ]

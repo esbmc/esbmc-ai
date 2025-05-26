@@ -11,16 +11,20 @@ from typing import (
     Any,
     Dict,
     List,
+    override,
 )
+import argparse
 
 from dotenv import load_dotenv, find_dotenv
 from langchain.schema import HumanMessage, BaseMessage
+import structlog
 
 from esbmc_ai.singleton import SingletonMeta, makecls
 from esbmc_ai.config_field import ConfigField
 from esbmc_ai.base_config import BaseConfig, default_scenario
 from esbmc_ai.chat_response import list_to_base_messages
 from esbmc_ai.log_utils import (
+    Categories,
     get_log_level,
     init_logging,
     set_horizontal_lines,
@@ -78,48 +82,15 @@ class Config(BaseConfig, metaclass=makecls(SingletonMeta)):
         super().__init__()
 
         self._args: argparse.Namespace
-        self.raw_conversation: bool = False
-        self.generate_patches: bool
-        self.output_dir: Path | None = None
+        self._arg_mappings: dict[str, list[str]] = {}
+        self._logger: structlog.stdlib.BoundLogger
 
         # Huggingface warning supress
         os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-    def load(self, args: Any) -> None:
-        """Will load the config from the args, the env file and then from config file."""
-
-        self._args = args
-
-        self._load_envs(
-            ConfigField.from_env(
-                name="ESBMCAI_CONFIG_FILE",
-                default_value=None,
-                on_load=lambda v: Path(os.path.expanduser(os.path.expandvars(str(v)))),
-            ),
-            ConfigField.from_env(
-                name="OPENAI_API_KEY",
-                default_value=None,
-                default_value_none=True,
-            ),
-            ConfigField.from_env(
-                name="ANTHROPIC_API_KEY",
-                default_value=None,
-                default_value_none=True,
-            ),
-        )
-
-        self.set_custom_field(
-            ConfigField(
-                name="api_keys",
-                default_value={},
-            ),
-            value={
-                "openai": self.get_value("OPENAI_API_KEY"),
-                "anthropic": self.get_value("ANTHROPIC_API_KEY"),
-            },
-        )
-
-        fields: list[ConfigField] = [
+        # Even though this gets initialized when we call self.load_config_fields
+        # it should be fine because load_config_field wont double add.
+        self._config_fields = [
             ConfigField(
                 name="dev_mode",
                 default_value=False,
@@ -152,9 +123,8 @@ class Config(BaseConfig, metaclass=makecls(SingletonMeta)):
             ConfigField(
                 name="llm_requests.model_refresh_seconds",
                 # Default is to refresh once a day
-                default_value=self._init_ai_models(86400),
+                default_value=86400,
                 validate=lambda v: isinstance(v, int),
-                on_load=self._init_ai_models,
                 help_message="How often to refresh the models list provided by OpenAI. "
                 "Make sure not to spam them as they can IP block. Default is once a day.",
                 error_message="Invalid value, needs to be an int in seconds",
@@ -165,9 +135,7 @@ class Config(BaseConfig, metaclass=makecls(SingletonMeta)):
                 default_value=None,
                 # Api keys are loaded from system env so they are already
                 # available
-                validate=lambda v: isinstance(v, str)
-                and AIModels().is_valid_ai_model(v),
-                on_load=AIModels().get_ai_model,
+                validate=lambda v: isinstance(v, str),
                 help_message="Which AI model to use.",
             ),
             ConfigField(
@@ -194,17 +162,17 @@ class Config(BaseConfig, metaclass=makecls(SingletonMeta)):
             ),
             ConfigField(
                 name="loading_hints",
-                default_value=True,
+                default_value=False,
                 validate=lambda v: isinstance(v, bool),
                 help_message="Show loading hints when running. Turn off if output "
                 "is going to be logged to a file.",
             ),
             ConfigField(
-                name="source_code_format",
-                default_value="full",
-                validate=lambda v: isinstance(v, str) and v in ["full", "single"],
-                error_message="source_code_format can only be 'full' or 'single'",
-                help_message="The source code format in the fix code prompt.",
+                name="generate_patches",
+                default_value=False,
+                help_message="Should the repaired result be returned as a patch "
+                "instead of a new file. Generate patch files and place them in "
+                "the same folder as the source files.",
             ),
             # This is the parameters that the user passes as args which are the
             # file names of the source code to target. It can also be a directory.
@@ -212,15 +180,9 @@ class Config(BaseConfig, metaclass=makecls(SingletonMeta)):
                 name="solution.filenames",
                 default_value=[],
                 validate=lambda v: isinstance(v, list)
-                # Validate config values are strings and also the paths exist
                 and (
                     len(v) == 0
                     or all(isinstance(f, str) and Path(f).exists() for f in v)
-                )
-                # Validate arg values
-                and (
-                    len(self._args.filenames) == 0
-                    or all(Path(f).exists() for f in self._args.filenames)
                 ),
                 on_load=self._filenames_load,
                 get_error_message=self._filenames_error_msg,
@@ -240,19 +202,19 @@ class Config(BaseConfig, metaclass=makecls(SingletonMeta)):
             ConfigField(
                 name="solution.entry_function",
                 default_value="main",
-                validate=lambda v: isinstance(v, str)
-                and (
-                    # This impliments logical implication A => B
-                    # So if entry_function arg is set then it must be a string
-                    not self._args.entry_function
-                    or isinstance(self._args.entry_function, str)
-                ),
-                on_load=lambda v: (
-                    self._args.entry_function
-                    if self._args.entry_function != "main" or not v
-                    else v
-                ),
                 error_message="The entry function name needs to be a string",
+                help_message="The name of the entry function to repair, defaults to main.",
+            ),
+            ConfigField(
+                name="solution.output_dir",
+                default_value=None,
+                default_value_none=True,
+                validate=lambda v: Path(v).exists() and Path(v).is_dir(),
+                on_load=lambda v: Path(v).expanduser(),
+                error_message="Dir does not exist",
+                help_message="Set the output directory to save successfully repaired "
+                "files in. Leave empty to not use. Specifying the same directory will "
+                "overwrite the original file.",
             ),
             ConfigField(
                 name="verifier.enable_cache",
@@ -265,7 +227,7 @@ class Config(BaseConfig, metaclass=makecls(SingletonMeta)):
                 default_value=None,
                 validate=lambda v: isinstance(v, str)
                 and Path(v).expanduser().is_file(),
-                on_load=lambda v: Path(v).expanduser(),
+                on_load=lambda v: Path(os.path.expanduser(os.path.expandvars(v))),
                 help_message="Path to the ESBMC binary.",
             ),
             ConfigField(
@@ -285,14 +247,11 @@ class Config(BaseConfig, metaclass=makecls(SingletonMeta)):
                     "--context-bound",
                     "2",
                 ],
-                validate=lambda v: isinstance(v, list),
-                help_message="Parameters for ESBMC.",
-            ),
-            ConfigField(
-                name="verifier.esbmc.output_type",
-                default_value="full",
-                validate=lambda v: v in ["full", "vp", "ce"],
-                help_message="The type of output from ESBMC in the fix code command.",
+                validate=lambda v: isinstance(v, list | str),
+                on_load=lambda v: [
+                    str(arg) for arg in (v.split(" ") if isinstance(v, str) else v)
+                ],
+                help_message="Parameters for ESBMC. Can accept as a list or a string.",
             ),
             ConfigField(
                 name="verifier.esbmc.timeout",
@@ -321,6 +280,34 @@ class Config(BaseConfig, metaclass=makecls(SingletonMeta)):
                 help_message="The temperature of the LLM for the user chat command.",
             ),
             ConfigField(
+                name="user_chat.initial_prompt_template",
+                default_value=None,
+                validate=lambda v: isinstance(v, str),
+                on_load=lambda v: HumanMessage(content=v),
+                help_message="The initial prompt for the user chat command.",
+            ),
+            ConfigField(
+                name="user_chat.system_prompt_templates",
+                default_value=None,
+                validate=_validate_prompt_template_conversation,
+                on_load=list_to_base_messages,
+                help_message="The system prompt for the user chat command.",
+            ),
+            ConfigField(
+                name="user_chat.set_solution_prompt_templates",
+                default_value=None,
+                validate=_validate_prompt_template_conversation,
+                on_load=list_to_base_messages,
+                help_message="The prompt for the user chat command when a solution "
+                "is found by the fix code command.",
+            ),
+            ConfigField(
+                name="fix_code.verifier_output_type",
+                default_value="full",
+                validate=lambda v: v in ["full", "vp", "ce"],
+                help_message="The type of output from ESBMC in the fix code command.",
+            ),
+            ConfigField(
                 name="fix_code.temperature",
                 default_value=1.0,
                 validate=lambda v: isinstance(v, float) and 0 <= v <= 2,
@@ -342,31 +329,21 @@ class Config(BaseConfig, metaclass=makecls(SingletonMeta)):
                 help_message="The type of history to be shown in the fix code command.",
             ),
             ConfigField(
-                name="prompt_templates.user_chat.initial",
-                default_value=None,
-                validate=lambda v: isinstance(v, str),
-                on_load=lambda v: HumanMessage(content=v),
-                help_message="The initial prompt for the user chat command.",
+                name="fix_code.raw_conversation",
+                default_value=False,
+                help_message="Print the raw conversation at different parts of execution.",
             ),
             ConfigField(
-                name="prompt_templates.user_chat.system",
-                default_value=None,
-                validate=_validate_prompt_template_conversation,
-                on_load=list_to_base_messages,
-                help_message="The system prompt for the user chat command.",
-            ),
-            ConfigField(
-                name="prompt_templates.user_chat.set_solution",
-                default_value=None,
-                validate=_validate_prompt_template_conversation,
-                on_load=list_to_base_messages,
-                help_message="The prompt for the user chat command when a solution "
-                "is found by the fix code command.",
+                name="fix_code.source_code_format",
+                default_value="full",
+                validate=lambda v: isinstance(v, str) and v in ["full", "single"],
+                error_message="source_code_format can only be 'full' or 'single'",
+                help_message="The source code format in the fix code prompt.",
             ),
             # Here we have a list of prompt templates that are for each scenario.
             # The base scenario prompt template is required.
             ConfigField(
-                name="prompt_templates.fix_code",
+                name="fix_code.prompt_templates",
                 default_value=None,
                 validate=lambda v: default_scenario in v
                 and all(
@@ -379,11 +356,11 @@ class Config(BaseConfig, metaclass=makecls(SingletonMeta)):
                             initial=HumanMessage(content=conv["initial"]),
                             system=list_to_base_messages(conv["system"]),
                         )
-                        for scenario, conv in config_file["prompt_templates"][
-                            "fix_code"
+                        for scenario, conv in config_file["fix_code"][
+                            "prompt_templates"
                         ].items()
                     }
-                    if "prompt_templates" in config_file
+                    if "prompt_templates" in config_file["fix_code"]
                     else {}
                 ),
                 help_message="Scenario prompt templates for differnet types of bugs "
@@ -391,38 +368,62 @@ class Config(BaseConfig, metaclass=makecls(SingletonMeta)):
             ),
         ]
 
-        # Base init needs to be called last (only before load args)
-        self.load_config_fields(self.get_value("ESBMCAI_CONFIG_FILE"), fields)
-        self._load_args()
+    def load(self, args: Any, arg_mappings: dict[str, list[str]]) -> None:
+        """Will load the config from the args, the env file and then from config file."""
 
-        # Config Pseudo-Entries - In the future have different type of config field
-        # that won't be read from the config file.
-        self.add_config_field(
-            ConfigField(
-                name="generate_patches",
-                default_value=self.generate_patches,
+        self._args = args
+        # Create an argument mapping of all the config files, the arg_mapping is
+        # applied over that to translate the mappings from the arguments to the
+        # mappings of the config fields.
+        self._arg_mappings: dict[str, list[str]] = {
+            f.name: [f.name] for f in self.get_config_fields()
+        } | arg_mappings
+
+        # Init logging
+        init_logging(get_log_level(args.verbose))
+        self._logger = structlog.get_logger().bind(category=Categories.CONFIG)
+
+        # Load config fields from environment
+        self._load_envs(
+            ConfigField.from_env(
+                name="ESBMCAI_CONFIG_FILE",
+                default_value=None,
+                on_load=lambda v: Path(os.path.expanduser(os.path.expandvars(str(v)))),
+            ),
+            ConfigField.from_env(
+                name="OPENAI_API_KEY",
+                default_value=None,
                 default_value_none=True,
-                help_message="Should the repaired result be returned as a patch "
-                "instead of a new file.",
-            )
-        )
-        self.add_config_field(
-            ConfigField(
-                name="fix_code.raw_conversation",
-                default_value=self.raw_conversation,
+            ),
+            ConfigField.from_env(
+                name="ANTHROPIC_API_KEY",
+                default_value=None,
                 default_value_none=True,
-                help_message="Print the raw conversation at different parts of execution.",
-            )
+            ),
         )
-        self.add_config_field(
+
+        fields: list[ConfigField] = self.get_config_fields()
+        self._load_args(args, fields)
+        # Base init needs to be called last
+        self.load_config_fields(self.get_value("ESBMCAI_CONFIG_FILE"), fields)
+
+        # =============== Post Init - Set to good values to fields ============
+        self.set_custom_field(
             ConfigField(
-                name="solution.output_dir",
-                default_value=self.output_dir,
-                default_value_none=True,
-                help_message="Set the output directory to save successfully repaired "
-                "files in. Leave empty to not use.",
-            )
+                name="api_keys",
+                default_value={},
+            ),
+            value={
+                "openai": self.get_value("OPENAI_API_KEY"),
+                "anthropic": self.get_value("ANTHROPIC_API_KEY"),
+            },
         )
+        # Load AI models and set ai_model
+        AIModels().load_models(
+            self.get_value("api_keys"),
+            self.get_value("llm_requests.model_refresh_seconds"),
+        )
+        self.set_value("ai_model", AIModels().get_ai_model(self.get_value("ai_model")))
 
     def _load_envs(self, *fields: ConfigField) -> None:
         """Loads the environment variables.
@@ -504,33 +505,60 @@ class Config(BaseConfig, metaclass=makecls(SingletonMeta)):
 
         self._fields.extend(fields)
 
-    def _load_args(self) -> None:
-        args: argparse.Namespace = self._args
+    @property
+    def _arg_reverse_mappings(self) -> dict[str, str]:
+        """Returns the reverse mapping of arg mappings. args --> field
 
-        init_logging(get_log_level(args.verbose))
+        This also replaces all the - with _ in the names since this is done by
+        argparse, for example: --ai-model will be accessible through ai_model."""
+        reverse_mappings: dict[str, str] = {}
+        for field_name, mappings in self._arg_mappings.items():
+            for mapping in mappings:
+                reverse_mappings[mapping.replace("-", "_")] = field_name
 
-        # AI Model -m
-        if args.ai_model != "":
-            if AIModels().is_valid_ai_model(args.ai_model):
-                ai_model = AIModels().get_ai_model(args.ai_model)
-                self.set_value("ai_model", ai_model)
-            else:
-                print(f"Error: invalid --ai-model parameter {args.ai_model}")
-                sys.exit(4)
+        return reverse_mappings
 
-        self.raw_conversation = args.raw_conversation
-        self.generate_patches = args.generate_patches
+    def _load_args(self, args: argparse.Namespace, fields: list[ConfigField]) -> None:
+        """Will load the fields set in the program arguments."""
 
-        if args.output_dir:
-            path: Path = Path(args.output_dir).expanduser()
-            if path.is_dir():
-                self.output_dir = path
-            else:
-                print(
-                    "Error while parsing arguments: output_dir: dir does not exist:",
-                    self.output_dir,
-                )
-                sys.exit(1)
+        # Track the names of the fields set, fields that are already set are
+        # skipped: --ai-models and -m are treated as one this way.
+        fields_set: set[str] = set()
+        reverse_mappings: dict[str, str] = self._arg_reverse_mappings
+        fields_mapped: dict[str, ConfigField] = {f.name: f for f in fields}
+        for mapped_name, value in vars(args).items():
+            print(mapped_name)
+            # Check if a field is set in args
+            if mapped_name in reverse_mappings:
+                # Get the field name
+                field_name: str = reverse_mappings[mapped_name]
+                # Skip if added
+                if field_name in fields_set:
+                    continue
+
+                self._logger.debug(f"Loading from arg: {field_name}")
+
+                fields_set.add(field_name)
+                # Load with value.
+                self.set_custom_field(fields_mapped[field_name], value)
+
+    @override
+    def load_config_fields(self, cfg_path: Path, fields: list[ConfigField]) -> None:
+        """Override to only load fields that have not been loaded by the args."""
+
+        # Track the names of the fields set, fields that are already set are
+        # skipped: --ai-models and -m are treated as one this way.
+        fields_set: set[str] = set()
+        reverse_mappings: dict[str, str] = self._arg_reverse_mappings
+
+        for mapped_name in vars(self._args).keys():
+            # Check if a field is set in args
+            if mapped_name in reverse_mappings:
+                # Get the field name
+                fields_set.add(reverse_mappings[mapped_name])
+
+        load_fields: list[ConfigField] = [f for f in fields if f.name not in fields_set]
+        return super().load_config_fields(cfg_path, load_fields)
 
     def _validate_custom_ai(self, ai_config_list: dict) -> bool:
         for name, ai_config in ai_config_list.items():
@@ -635,6 +663,6 @@ class Config(BaseConfig, metaclass=makecls(SingletonMeta)):
 
         return "Error while loading files..."
 
-    def _init_ai_models(self, refresh_duration: int) -> int:
-        AIModels().load_models(self.get_value("api_keys"), refresh_duration)
-        return refresh_duration
+    def get_config_fields(self) -> list[ConfigField]:
+        """Returns the config fields. Excluding env fields."""
+        return self._config_fields

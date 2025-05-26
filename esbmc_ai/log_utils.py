@@ -18,6 +18,7 @@ class Categories(Enum):
     SYSTEM = "esbmc_ai"
     VERIFIER = "verifier"
     COMMAND = "command"
+    CONFIG = "config"
 
 
 _largest_cat_len: int = min(10, max(len(cat.value) for cat in Categories))

@@ -6,6 +6,7 @@ import sys
 
 import readline
 import argparse
+from typing import Any
 
 from structlog import get_logger
 from structlog.stdlib import BoundLogger
@@ -23,8 +24,10 @@ import esbmc_ai.commands
 # Enables arrow key functionality for input(). Do not remove import.
 _ = readline
 
-HELP_MESSAGE: str = """Automated Program Repair platform. To view additional help
-run with the subcommand "help"."""
+HELP_MESSAGE: str = (
+    "Automated Program Repair platform. To view possible subcommands, run with "
+    '"help".'
+)
 
 
 def _init_builtin_defaults() -> None:
@@ -52,13 +55,20 @@ def _run_command_mode(command: ChatCommand, args: argparse.Namespace) -> None:
     sys.exit(0)
 
 
-def main() -> None:
-    """Entry point function"""
-    parser: argparse.ArgumentParser = argparse.ArgumentParser(
-        prog="ESBMC-AI",
-        description=HELP_MESSAGE,
-        epilog=f"Made by {__author__}",
-    )
+def _init_args(
+    parser: argparse.ArgumentParser,
+    map_field_names: dict[str, list[str]],
+    ignore_fields: list[str],
+    manual_mappings: dict[str, list[str]],
+) -> None:
+    """Initializes the Config's ConfigFields to be accepted by the argument
+    parser, this allows all ConfigFields to be loaded as arguments.
+
+    Args:
+        * parser: The parser to add the arguments into.
+        * map_fields: The parser will map the config fields to use alternative names.
+        * ignore_fields: List of field names to not encode. This takes precedence over
+        map_fields."""
 
     parser.add_argument(
         "command",
@@ -72,20 +82,12 @@ def main() -> None:
     )
 
     parser.add_argument(
-        "filenames",
+        *manual_mappings["solution.filenames"],
         default=[],
         type=str,
-        nargs=argparse.REMAINDER,
+        # nargs=argparse.REMAINDER,
+        nargs=argparse.ZERO_OR_MORE,
         help="The filename(s) to pass to the verifier.",
-    )
-
-    parser.add_argument(
-        "--entry-function",
-        action="store",
-        default="main",
-        type=str,
-        required=False,
-        help="The name of the entry function to repair, defaults to main.",
     )
 
     parser.add_argument(
@@ -107,38 +109,100 @@ def main() -> None:
         ),
     )
 
-    parser.add_argument(
-        "-m",
-        "--ai-model",
-        default="",
-        help=(
-            "Which AI model to use. Specify any OpenAI model, Anthropic model, "
-            "or custom defined model."
-        ),
+    # Init arg groups
+    arg_groups: dict[str, argparse._ArgumentGroup] = {}
+    for f in Config().get_config_fields():
+        name_split: list[str] = f.name.split(".")
+        if len(name_split) == 1:
+            continue  # No group
+        arg_groups[name_split[0]] = parser.add_argument_group(
+            title=name_split[0],
+        )
+
+    for f in Config().get_config_fields():
+        if f.name in ignore_fields:
+            continue
+
+        # Get either the general parser or a group parser
+        arg_parser: argparse._ArgumentGroup | argparse.ArgumentParser = parser
+        name_split: list[str] = f.name.split(".")
+        if len(name_split) > 1:
+            arg_parser = arg_groups[name_split[0]]
+
+        # Get the name that will be shown.
+        mappings: list[str] = (
+            map_field_names[f.name] if f.name in map_field_names else [f.name]
+        )
+        # Add single or double dash. Change _ into -, argparse will automatically
+        # convert into _ anyway.
+        mappings = [
+            f"-{m}" if len(m) == 1 else f"--{m.replace("_", "-")}" for m in mappings
+        ]
+
+        action: Any
+        match f.default_value:
+            case str():
+                action = "store"
+            case bool():
+                action = "store_true"
+            case _:
+                action = "store"
+
+        # Set type
+        try:
+            # Type is only accepted when the action is not some specific values.
+            kwargs = {}
+            if action not in (
+                "store_true",
+                "store_false",
+                "append_const",
+                "count",
+                "help",
+                "version",
+            ):
+                # If None then it will only accept None values so basically useless
+                kwargs["type"] = (
+                    str if f.default_value is None else type(f.default_value)
+                )
+
+            # Create the argument.
+            arg_parser.add_argument(
+                *mappings,
+                action=action,
+                required=False,
+                # Will not show up in the Namespace
+                default=argparse.SUPPRESS,
+                help=f.help_message,
+                **kwargs,
+            )
+        except TypeError as e:
+            get_logger().critical(f"Failed to encode config into args: {f.name}")
+            raise e
+
+
+def main() -> None:
+    """Entry point function"""
+    parser: argparse.ArgumentParser = argparse.ArgumentParser(
+        prog="ESBMC-AI",
+        description=HELP_MESSAGE,
+        epilog=f"Made by {__author__}",
     )
 
-    parser.add_argument(
-        "-r",
-        "--raw-conversation",
-        action="store_true",
-        default=False,
-        help="Show the raw conversation at the end of a command. Good for debugging...",
-    )
+    arg_mappings: dict[str, list[str]] = {
+        "solution.entry_function": ["entry-function"],
+        "ai_model": ["m", "ai-model"],
+        "solution.output_dir": ["o", "output-dir"],
+    }
 
-    parser.add_argument(
-        "-p",
-        "--generate-patches",
-        action="store_true",
-        default=False,
-        help="Generate patch files and place them in the same folder as the source files.",
-    )
+    manual_mappings: dict[str, list[str]] = {
+        "solution.filenames": ["filenames"],
+    }
 
-    parser.add_argument(
-        "-o",
-        "--output-dir",
-        default="",
-        help="Store the result at the following dir. Specifying the same directory will "
-        + "overwrite the original file.",
+    _init_args(
+        parser=parser,
+        map_field_names=arg_mappings,
+        ignore_fields=["solution.filenames"],
+        manual_mappings=manual_mappings,
     )
 
     args: argparse.Namespace = parser.parse_args()
@@ -147,7 +211,7 @@ def main() -> None:
     print(f"Made by {__author__}")
     print()
 
-    Config().load(args)
+    Config().load(args, arg_mappings | manual_mappings)
     print(f"Config File: {Config().get_value("ESBMCAI_CONFIG_FILE")}")
 
     _init_builtin_defaults()

@@ -32,67 +32,65 @@ timeout = 60
 max_tries = 5
 timeout = 60
 
+# USER CHAT
+
 [user_chat]
 temperature = 1.0
+initial_prompt_template = "Walk me through the source code, while also explaining the output of ESBMC at the relevant parts. You shall not start the reply with an acknowledgement message such as 'Certainly'."
+
+[[user_chat.system_prompt_templates]]
+role = "System"
+content = "You are a security focused assistant that parses output from a program called ESBMC and explains the output to the user. ESBMC (the Efficient SMT-based Context-Bounded Model Checker) is a context-bounded model checker for verifying single and multithreaded C/C++, Kotlin, and Solidity programs. It can automatically verify both predefined safety properties (e.g., bounds check, pointer safety, overflow) and user-defined program assertions. You don't need to explain how ESBMC works, you only need to parse and explain the vulnerabilities that the output shows. For each line of code explained, say what the line number is as well. Do not answer any questions outside of these explicit parameters. If you understand, reply OK."
+
+[[user_chat.system_prompt_templates]]
+role = "AI"
+content = "OK"
+
+[[user_chat.system_prompt_templates]]
+role = "System"
+content = "Reply OK if you understand that the following text is the program source code:\n\n```c{source_code}```"
+
+[[user_chat.system_prompt_templates]]
+role = "AI"
+content = "OK"
+
+[[user_chat.system_prompt_templates]]
+role = "System"
+content = "Reply OK if you understand that the following text is the output from ESBMC:\n\n```\n{esbmc_output}\n```"
+
+[[user_chat.system_prompt_templates]]
+role = "AI"
+content = "OK"
+
+[[user_chat.set_solution_prompt_templates]]
+role = "System"
+content = "Here is the corrected code:\n\n```c\n{source_code_solution}```"
+
+[[user_chat.set_solution_prompt_templates]]
+role = "AI"
+content = "OK"
+
+# FIX CODE
 
 [fix_code]
 temperature = 0.7
 max_attempts = 5
 message_history = "normal"
 
-# PROMPT TEMPLATES - USER CHAT
-
-[prompt_templates.user_chat]
-initial = "Walk me through the source code, while also explaining the output of ESBMC at the relevant parts. You shall not start the reply with an acknowledgement message such as 'Certainly'."
-
-[[prompt_templates.user_chat.system]]
-role = "System"
-content = "You are a security focused assistant that parses output from a program called ESBMC and explains the output to the user. ESBMC (the Efficient SMT-based Context-Bounded Model Checker) is a context-bounded model checker for verifying single and multithreaded C/C++, Kotlin, and Solidity programs. It can automatically verify both predefined safety properties (e.g., bounds check, pointer safety, overflow) and user-defined program assertions. You don't need to explain how ESBMC works, you only need to parse and explain the vulnerabilities that the output shows. For each line of code explained, say what the line number is as well. Do not answer any questions outside of these explicit parameters. If you understand, reply OK."
-
-[[prompt_templates.user_chat.system]]
-role = "AI"
-content = "OK"
-
-[[prompt_templates.user_chat.system]]
-role = "System"
-content = "Reply OK if you understand that the following text is the program source code:\n\n```c{source_code}```"
-
-[[prompt_templates.user_chat.system]]
-role = "AI"
-content = "OK"
-
-[[prompt_templates.user_chat.system]]
-role = "System"
-content = "Reply OK if you understand that the following text is the output from ESBMC:\n\n```\n{esbmc_output}\n```"
-
-[[prompt_templates.user_chat.system]]
-role = "AI"
-content = "OK"
-
-[[prompt_templates.user_chat.set_solution]]
-role = "System"
-content = "Here is the corrected code:\n\n```c\n{source_code_solution}```"
-
-[[prompt_templates.user_chat.set_solution]]
-role = "AI"
-content = "OK"
-
-# PROMPT TEMPLATES - FIX CODE
-
-[prompt_templates.fix_code.base]
+[fix_code.prompt_templates.base]
 initial = "The ESBMC output is:\n\n```\n{esbmc_output}\n```\n\nThe source code is:\n\n```c\n{source_code}\n```\n Using the ESBMC output, show the fixed text."
 
-[[prompt_templates.fix_code.base.system]]
+[[fix_code.prompt_templates.base.system]]
 role = "System"
 content = "From now on, act as an Automated Code Repair Tool that repairs AI C code. You will be shown AI C code, along with ESBMC output. Pay close attention to the ESBMC output, which contains a stack trace along with the type of error that occurred and its location that you need to fix. Provide the repaired C code as output, as would an Automated Code Repair Tool. Aside from the corrected source code, do not output any other text."
 
-[prompt_templates.fix_code."division by zero"]
+[fix_code.prompt_templates."division by zero"]
 initial = "The ESBMC output is:\n\n```\n{esbmc_output}\n```\n\nThe source code is:\n\n```c\n{source_code}\n```\n Using the ESBMC output, show the fixed text."
 
-[[prompt_templates.fix_code."division by zero".system]]
+[[fix_code.prompt_templates."division by zero".system]]
 role = "System"
 content = "Here's a C program with a vulnerability:\n```c\n{source_code}\n```\nA Formal Verification tool identified a division by zero issue:\n{esbmc_output}\nTask: Modify the C code to safely handle scenarios where division by zero might occur. The solution should prevent undefined behavior or crashes due to division by zero. \nGuidelines: Focus on making essential changes only. Avoid adding or modifying comments, and ensure the changes are precise and minimal.\nGuidelines: Ensure the revised code avoids undefined behavior and handles division by zero cases effectively.\nGuidelines: Implement safeguards (like comparison) to prevent division by zero instead of using literal divisions like 1.0/0.0.Output: Provide the corrected, complete C code. The solution should compile and run error-free, addressing the division by zero vulnerability.\nStart the code snippet with ```c and end with ```. Reply OK if you understand."
 
-[[prompt_templates.fix_code."division by zero".system]]
+[[fix_code.prompt_templates."division by zero".system]]
 role = "AI"
 content = "OK."

@@ -1,5 +1,6 @@
 # Author: Yiannis Charalambous
 
+import os
 from pathlib import Path
 import sys
 from typing import Any, Optional
@@ -81,7 +82,10 @@ class FixCodeCommand(ChatCommand):
         self._config = Config()
 
         # Handle kwargs
-        source_file: SourceFile = kwargs["source_file"]
+        source_file: SourceFile = SourceFile.load(
+            self.get_config_value("solution.filenames")[0],
+            Path(os.getcwd()),
+        )
         original_source_file: SourceFile = SourceFile(
             source_file.file_path, source_file.base_path, source_file.content
         )
@@ -96,10 +100,12 @@ class FixCodeCommand(ChatCommand):
         temperature: float = self.get_config_value("fix_code.temperature")
         max_tries: int = self.get_config_value("fix_code.max_attempts")
         timeout: int = self.get_config_value("llm_requests.timeout")
-        source_code_format: str = self.get_config_value("source_code_format")
-        esbmc_output_format: str = self.get_config_value("verifier.esbmc.output_type")
+        source_code_format: str = self.get_config_value("fix_code.source_code_format")
+        esbmc_output_format: str = self.get_config_value(
+            "fix_code.verifier_output_type"
+        )
         scenarios: dict[str, FixCodeScenario] = self.get_config_value(
-            "prompt_templates.fix_code"
+            "fix_code.prompt_templates"
         )
         max_attempts: int = self.get_config_value("fix_code.max_attempts")
         raw_conversation: bool = self.get_config_value("fix_code.raw_conversation")

@@ -99,18 +99,18 @@ class UserChatCommand(ChatCommand):
 
     @staticmethod
     def get_user_chat_initial() -> BaseMessage:
-        """Value of field: prompt_templates.user_chat.initial"""
-        return Config().get_value("prompt_templates.user_chat.initial")
+        """Value of field: user_chat.initial_prompt_template"""
+        return Config().get_value("user_chat.initial_prompt_template")
 
     @staticmethod
     def get_user_chat_system_messages() -> list[BaseMessage]:
-        """Value of field: prompt_templates.user_chat.system"""
-        return Config().get_value("prompt_templates.user_chat.system")
+        """Value of field: user_chat.system_prompt_templates"""
+        return Config().get_value("user_chat.system_prompt_templates")
 
     @staticmethod
     def get_user_chat_set_solution() -> list[BaseMessage]:
-        """Value of field: prompt_templates.user_chat.set_solution"""
-        return Config().get_value("prompt_templates.user_chat.set_solution")
+        """Value of field: user_chat.set_solution_prompt_templates"""
+        return Config().get_value("user_chat.set_solution_prompt_templates")
 
     @override
     def execute(self, **kwargs: Optional[Any]) -> Optional[CommandResult]:
