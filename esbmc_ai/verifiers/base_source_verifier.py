@@ -107,15 +107,14 @@ class BaseSourceVerifier(BaseComponent):
 
     def verify_source(
         self,
+        *,
         solution: Solution,
-        entry_function: str = "main",
         timeout: int | None = None,
         **kwargs: Any,
     ) -> VerifierOutput:
         """Verifies source_file, the kwargs are optional arguments that are
         implementation dependent."""
         _ = solution
-        _ = entry_function
         _ = timeout
         _ = kwargs
         raise NotImplementedError()

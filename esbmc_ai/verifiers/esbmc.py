@@ -5,6 +5,7 @@ import sys
 import re
 from subprocess import PIPE, STDOUT, run, CompletedProcess
 from pathlib import Path
+from typing import overload
 from typing_extensions import Any, override
 
 from esbmc_ai.config import Config
@@ -78,7 +79,7 @@ class ESBMC(BaseSourceVerifier):
         return None
 
     def __init__(self) -> None:
-        super().__init__("esbmc", "")
+        super().__init__(verifier_name="esbmc", authors="")
         self.config = Config()
 
     @property
@@ -89,9 +90,10 @@ class ESBMC(BaseSourceVerifier):
     @override
     def verify_source(
         self,
+        *,
         solution: Solution,
-        entry_function: str = "main",
         timeout: int | None = None,
+        entry_function: str = "main",
         params: list[str] | None = None,
         **kwargs: Any,
     ) -> ESBMCOutput:
