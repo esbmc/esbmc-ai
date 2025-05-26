@@ -92,17 +92,17 @@ class BaseSourceVerifier(BaseComponent):
         properties = self._cache_name_pack(properties)
         data_dump: bytes = pickle.dumps(obj=properties, protocol=-1)
         file_id: str = str(sha512(data_dump).hexdigest())
-        self.logger.info(f"Searching cache ID: {file_id}", post_label="Verifier")
+        self.logger.info(f"Searching cache ID: {file_id}")
 
         cache: Path = Path(user_cache_dir("esbmc-ai", "Yiannis Charalambous"))
         filename: Path = cache / file_id
         if cache.exists() and filename.exists() and filename.is_file():
             with open(filename, "rb") as file:
                 data: bytes = pickle.load(file=file)
-                self.logger.info("Using cached result", post_label="Verifier")
+                self.logger.info("Using cached result")
                 return data
 
-        self.logger.info("Cache not found...", post_label="Verifier")
+        self.logger.info("Cache not found...")
         return None
 
     def verify_source(

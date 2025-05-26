@@ -30,9 +30,9 @@ If you want to allow a certain type of verifier only to be used in your addon, y
 
 ```py
 if not isinstance(verifier, ESBMC):
-    log0(
+    self.logger.error(
         f"The following verifier {verifier.name} is not compatible, "
-        "use addons that inherit ESBMC", post_label="Error"
+        "use addons that inherit ESBMC"
     )
     sys.exit(1)
 ```

@@ -104,25 +104,20 @@ class ESBMC(BaseSourceVerifier):
         if "--multi-property" in esbmc_params:
             self._logger.error(
                 "Do not add --multi-property to ESBMC params it is not yet supported!",
-                post_label="ESBMC",
             )
             sys.exit(1)
 
         if "--input-file" in esbmc_params:
-            self._logger.error(
-                "Do not add --input-file to ESBMC parameters.", post_label="ESBMC"
-            )
+            self._logger.error("Do not add --input-file to ESBMC parameters.")
             sys.exit(1)
         if "--timeout" in esbmc_params:
             self._logger.error(
                 "Do not add --timeout to ESBMC parameters, instead specify it in its own field.",
-                post_label="ESBMC",
             )
             sys.exit(1)
         if "--function" in esbmc_params:
             self._logger.error(
                 "Don't add --function to ESBMC parameters, instead specify it in its own field.",
-                post_label="ESBMC",
             )
             sys.exit(1)
 
@@ -277,7 +272,6 @@ class ESBMC(BaseSourceVerifier):
             self._logger.error(
                 "ESBMC has segfaulted... Please report the issue",
                 "to developers: https://www.github.com/esbmc/esbmc",
-                post_label="Error",
             )
             sys.exit(1)
 

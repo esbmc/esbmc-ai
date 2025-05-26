@@ -131,5 +131,4 @@ class BaseChatInterface:
         )
 
         self.push_to_message_stack(message=response.message)
-
         return response
