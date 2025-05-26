@@ -14,7 +14,7 @@ from structlog.stdlib import BoundLogger
 from esbmc_ai import Config, ChatCommand, __author__, __version__
 from esbmc_ai.addon_loader import AddonLoader
 from esbmc_ai.command_result import CommandResult
-from esbmc_ai.log_utils import Categories
+from esbmc_ai.log_utils import LogCategories
 from esbmc_ai.verifiers.base_source_verifier import BaseSourceVerifier
 from esbmc_ai.verifiers.esbmc import ESBMC
 from esbmc_ai.verifier_runner import VerifierRunner
@@ -197,10 +197,14 @@ def main() -> None:
         "solution.entry_function": ["entry-function"],
         "ai_model": ["m", "ai-model"],
         "solution.output_dir": ["o", "output-dir"],
+        "log.output": ["log-output"],
+        "log.by_cat": ["log-by-cat"],
+        "log.by_name": ["log-by-name"],
     }
 
     manual_mappings: dict[str, list[str]] = {
         "solution.filenames": ["filenames"],
+        "ai_custom": ["ai_custom"],  # Block
     }
 
     _init_args(
@@ -219,7 +223,7 @@ def main() -> None:
     print(f"Config File: {Config().get_value("ESBMCAI_CONFIG_FILE")}")
 
     _init_builtin_defaults()
-    logger: BoundLogger = get_logger().bind(category=Categories.SYSTEM)
+    logger: BoundLogger = get_logger().bind(category=LogCategories.SYSTEM)
 
     if Config().get_value("dev_mode"):
         logger.warn("Development Mode Activated")
