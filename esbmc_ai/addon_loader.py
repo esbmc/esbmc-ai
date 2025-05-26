@@ -72,19 +72,10 @@ class AddonLoader(metaclass=SingletonMeta):
             for addon in addons:
                 print(f"\t* {addon.name} by {addon.authors}")
 
-        # Init the verifier.name field for the main config. The reason this is
-        # not part of the main config is that verifiers are treated as addons,
-        # even internally.
-        self._config.load_config_field(
-            ConfigField(
-                name="verifier.name",
-                default_value="esbmc",
-                validate=lambda v: isinstance(v, str)
-                and v in self.verifier_addon_names + ["esbmc"],
-                error_message="Invalid verifier name specified.",
-                help_message="The verifier to use. Default is ESBMC.",
-            )
-        )
+        # Check verifeier
+        verifier: BaseSourceVerifier = self._config.get_value("verifier.name")
+        if verifier not in self.verifier_addon_names + ["esbmc"]:
+            self._logger.error(f"Invalid verifier specified: {verifier.name}")
 
     @property
     def chat_command_addons(self) -> dict[str, ChatCommand]:

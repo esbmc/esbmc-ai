@@ -216,6 +216,14 @@ class Config(BaseConfig, metaclass=makecls(SingletonMeta)):
                 "files in. Leave empty to not use. Specifying the same directory will "
                 "overwrite the original file.",
             ),
+            # The value is checked in AddonLoader.
+            ConfigField(
+                name="verifier.name",
+                default_value="esbmc",
+                validate=lambda v: isinstance(v, str),
+                error_message="Invalid verifier name specified.",
+                help_message="The verifier to use. Default is ESBMC.",
+            ),
             ConfigField(
                 name="verifier.enable_cache",
                 default_value=True,
