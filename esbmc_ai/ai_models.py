@@ -337,7 +337,6 @@ class AIModels(metaclass=SingletonMeta):
     ) -> None:
         """Loads the AI models."""
 
-        self._ai_models = {}
         self._api_keys = api_keys
 
         self._load_ai_model_list(
@@ -460,7 +459,7 @@ class AIModels(metaclass=SingletonMeta):
 
         if "openai" not in self._api_keys:
             return []
-        # Check if needs refreshing
+
         try:
             return [str(model.id) for model in OpenAIClient().models.list().data]
         except ImportError:
