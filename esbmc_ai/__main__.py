@@ -30,7 +30,8 @@ HELP_MESSAGE: str = (
 )
 
 
-def _init_builtin_defaults() -> None:
+def _init_builtin_components() -> None:
+    """Initializes the builtin verifiers and commands."""
     # Built-in verifiers
     esbmc = ESBMC.create()
     assert isinstance(esbmc, BaseSourceVerifier)
@@ -221,10 +222,11 @@ def main() -> None:
     print()
 
     Config().load(args, arg_mappings | manual_mappings)
-    print(f"Config File: {Config().get_value("ESBMCAI_CONFIG_FILE")}")
-
-    _init_builtin_defaults()
     logger: BoundLogger = get_logger().bind(category=LogCategories.SYSTEM)
+
+    logger.info(f"Config File: {Config().get_value("ESBMCAI_CONFIG_FILE")}")
+
+    _init_builtin_components()
 
     if Config().get_value("dev_mode"):
         logger.warn("Development Mode Activated")
@@ -243,7 +245,7 @@ def main() -> None:
     command = args.command
     command_names: list[str] = CommandRunner().command_names
     if command in command_names:
-        print("Running Command:", command, "\n")
+        logger.info(f"Running Command: {command}\n")
         _run_command_mode(command=CommandRunner().commands[command], args=args)
         sys.exit(0)
     else:

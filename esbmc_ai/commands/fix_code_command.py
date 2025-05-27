@@ -69,12 +69,13 @@ class FixCodeCommand(ChatCommand):
 
     def print_raw_conversation(self, solution_generator: SolutionGenerator) -> None:
         """Debug prints the raw conversation"""
-        print_horizontal_line(0)
-        print("ESBMC-AI Notice: Printing raw conversation...")
+        print_horizontal_line(get_log_level())
+        self.logger.info("ESBMC-AI Notice: Printing raw conversation...")
         all_messages = solution_generator._system_messages + solution_generator.messages
         messages: list[str] = [f"{msg.type}: {msg.content}" for msg in all_messages]
-        print("\n" + "\n\n".join(messages))
-        print("ESBMC-AI Notice: End of raw conversation")
+        self.logger.info("\n" + "\n\n".join(messages))
+        self.logger.info("ESBMC-AI Notice: End of raw conversation")
+        print_horizontal_line(get_log_level())
 
     @override
     def execute(self, **kwargs: Any) -> FixCodeCommandResult:
@@ -121,11 +122,13 @@ class FixCodeCommand(ChatCommand):
 
         verifier: BaseSourceVerifier = VerifierRunner().verifier
         self._logger.info(f"Running verifier: {verifier.verifier_name}")
-        verifier_result: VerifierOutput = verifier.verify_source(solution, **kwargs)
+        verifier_result: VerifierOutput = verifier.verify_source(
+            solution=solution, **kwargs
+        )
         source_file.verifier_output = verifier_result
 
         if verifier_result.successful():
-            print("File verified successfully")
+            self.logger.info("File verified successfully")
             returned_source: str
             if generate_patches:
                 returned_source = source_file.get_patch(source_file)
@@ -184,7 +187,7 @@ class FixCodeCommand(ChatCommand):
                 esbmc_output=source_file.verifier_output.output,
             )
         except VerifierTimedOutException:
-            print("ESBMC-AI Notice: ESBMC has timed out...")
+            self.logger.error("ESBMC has timed out...")
             sys.exit(1)
 
         print()
@@ -251,7 +254,7 @@ class FixCodeCommand(ChatCommand):
         # Pass to ESBMC, a workaround is used where the file is saved
         # to a temporary location since ESBMC needs it in file format.
         with self.anim("Verifying with ESBMC... Please Wait"):
-            verifier_result: VerifierOutput = verifier.verify_source(solution)
+            verifier_result: VerifierOutput = verifier.verify_source(solution=solution)
 
         source_file.verifier_output = verifier_result
 
@@ -268,7 +271,7 @@ class FixCodeCommand(ChatCommand):
             if raw_conversation:
                 self.print_raw_conversation(solution_generator)
 
-            print("ESBMC-AI Notice: Successfully verified code")
+            self.logger.info("Successfully verified code")
 
             # Check if an output directory is specified and save to it
             if output_dir:
@@ -286,11 +289,11 @@ class FixCodeCommand(ChatCommand):
         except VerifierTimedOutException:
             if raw_conversation:
                 self.print_raw_conversation(solution_generator)
-            print("ESBMC-AI Notice: error: ESBMC has timed out...")
+            self.logger.error("ESBMC has timed out...")
             sys.exit(1)
 
         # Failure case
         if attempt != max_attempts:
-            print(f"ESBMC-AI Notice: Failure {attempt}/{max_attempts}: Retrying...")
+            self.logger.info(f"Failure {attempt}/{max_attempts}: Retrying...")
         else:
-            print(f"ESBMC-AI Notice: Failure {attempt}/{max_attempts}: Exiting...")
+            self.logger.info(f"Failure {attempt}/{max_attempts}: Exiting...")
