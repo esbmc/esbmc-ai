@@ -631,6 +631,12 @@ class Config(BaseConfig, metaclass=makecls(SingletonMeta)):
 
     def _validate_custom_ai(self, ai_config_list: dict) -> bool:
         for name, ai_config in ai_config_list.items():
+            # Check the field is a dict not a list
+            if not isinstance(ai_config, dict):
+                raise ValueError(
+                    f"The value of each entry in ai_custom needs to be a dict: {ai_config}"
+                )
+
             # Max tokens
             if "max_tokens" not in ai_config:
                 raise KeyError(
