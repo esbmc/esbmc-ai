@@ -205,6 +205,14 @@ class Config(BaseConfig, metaclass=makecls(SingletonMeta)):
                 " different files. They will have the same base log.output path"
                 " but will have an extension to differentiate them.",
             ),
+            ConfigField(
+                name="log.basic",
+                default_value=False,
+                help_message="Enable basic logging mode, will contain no "
+                "formatting and also will render --log-by-name (log.by_name) "
+                "and --log-by-cat (log.by_cat) useless. Used for debugging "
+                "noisy libs.",
+            ),
             # This is the parameters that the user passes as args which are the
             # file names of the source code to target. It can also be a directory.
             ConfigField(
@@ -448,12 +456,12 @@ class Config(BaseConfig, metaclass=makecls(SingletonMeta)):
 
         # =============== Post Init - Set to good values to fields ============
         # Add logging handlers with config options
+        logging_handlers: list[logging.Handler] = []
         if self.get_value("log.output"):
             log_path: Path = self.get_value("log.output")
-            handlers: list[logging.Handler] = []
             # Log categories
             if self.get_value("log.by_cat"):
-                handlers.append(
+                logging_handlers.append(
                     CategoryFileHandler(
                         log_path,
                         append=self.get_value("log.append"),
@@ -462,7 +470,7 @@ class Config(BaseConfig, metaclass=makecls(SingletonMeta)):
                 )
             # Log by name
             if self.get_value("log.by_name"):
-                handlers.append(
+                logging_handlers.append(
                     NameFileHandler(
                         log_path,
                         append=self.get_value("log.append"),
@@ -474,9 +482,14 @@ class Config(BaseConfig, metaclass=makecls(SingletonMeta)):
                 str(log_path) + ".log",
                 mode="a" if self.get_value("log.append") else "w",
             )
-            handlers.append(file_log_handler)
+            logging_handlers.append(file_log_handler)
 
-            init_logging(level=get_log_level(args.verbose), file_handlers=handlers)
+        # Reinit logging
+        init_logging(
+            level=get_log_level(args.verbose),
+            file_handlers=logging_handlers,
+            init_basic=self.get_value("log.basic"),
+        )
 
         self.set_custom_field(
             ConfigField(

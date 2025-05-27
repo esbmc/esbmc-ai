@@ -14,7 +14,7 @@ from structlog.typing import EventDict
 _enable_horizontal_lines: bool = True
 _horizontal_line_width: Optional[int] = None
 _verbose_level: int = logging.INFO
-_logging_format: str = "%(message)s"
+_logging_format: str = "%(name)s %(message)s"
 
 
 class LogCategories(Enum):
@@ -47,12 +47,41 @@ def get_log_level(verbosity: int | None = None) -> int:
         return logging.ERROR  # Default least verbose
 
 
-def init_logging(
+def _init_logging_basic(
     *,
     level: int,
     logging_format: str = _logging_format,
+) -> None:
+    """Initializes the logging system in basic mode, good for debugging since
+    it can easily change the logging_format."""
+
+    structlog.configure(
+        processors=[
+            # structlog.processors.TimeStamper(fmt="iso"),
+            structlog.processors.add_log_level,
+            _add_category_field,
+            _render_prefix_category_to_event,
+            structlog.dev.ConsoleRenderer(),
+        ],
+        wrapper_class=structlog.stdlib.BoundLogger,
+        logger_factory=structlog.stdlib.LoggerFactory(),
+        cache_logger_on_first_use=True,
+    )
+
+    # Configure standard logging level
+    logging.basicConfig(
+        level=level,
+        format=logging_format,
+        force=True,
+    )
+
+
+def init_logging(
+    *,
+    level: int,
     file_handlers: list[logging.Handler] = [],
-):
+    init_basic: bool = False,
+) -> None:
     """Initializes the logging system.
 
     Args:
@@ -70,12 +99,18 @@ def init_logging(
     for noisy_lib in (
         "httpx",
         "httpcore",
+        "urllib",
+        "urllib3",
         "openai",
         "anthropic",
         "ollama",
         "huggingface_hub",
     ):
         logging.getLogger(noisy_lib).setLevel(logging.WARN)
+
+    if init_basic:
+        _init_logging_basic(level=level)
+        return
 
     structlog.configure(
         processors=[
@@ -122,7 +157,6 @@ def init_logging(
     # Configure standard logging level
     logging.basicConfig(
         level=level,
-        format=logging_format,
         handlers=all_handlers,
         force=True,
     )
