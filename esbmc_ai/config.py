@@ -30,7 +30,6 @@ from esbmc_ai.log_utils import (
     NameFileHandler,
     get_log_level,
     init_logging,
-    print_horizontal_line,
     set_horizontal_lines,
     set_horizontal_line_width,
 )
@@ -420,7 +419,7 @@ class Config(BaseConfig, metaclass=makecls(SingletonMeta)):
         } | arg_mappings
 
         # Init logging
-        init_logging(get_log_level(args.verbose))
+        init_logging(level=get_log_level(args.verbose))
         self._logger = structlog.get_logger().bind(category=LogCategories.CONFIG)
 
         # Load config fields from environment
@@ -478,9 +477,6 @@ class Config(BaseConfig, metaclass=makecls(SingletonMeta)):
             handlers.append(file_log_handler)
 
             init_logging(level=get_log_level(args.verbose), file_handlers=handlers)
-            structlog.get_logger().info("Hello world", category="DEBUG")
-            print_horizontal_line(get_log_level())
-            exit(1)
 
         self.set_custom_field(
             ConfigField(

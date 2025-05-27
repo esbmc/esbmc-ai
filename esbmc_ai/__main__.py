@@ -49,9 +49,10 @@ def _init_builtin_defaults() -> None:
 
 
 def _run_command_mode(command: ChatCommand, args: argparse.Namespace) -> None:
+    # TODO Test before doing this but command.execute(kwargs=vars(args))
     result: CommandResult | None = command.execute()
     if result:
-        print(result)
+        get_logger().info("\n" + str(result), category=LogCategories.SYSTEM)
     sys.exit(0)
 
 
