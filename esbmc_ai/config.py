@@ -30,6 +30,7 @@ from esbmc_ai.log_utils import (
     NameFileHandler,
     get_log_level,
     init_logging,
+    print_horizontal_line,
     set_horizontal_lines,
     set_horizontal_line_width,
 )
@@ -181,10 +182,15 @@ class Config(BaseConfig, metaclass=makecls(SingletonMeta)):
                 name="log.output",
                 default_value=None,
                 default_value_none=True,
-                validate=lambda v: Path(v).exists(),
+                validate=lambda v: Path(v).exists() or Path(v).parent.exists(),
                 on_load=lambda v: Path(v),
                 help_message="Save the output logs to a location. Do not add "
                 ".log suffix, it will be added automatically.",
+            ),
+            ConfigField(
+                name="log.append",
+                default_value=False,
+                help_message="Will append to the logs rather than replace them.",
             ),
             ConfigField(
                 name="log.by_cat",
@@ -445,14 +451,36 @@ class Config(BaseConfig, metaclass=makecls(SingletonMeta)):
         # Add logging handlers with config options
         if self.get_value("log.output"):
             log_path: Path = self.get_value("log.output")
-            base_logger: logging.Logger = logging.getLogger()
+            handlers: list[logging.Handler] = []
+            # Log categories
             if self.get_value("log.by_cat"):
-                base_logger.addHandler(CategoryFileHandler(log_path, True))
-
+                handlers.append(
+                    CategoryFileHandler(
+                        log_path,
+                        append=self.get_value("log.append"),
+                        skip_uncategorized=True,
+                    )
+                )
+            # Log by name
             if self.get_value("log.by_name"):
-                base_logger.addHandler(NameFileHandler(log_path))
+                handlers.append(
+                    NameFileHandler(
+                        log_path,
+                        append=self.get_value("log.append"),
+                    )
+                )
 
-            base_logger.addHandler(logging.FileHandler(str(log_path) + ".log"))
+            # Normal logging
+            file_log_handler: logging.Handler = logging.FileHandler(
+                str(log_path) + ".log",
+                mode="a" if self.get_value("log.append") else "w",
+            )
+            handlers.append(file_log_handler)
+
+            init_logging(level=get_log_level(args.verbose), file_handlers=handlers)
+            structlog.get_logger().info("Hello world", category="DEBUG")
+            print_horizontal_line(get_log_level())
+            exit(1)
 
         self.set_custom_field(
             ConfigField(
@@ -573,7 +601,6 @@ class Config(BaseConfig, metaclass=makecls(SingletonMeta)):
         reverse_mappings: dict[str, str] = self._arg_reverse_mappings
         fields_mapped: dict[str, ConfigField] = {f.name: f for f in fields}
         for mapped_name, value in vars(args).items():
-            print(mapped_name)
             # Check if a field is set in args
             if mapped_name in reverse_mappings:
                 # Get the field name
