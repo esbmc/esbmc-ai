@@ -48,7 +48,8 @@ def get_log_level(verbosity: int | None = None) -> int:
 
 
 def init_logging(
-    level: int = logging.INFO,
+    *,
+    level: int,
     logging_format: str = _logging_format,
     file_handlers: list[logging.Handler] = [],
 ):
@@ -66,7 +67,14 @@ def init_logging(
     structlog.reset_defaults()
 
     # Suppress noisy libraries after setting global log level.
-    for noisy_lib in ("httpx", "openai", "httpcore"):
+    for noisy_lib in (
+        "httpx",
+        "httpcore",
+        "openai",
+        "anthropic",
+        "ollama",
+        "huggingface_hub",
+    ):
         logging.getLogger(noisy_lib).setLevel(logging.WARN)
 
     structlog.configure(
