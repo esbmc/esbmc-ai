@@ -12,7 +12,7 @@ from platformdirs import user_cache_dir
 
 from esbmc_ai.__about__ import __version__ as esbmc_ai_version
 from esbmc_ai.base_component import BaseComponent
-from esbmc_ai.log_utils import Categories
+from esbmc_ai.log_utils import LogCategories
 from esbmc_ai.solution import Solution
 from esbmc_ai.base_config import BaseConfig, default_scenario
 from esbmc_ai.verifier_output import VerifierOutput
@@ -46,7 +46,7 @@ class BaseSourceVerifier(BaseComponent):
     @classmethod
     def create(cls) -> "BaseComponent":
         obj: BaseComponent = super().create()
-        obj._logger = obj.logger.bind(category=Categories.VERIFIER)
+        obj._logger = obj.logger.bind(category=LogCategories.VERIFIER)
         return obj
 
     def __init__(self, verifier_name: str, authors: str) -> None:
@@ -92,30 +92,29 @@ class BaseSourceVerifier(BaseComponent):
         properties = self._cache_name_pack(properties)
         data_dump: bytes = pickle.dumps(obj=properties, protocol=-1)
         file_id: str = str(sha512(data_dump).hexdigest())
-        self.logger.info(f"Searching cache ID: {file_id}", post_label="Verifier")
+        self.logger.info(f"Searching cache ID: {file_id}")
 
         cache: Path = Path(user_cache_dir("esbmc-ai", "Yiannis Charalambous"))
         filename: Path = cache / file_id
         if cache.exists() and filename.exists() and filename.is_file():
             with open(filename, "rb") as file:
                 data: bytes = pickle.load(file=file)
-                self.logger.info("Using cached result", post_label="Verifier")
+                self.logger.info("Using cached result")
                 return data
 
-        self.logger.info("Cache not found...", post_label="Verifier")
+        self.logger.info("Cache not found...")
         return None
 
     def verify_source(
         self,
+        *,
         solution: Solution,
-        entry_function: str = "main",
         timeout: int | None = None,
         **kwargs: Any,
     ) -> VerifierOutput:
         """Verifies source_file, the kwargs are optional arguments that are
         implementation dependent."""
         _ = solution
-        _ = entry_function
         _ = timeout
         _ = kwargs
         raise NotImplementedError()

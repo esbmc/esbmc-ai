@@ -53,7 +53,7 @@ class AddonLoader(metaclass=SingletonMeta):
             sys.path.insert(0, "")
 
         # Register field with Config to know which modules to load.
-        config.add_config_field(
+        config.load_config_field(
             ConfigField(
                 name="addon_modules",
                 default_value=[],
@@ -68,23 +68,14 @@ class AddonLoader(metaclass=SingletonMeta):
         if self._config.get_value("addon_modules"):
             print("Loading Addons:")
         for m in self._config.get_value("addon_modules"):
-            addons: list[BaseComponent] = self.load_addons(m)
+            addons: list[BaseComponent] = self.load_addons_module(m)
             for addon in addons:
                 print(f"\t* {addon.name} by {addon.authors}")
 
-        # Init the verifier.name field for the main config. The reason this is
-        # not part of the main config is that verifiers are treated as addons,
-        # even internally.
-        self._config.add_config_field(
-            ConfigField(
-                name="verifier.name",
-                default_value="esbmc",
-                validate=lambda v: isinstance(v, str)
-                and v in self.verifier_addon_names + ["esbmc"],
-                error_message="Invalid verifier name specified.",
-                help_message="The verifier to use. Default is ESBMC.",
-            )
-        )
+        # Check verifeier
+        verifier: BaseSourceVerifier = self._config.get_value("verifier.name")
+        if verifier not in self.verifier_addon_names + ["esbmc"]:
+            self._logger.error(f"Invalid verifier specified: {verifier.name}")
 
     @property
     def chat_command_addons(self) -> dict[str, ChatCommand]:
@@ -202,7 +193,7 @@ class AddonLoader(metaclass=SingletonMeta):
 
         return ConfigField(**params)
 
-    def load_addons(self, module_name: str) -> list[BaseComponent]:
+    def load_addons_module(self, module_name: str) -> list[BaseComponent]:
         """Loads an addon, needs to expose a BaseComponent.
 
         Will import addon modules that exist and iterate through the exposed
@@ -216,16 +207,7 @@ class AddonLoader(metaclass=SingletonMeta):
                 exposed_class = getattr(m, exposed_class_name)
                 # Check if valid addon type and import
                 if issubclass(exposed_class, BaseComponent):
-                    # Initialize class.
-                    addon: BaseComponent = exposed_class.create()
-                    self._logger.debug(f"Loading addon: {exposed_class_name}")
-
-                    # Register config with modules
-                    addon.config = self._config
-
-                    # Add to addon list.
-                    self._loaded_addons[addon.name] = addon
-                    result.append(addon)
+                    result.append(self.init_base_component(exposed_class))
 
         except ModuleNotFoundError as e:
             self._logger.error("error while loading module: traceback:")
@@ -237,6 +219,18 @@ class AddonLoader(metaclass=SingletonMeta):
             sys.exit(1)
         return result
 
+    def init_base_component(self, t: type[BaseComponent]) -> BaseComponent:
+        # Initialize class.
+        addon: BaseComponent = t.create()
+        self._logger.debug(f"Loading addon: {addon.__class__.__name__}")
+
+        # Register config with modules
+        addon.config = self._config
+
+        # Add to addon list.
+        self._loaded_addons[addon.name] = addon
+        return addon
+
     def _load_addon_config(self, addon: BaseComponent) -> None:
         """Loads the config fields defined by an addon"""
 
@@ -247,6 +241,6 @@ class AddonLoader(metaclass=SingletonMeta):
             if f.name in added_field_names:
                 raise KeyError(f"AddonLoader: field already loaded: {f.name}")
             try:
-                self._config.add_config_field(f)
+                self._config.load_config_field(f)
             except Exception:
                 self._logger.error(f"failed to register config field: {f.name}")
