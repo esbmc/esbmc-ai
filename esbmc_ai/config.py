@@ -181,10 +181,15 @@ class Config(BaseConfig, metaclass=makecls(SingletonMeta)):
                 name="log.output",
                 default_value=None,
                 default_value_none=True,
-                validate=lambda v: Path(v).exists(),
+                validate=lambda v: Path(v).exists() or Path(v).parent.exists(),
                 on_load=lambda v: Path(v),
                 help_message="Save the output logs to a location. Do not add "
                 ".log suffix, it will be added automatically.",
+            ),
+            ConfigField(
+                name="log.append",
+                default_value=False,
+                help_message="Will append to the logs rather than replace them.",
             ),
             ConfigField(
                 name="log.by_cat",
@@ -199,6 +204,14 @@ class Config(BaseConfig, metaclass=makecls(SingletonMeta)):
                 help_message="Will split the logs by name and write them to"
                 " different files. They will have the same base log.output path"
                 " but will have an extension to differentiate them.",
+            ),
+            ConfigField(
+                name="log.basic",
+                default_value=False,
+                help_message="Enable basic logging mode, will contain no "
+                "formatting and also will render --log-by-name (log.by_name) "
+                "and --log-by-cat (log.by_cat) useless. Used for debugging "
+                "noisy libs.",
             ),
             # This is the parameters that the user passes as args which are the
             # file names of the source code to target. It can also be a directory.
@@ -414,7 +427,7 @@ class Config(BaseConfig, metaclass=makecls(SingletonMeta)):
         } | arg_mappings
 
         # Init logging
-        init_logging(get_log_level(args.verbose))
+        init_logging(level=get_log_level(args.verbose))
         self._logger = structlog.get_logger().bind(category=LogCategories.CONFIG)
 
         # Load config fields from environment
@@ -443,16 +456,40 @@ class Config(BaseConfig, metaclass=makecls(SingletonMeta)):
 
         # =============== Post Init - Set to good values to fields ============
         # Add logging handlers with config options
+        logging_handlers: list[logging.Handler] = []
         if self.get_value("log.output"):
             log_path: Path = self.get_value("log.output")
-            base_logger: logging.Logger = logging.getLogger()
+            # Log categories
             if self.get_value("log.by_cat"):
-                base_logger.addHandler(CategoryFileHandler(log_path, True))
-
+                logging_handlers.append(
+                    CategoryFileHandler(
+                        log_path,
+                        append=self.get_value("log.append"),
+                        skip_uncategorized=True,
+                    )
+                )
+            # Log by name
             if self.get_value("log.by_name"):
-                base_logger.addHandler(NameFileHandler(log_path))
+                logging_handlers.append(
+                    NameFileHandler(
+                        log_path,
+                        append=self.get_value("log.append"),
+                    )
+                )
 
-            base_logger.addHandler(logging.FileHandler(str(log_path) + ".log"))
+            # Normal logging
+            file_log_handler: logging.Handler = logging.FileHandler(
+                str(log_path) + ".log",
+                mode="a" if self.get_value("log.append") else "w",
+            )
+            logging_handlers.append(file_log_handler)
+
+        # Reinit logging
+        init_logging(
+            level=get_log_level(args.verbose),
+            file_handlers=logging_handlers,
+            init_basic=self.get_value("log.basic"),
+        )
 
         self.set_custom_field(
             ConfigField(
@@ -573,7 +610,6 @@ class Config(BaseConfig, metaclass=makecls(SingletonMeta)):
         reverse_mappings: dict[str, str] = self._arg_reverse_mappings
         fields_mapped: dict[str, ConfigField] = {f.name: f for f in fields}
         for mapped_name, value in vars(args).items():
-            print(mapped_name)
             # Check if a field is set in args
             if mapped_name in reverse_mappings:
                 # Get the field name
@@ -608,6 +644,12 @@ class Config(BaseConfig, metaclass=makecls(SingletonMeta)):
 
     def _validate_custom_ai(self, ai_config_list: dict) -> bool:
         for name, ai_config in ai_config_list.items():
+            # Check the field is a dict not a list
+            if not isinstance(ai_config, dict):
+                raise ValueError(
+                    f"The value of each entry in ai_custom needs to be a dict: {ai_config}"
+                )
+
             # Max tokens
             if "max_tokens" not in ai_config:
                 raise KeyError(
