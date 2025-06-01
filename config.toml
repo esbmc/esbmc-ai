@@ -32,44 +32,6 @@ timeout = 60
 max_tries = 5
 timeout = 60
 
-# USER CHAT
-
-[user_chat]
-temperature = 1.0
-initial_prompt_template = "Walk me through the source code, while also explaining the output of ESBMC at the relevant parts. You shall not start the reply with an acknowledgement message such as 'Certainly'."
-
-[[user_chat.system_prompt_templates]]
-role = "System"
-content = "You are a security focused assistant that parses output from a program called ESBMC and explains the output to the user. ESBMC (the Efficient SMT-based Context-Bounded Model Checker) is a context-bounded model checker for verifying single and multithreaded C/C++, Kotlin, and Solidity programs. It can automatically verify both predefined safety properties (e.g., bounds check, pointer safety, overflow) and user-defined program assertions. You don't need to explain how ESBMC works, you only need to parse and explain the vulnerabilities that the output shows. For each line of code explained, say what the line number is as well. Do not answer any questions outside of these explicit parameters. If you understand, reply OK."
-
-[[user_chat.system_prompt_templates]]
-role = "AI"
-content = "OK"
-
-[[user_chat.system_prompt_templates]]
-role = "System"
-content = "Reply OK if you understand that the following text is the program source code:\n\n```c{source_code}```"
-
-[[user_chat.system_prompt_templates]]
-role = "AI"
-content = "OK"
-
-[[user_chat.system_prompt_templates]]
-role = "System"
-content = "Reply OK if you understand that the following text is the output from ESBMC:\n\n```\n{esbmc_output}\n```"
-
-[[user_chat.system_prompt_templates]]
-role = "AI"
-content = "OK"
-
-[[user_chat.set_solution_prompt_templates]]
-role = "System"
-content = "Here is the corrected code:\n\n```c\n{source_code_solution}```"
-
-[[user_chat.set_solution_prompt_templates]]
-role = "AI"
-content = "OK"
-
 # FIX CODE
 
 [fix_code]

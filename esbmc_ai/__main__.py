@@ -28,6 +28,8 @@ HELP_MESSAGE: str = (
     'the subcommand "help".'
 )
 
+_default_command_name: str = "help"
+
 
 def _init_builtin_components() -> None:
     """Initializes the builtin verifiers and commands."""
@@ -81,7 +83,7 @@ def _init_args(
         "command",
         type=str,
         nargs="?",
-        default="userchat",
+        default=_default_command_name,
         help=(
             "The command to run using the program. To see addon commands "
             "available: Run with 'help' as the default command."

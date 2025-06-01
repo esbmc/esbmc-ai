@@ -1,6 +1,6 @@
 # Author: Yiannis Charalambous
 
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class VerifierOutput:
+class VerifierOutput(ABC):
     """Class that represents the verifier output."""
 
     return_code: int
