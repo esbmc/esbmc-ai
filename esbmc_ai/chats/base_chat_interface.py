@@ -3,6 +3,7 @@
 """Contains code for the base class for interacting with the LLMs in a 
 conversation-based way."""
 
+from time import sleep, time
 from typing import Any, Optional
 
 from langchain.schema import (
@@ -11,14 +12,19 @@ from langchain.schema import (
     PromptValue,
 )
 from langchain_core.language_models import BaseChatModel
+import structlog
 
 from esbmc_ai.chat_response import ChatResponse, FinishReason
 from esbmc_ai.ai_models import AIModel
+from esbmc_ai.log_utils import LogCategories
 
 
 class BaseChatInterface:
     """Base class for interacting with an LLM. It allows for interactions with
     text generation LLMs and also chat LLMs."""
+
+    _last_attempt: float = 0
+    cooldown_total: float = 20.0
 
     def __init__(
         self,
@@ -27,6 +33,9 @@ class BaseChatInterface:
         ai_model: AIModel,
     ) -> None:
         super().__init__()
+        self._logger: structlog.stdlib.BoundLogger = structlog.get_logger(
+            category=LogCategories.CHAT
+        )
         self.ai_model: AIModel = ai_model
         self._system_messages: list[BaseMessage] = system_messages
         self.messages: list[BaseMessage] = []
@@ -93,10 +102,24 @@ class BaseChatInterface:
 
     @staticmethod
     def send_messages(
-        ai_model: AIModel, llm: BaseChatModel, messages: list[BaseMessage]
+        ai_model: AIModel,
+        llm: BaseChatModel,
+        messages: list[BaseMessage],
+        logger: structlog.stdlib.BoundLogger | None = None,
     ) -> ChatResponse:
         """Static method to send messages."""
+
+        # Check cooldown
+        time_passed: float = time() - BaseChatInterface._last_attempt
+        if time_passed < BaseChatInterface.cooldown_total:
+            sleep_total_seconds: float = BaseChatInterface.cooldown_total - time_passed
+            if logger:
+                logger.info(f"Sleeping for {sleep_total_seconds}...")
+            sleep(sleep_total_seconds)
+        BaseChatInterface._last_attempt = time()
+
         response_message: BaseMessage = llm.invoke(input=messages)
+
         # Check if token limit has been exceeded.
         new_tokens: int = ai_model.get_num_tokens_from_messages(
             messages=messages + [response_message],

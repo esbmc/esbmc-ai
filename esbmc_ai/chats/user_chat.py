@@ -13,9 +13,9 @@ from langchain_community.chat_message_histories import ChatMessageHistory
 
 from esbmc_ai.ai_models import AIModel
 from esbmc_ai.solution import Solution
+from esbmc_ai.verifier_output import VerifierOutput
 from esbmc_ai.verifiers.base_source_verifier import BaseSourceVerifier
-
-from .base_chat_interface import BaseChatInterface
+from esbmc_ai.chats.base_chat_interface import BaseChatInterface
 
 
 class UserChat(BaseChatInterface):
@@ -26,9 +26,8 @@ class UserChat(BaseChatInterface):
         self,
         ai_model: AIModel,
         llm: BaseChatModel,
-        verifier: BaseSourceVerifier,
         solution: Solution,
-        esbmc_output: str,
+        esbmc_output: VerifierOutput,
         system_messages: list[BaseMessage],
         set_solution_messages: list[BaseMessage],
     ) -> None:
@@ -39,17 +38,17 @@ class UserChat(BaseChatInterface):
         )
         # Store source code and esbmc output in order to substitute it into the message stack.
         self.solution: Solution = solution
-        self.esbmc_output: str = esbmc_output
+        self.esbmc_output: VerifierOutput = esbmc_output
         # The messsages for setting a new solution to the source code.
         self.set_solution_messages = set_solution_messages
 
-        error_type: Optional[str] = verifier.get_error_type(self.esbmc_output)
+        error_type: Optional[str] = self.esbmc_output.get_error_type()
 
         self.apply_template_value(
             **self.get_canonical_template_keys(
                 source_code=self.solution.files[0].content,
-                esbmc_output=self.esbmc_output,
-                error_line=str(verifier.get_error_line(self.esbmc_output)),
+                esbmc_output=self.esbmc_output.output,
+                error_line=str(self.esbmc_output.get_error_line()),
                 error_type=error_type if error_type else "unknown error",
             )
         )

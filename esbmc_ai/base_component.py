@@ -5,6 +5,7 @@ components."""
 
 import inspect
 from abc import ABC
+import re
 from typing import Any
 
 import structlog
@@ -37,6 +38,12 @@ class BaseComponent(ABC):
 
         self._config: BaseConfig
         self._name: str = self.__class__.__name__
+
+        pattern = re.compile(r"[a-zA-Z_]\w*")
+        assert pattern.match(
+            self._name
+        ), f"Invalid toml-friendly verifier name: {self._name}"
+
         self._authors: str = ""
         self._logger: structlog.stdlib.BoundLogger = structlog.get_logger(
             f"{self._name}"

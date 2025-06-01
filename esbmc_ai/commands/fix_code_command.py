@@ -4,28 +4,31 @@ import os
 from pathlib import Path
 import sys
 from typing import Any, Optional
+from langchain.schema import HumanMessage
 from typing_extensions import override
 
+from esbmc_ai.config_field import ConfigField
+from esbmc_ai.component_loader import ComponentLoader
 from esbmc_ai.solution import Solution, SourceFile
 from esbmc_ai.ai_models import AIModel
 from esbmc_ai.chat_response import FinishReason
-from esbmc_ai.chats import LatestStateSolutionGenerator, SolutionGenerator
-from esbmc_ai.verifiers.base_source_verifier import (
-    VerifierTimedOutException,
-    BaseSourceVerifier,
-)
-from esbmc_ai.command_result import CommandResult
-from esbmc_ai.config import Config, FixCodeScenario
-from esbmc_ai.chats.reverse_order_solution_generator import (
+from esbmc_ai.chats.solution_generator import (
+    SolutionGenerator,
+    LatestStateSolutionGenerator,
     ReverseOrderSolutionGenerator,
+    FixCodeScenario,
+    default_scenario,
 )
-from esbmc_ai.verifier_runner import VerifierRunner
+from esbmc_ai.verifiers.base_source_verifier import VerifierTimedOutException
+from esbmc_ai.command_result import CommandResult
 from esbmc_ai.verifier_output import VerifierOutput
 from esbmc_ai.chat_command import ChatCommand
 from esbmc_ai.log_utils import get_log_level, print_horizontal_line
-
-from ..msg_bus import Signal
-from ..loading_widget import BaseLoadingWidget, LoadingWidget
+from esbmc_ai.chat_response import list_to_base_messages
+from esbmc_ai.msg_bus import Signal
+from esbmc_ai.loading_widget import BaseLoadingWidget, LoadingWidget
+import esbmc_ai.prompt_utils as prompt_utils
+from esbmc_ai.verifiers.esbmc import ESBMC
 
 
 class FixCodeCommandResult(CommandResult):
@@ -78,9 +81,78 @@ class FixCodeCommand(ChatCommand):
         print_horizontal_line(get_log_level())
 
     @override
-    def execute(self, **kwargs: Any) -> FixCodeCommandResult:
+    def get_config_fields(self) -> list[ConfigField]:
+        return [
+            ConfigField(
+                name="fix_code.verifier_output_type",
+                default_value="full",
+                validate=lambda v: v in ["full", "vp", "ce"],
+                help_message="The type of output from ESBMC in the fix code command.",
+            ),
+            ConfigField(
+                name="fix_code.temperature",
+                default_value=1.0,
+                validate=lambda v: isinstance(v, float) and 0 <= v <= 2,
+                error_message="Temperature needs to be a value between 0 and 2.0",
+                help_message="The temperature of the LLM for the fix code command.",
+            ),
+            ConfigField(
+                name="fix_code.max_attempts",
+                default_value=5,
+                validate=lambda v: isinstance(v, int),
+                help_message="Fix code command max attempts.",
+            ),
+            ConfigField(
+                name="fix_code.message_history",
+                default_value="normal",
+                validate=lambda v: v in ["normal", "latest_only", "reverse"],
+                error_message='fix_code.message_history can only be "normal", '
+                + '"latest_only", "reverse"',
+                help_message="The type of history to be shown in the fix code command.",
+            ),
+            ConfigField(
+                name="fix_code.raw_conversation",
+                default_value=False,
+                help_message="Print the raw conversation at different parts of execution.",
+            ),
+            ConfigField(
+                name="fix_code.source_code_format",
+                default_value="full",
+                validate=lambda v: isinstance(v, str) and v in ["full", "single"],
+                error_message="source_code_format can only be 'full' or 'single'",
+                help_message="The source code format in the fix code prompt.",
+            ),
+            # Here we have a list of prompt templates that are for each scenario.
+            # The base scenario prompt template is required.
+            ConfigField(
+                name="fix_code.prompt_templates",
+                default_value=None,
+                validate=lambda v: default_scenario in v
+                and all(
+                    prompt_utils.validate_prompt_template(prompt_template)
+                    for prompt_template in v.values()
+                ),
+                on_read=lambda config_file: (
+                    {
+                        scenario: FixCodeScenario(
+                            initial=HumanMessage(content=conv["initial"]),
+                            system=list_to_base_messages(conv["system"]),
+                        )
+                        for scenario, conv in config_file["fix_code"][
+                            "prompt_templates"
+                        ].items()
+                    }
+                    if "prompt_templates" in config_file["fix_code"]
+                    else {}
+                ),
+                help_message="Scenario prompt templates for differnet types of bugs "
+                "for the fix code command.",
+            ),
+        ]
 
-        self._config = Config()
+    @override
+    def execute(self, **kwargs: Any) -> FixCodeCommandResult:
+        ComponentLoader().load_base_component_config(self)
 
         # Handle kwargs
         source_file: SourceFile = SourceFile.load(
@@ -120,7 +192,8 @@ class FixCodeCommand(ChatCommand):
         self._logger.info(f"Temperature: {temperature}")
         self._logger.info(f"Verifying function: {entry_function}")
 
-        verifier: BaseSourceVerifier = VerifierRunner().verifier
+        verifier: Any = ComponentLoader().get_verifier("esbmc")
+        assert isinstance(verifier, ESBMC)
         self._logger.info(f"Running verifier: {verifier.verifier_name}")
         verifier_result: VerifierOutput = verifier.verify_source(
             solution=solution, **kwargs
@@ -145,7 +218,6 @@ class FixCodeCommand(ChatCommand):
                         requests_max_tries=max_tries,
                         requests_timeout=timeout,
                     ),
-                    verifier=verifier,
                     scenarios=scenarios,
                     source_code_format=source_code_format,
                     esbmc_output_type=esbmc_output_format,
@@ -158,7 +230,6 @@ class FixCodeCommand(ChatCommand):
                         requests_max_tries=max_tries,
                         requests_timeout=timeout,
                     ),
-                    verifier=verifier,
                     scenarios=scenarios,
                     source_code_format=source_code_format,
                     esbmc_output_type=esbmc_output_format,
@@ -171,7 +242,6 @@ class FixCodeCommand(ChatCommand):
                         requests_max_tries=max_tries,
                         requests_timeout=timeout,
                     ),
-                    verifier=verifier,
                     scenarios=scenarios,
                     source_code_format=source_code_format,
                     esbmc_output_type=esbmc_output_format,
@@ -183,8 +253,8 @@ class FixCodeCommand(ChatCommand):
 
         try:
             solution_generator.update_state(
-                source_code=source_file.content,
-                esbmc_output=source_file.verifier_output.output,
+                source_file=source_file,
+                verifier_output=source_file.verifier_output,
             )
         except VerifierTimedOutException:
             self.logger.error("ESBMC has timed out...")
@@ -222,7 +292,7 @@ class FixCodeCommand(ChatCommand):
         max_attempts: int,
         solution_generator: SolutionGenerator,
         solution: Solution,
-        verifier: BaseSourceVerifier,
+        verifier: ESBMC,
         output_dir: Optional[Path],
         raw_conversation: bool,
     ) -> Optional[FixCodeCommandResult]:
@@ -284,7 +354,8 @@ class FixCodeCommand(ChatCommand):
         try:
             # Update state
             solution_generator.update_state(
-                source_file.content, source_file.verifier_output.output
+                source_file,
+                source_file.verifier_output,
             )
         except VerifierTimedOutException:
             if raw_conversation:

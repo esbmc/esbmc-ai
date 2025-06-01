@@ -24,6 +24,7 @@ class LogCategories(Enum):
     VERIFIER = "verifier"
     COMMAND = "command"
     CONFIG = "config"
+    CHAT = "chat"
 
 
 _largest_cat_len: int = min(10, max(len(cat.value) for cat in LogCategories))
@@ -176,7 +177,7 @@ def print_horizontal_line(
     level: str | int = "info",
     *,
     char: str = "=",
-    category: str = LogCategories.ALL.value,
+    category: Enum | str = LogCategories.ALL,
     width: Optional[int] = None,
     logger: structlog.stdlib.BoundLogger | None = None,
 ) -> None:
@@ -220,12 +221,10 @@ def _render_prefix_category_to_event(
     then remove 'category' from the event dict.
     """
     _ = logger, method_name
-    category_raw: LogCategories | str | None = event_dict.get("category", None)
+    category_raw: Enum | str | None = event_dict.get("category", None)
     if category_raw is not None:
         category: str = (
-            category_raw.value
-            if isinstance(category_raw, LogCategories)
-            else category_raw
+            category_raw.value if isinstance(category_raw, Enum) else category_raw
         )
 
         event = event_dict.get("event")

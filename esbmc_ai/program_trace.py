@@ -4,7 +4,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from esbmc_ai.solution import SourceFile
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from esbmc_ai.solution import SourceFile
 
 
 @dataclass
@@ -15,7 +18,7 @@ class ProgramTrace:
     """The scope of this trace."""
     trace_index: int
     """The index position of this trace point in the trace stack."""
-    source_file: SourceFile
+    source_file: "SourceFile"
     """The source file of this trace."""
     name: str
     """The name of the symbol, if applicable."""

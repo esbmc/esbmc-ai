@@ -4,7 +4,6 @@
 
 from dataclasses import dataclass
 from os import getcwd, walk
-from typing import Optional
 from pathlib import Path
 from subprocess import PIPE, STDOUT, run, CompletedProcess
 from tempfile import NamedTemporaryFile, TemporaryDirectory
@@ -55,7 +54,7 @@ class SourceFile:
         self.file_path: Path = file_path
         self.base_path: Path = base_path
         self.content: str = content
-        self.verifier_output: Optional[VerifierOutput] = None
+        self.verifier_output: VerifierOutput | None = None
 
     @property
     def abs_path(self) -> Path:
@@ -146,7 +145,7 @@ class SourceFile:
     def calculate_cyclomatic_complexity_delta(
         self,
         source_2: "SourceFile",
-    ) -> Optional[float]:
+    ) -> float | None:
         """Calculates the cyclomatic complexity difference between the two source files."""
         try:
             file_1: Path = self.save_temp_file()

@@ -9,19 +9,20 @@ import sys
 from typing import Any, Optional, override
 
 from langchain_core.language_models import BaseChatModel
-from langchain.schema import BaseMessage
+from langchain.schema import BaseMessage, HumanMessage
 from esbmc_ai.chat_response import ChatResponse, FinishReason
+from esbmc_ai.config_field import ConfigField
 from esbmc_ai.chats.user_chat import UserChat
-from esbmc_ai.command_runner import CommandRunner
+from esbmc_ai.component_loader import ComponentLoader
 from esbmc_ai.chat_command import ChatCommand
 from esbmc_ai.command_result import CommandResult
 from esbmc_ai.commands.fix_code_command import FixCodeCommand, FixCodeCommandResult
-from esbmc_ai.config import Config
 from esbmc_ai.loading_widget import BaseLoadingWidget, LoadingWidget
-from esbmc_ai.log_utils import print_horizontal_line
+from esbmc_ai.component_loader import ComponentLoader
 from esbmc_ai.solution import Solution
-from esbmc_ai.verifier_runner import VerifierRunner
 from esbmc_ai.verifiers.base_source_verifier import VerifierOutput
+from esbmc_ai.chat_response import list_to_base_messages
+from esbmc_ai import prompt_utils
 
 
 class UserChatCommand(ChatCommand):
@@ -38,34 +39,65 @@ class UserChatCommand(ChatCommand):
             ),
         )
 
-        self.command_runner: CommandRunner
-        self.verifier_runner: VerifierRunner
         self.fix_code_command: FixCodeCommand
         self.chat: UserChat
         self.solution: Solution
         self.anim: BaseLoadingWidget
 
-        self._config = Config()
-
-    def _run_esbmc(self) -> str:
+    def _run_esbmc(self) -> VerifierOutput:
         with self.anim("Verifier is processing... Please Wait"):
-            verifier_result: VerifierOutput = (
-                self.verifier_runner.verifier.verify_source(
-                    solution=self.solution,
-                    params=Config().get_value("verifier.esbmc.params"),
-                    timeout=Config().get_value("verifier.esbmc.timeout"),
-                )
+            verifier_result: VerifierOutput = ComponentLoader().verifier.verify_source(
+                solution=self.solution,
+                params=self.get_config_value("verifier.esbmc.params"),
+                timeout=self.get_config_value("verifier.esbmc.timeout"),
             )
 
         # ESBMC will output 0 for verification success and 1 for verification
         # failed, if anything else gets thrown, it's an ESBMC error.
-        if not Config().get_value("allow_successful") and verifier_result.successful():
+        if (
+            not self.get_config_value("allow_successful")
+            and verifier_result.successful()
+        ):
             self.logger.info(f"Verifier exit code: {verifier_result.return_code}")
             self.logger.debug(f"Verifier Output:\n\n{verifier_result.output}")
             print("Sample successfuly verified. Exiting...")
             sys.exit(0)
 
-        return verifier_result.output
+        return verifier_result
+
+    @override
+    def get_config_fields(self) -> list[ConfigField]:
+        return [
+            ConfigField(
+                name="user_chat.temperature",
+                default_value=1.0,
+                validate=lambda v: isinstance(v, float) and 0 <= v <= 2.0,
+                error_message="Temperature needs to be a value between 0 and 2.0",
+                help_message="The temperature of the LLM for the user chat command.",
+            ),
+            ConfigField(
+                name="user_chat.initial_prompt_template",
+                default_value=None,
+                validate=lambda v: isinstance(v, str),
+                on_load=lambda v: HumanMessage(content=v),
+                help_message="The initial prompt for the user chat command.",
+            ),
+            ConfigField(
+                name="user_chat.system_prompt_templates",
+                default_value=None,
+                validate=prompt_utils.validate_prompt_template_conversation,
+                on_load=list_to_base_messages,
+                help_message="The system prompt for the user chat command.",
+            ),
+            ConfigField(
+                name="user_chat.set_solution_prompt_templates",
+                default_value=None,
+                validate=prompt_utils.validate_prompt_template_conversation,
+                on_load=list_to_base_messages,
+                help_message="The prompt for the user chat command when a solution "
+                "is found by the fix code command.",
+            ),
+        ]
 
     def init_commands(self) -> None:
         """# Bus Signals
@@ -97,37 +129,35 @@ class UserChatCommand(ChatCommand):
                 f"finish reason: {response.finish_reason}",
             )
 
-    @staticmethod
-    def get_user_chat_initial() -> BaseMessage:
+    def get_user_chat_initial(self) -> BaseMessage:
         """Value of field: user_chat.initial_prompt_template"""
-        return Config().get_value("user_chat.initial_prompt_template")
+        return self.get_config_value("user_chat.initial_prompt_template")
 
-    @staticmethod
-    def get_user_chat_system_messages() -> list[BaseMessage]:
+    def get_user_chat_system_messages(self) -> list[BaseMessage]:
         """Value of field: user_chat.system_prompt_templates"""
-        return Config().get_value("user_chat.system_prompt_templates")
+        return self.get_config_value("user_chat.system_prompt_templates")
 
-    @staticmethod
-    def get_user_chat_set_solution() -> list[BaseMessage]:
+    def get_user_chat_set_solution(self) -> list[BaseMessage]:
         """Value of field: user_chat.set_solution_prompt_templates"""
-        return Config().get_value("user_chat.set_solution_prompt_templates")
+        return self.get_config_value("user_chat.set_solution_prompt_templates")
 
     @override
     def execute(self, **kwargs: Optional[Any]) -> Optional[CommandResult]:
         _ = kwargs
 
-        self.command_runner = CommandRunner()
-        self.verifier_runner = VerifierRunner()
+        ComponentLoader().load_base_component_config(self)
+
         self.anim = (
             LoadingWidget()
-            if Config().get_value("loading_hints")
+            if self.get_config_value("loading_hints")
             else BaseLoadingWidget()
         )
 
         # Assign fix code command - In the future make this not explicitly mentioned
         # and make the signal bus system available to all commands.
-        assert isinstance(self.command_runner.commands["fix-code"], FixCodeCommand)
-        self.fix_code_command = self.command_runner.commands["fix-code"]
+        fix_code_command: Any = ComponentLoader().commands["fix-code"]
+        assert isinstance(fix_code_command, FixCodeCommand)
+        self.fix_code_command = fix_code_command
 
         # Read the source code and esbmc output.
         print("Reading source code...")
@@ -137,32 +167,22 @@ class UserChatCommand(ChatCommand):
             print("Error: No files specified.")
             sys.exit(1)
 
-        print(f"Running ESBMC with {Config().get_value('verifier.esbmc.params')}\n")
-        esbmc_output: str = self._run_esbmc()
-
-        # Print verbose lvl 2
-        print_horizontal_line(2)
-        self.logger.debug(esbmc_output)
-        print_horizontal_line(2)
+        print(f"Running ESBMC with {self.get_config_value('verifier.esbmc.params')}\n")
+        esbmc_output: VerifierOutput = self._run_esbmc()
 
         self.logger.info(
-            f"Initializing the LLM: {Config().get_value("ai_model").name}\n"
+            f"Initializing the LLM: {self.get_config_value("ai_model").name}\n"
         )
-        chat_llm: BaseChatModel = (
-            Config()
-            .get_value("ai_model")
-            .create_llm(
-                temperature=Config().get_value("user_chat.temperature"),
-                requests_max_tries=Config().get_value("llm_requests.max_tries"),
-                requests_timeout=Config().get_value("llm_requests.timeout"),
-            )
+        chat_llm: BaseChatModel = self.get_config_value("ai_model").create_llm(
+            temperature=self.get_config_value("user_chat.temperature"),
+            requests_max_tries=self.get_config_value("llm_requests.max_tries"),
+            requests_timeout=self.get_config_value("llm_requests.timeout"),
         )
 
         self.logger.info("Creating user chat")
         self.chat = UserChat(
-            ai_model=Config().get_value("ai_model"),
+            ai_model=self.get_config_value("ai_model"),
             llm=chat_llm,
-            verifier=self.verifier_runner.verifier,
             solution=self.solution,
             esbmc_output=esbmc_output,
             system_messages=UserChatCommand().get_user_chat_system_messages(),
@@ -204,16 +224,16 @@ class UserChatCommand(ChatCommand):
 
             # Check if it is a command, if not, then pass it to the chat interface.
             if user_message.startswith("/"):
-                command, command_args = CommandRunner.parse_command(user_message)
+                command, command_args = ComponentLoader().parse_command(user_message)
                 command = command[1:]  # Remove the /
                 if command == self.fix_code_command.command_name:
                     # Fix Code command
                     print()
                     print("ESBMC-AI will generate a fix for the code...")
 
-                    result: FixCodeCommandResult = self.command_runner.commands[
-                        "fix-code"
-                    ].execute(source_file=self.solution.files[0])
+                    result: FixCodeCommandResult = fix_code_command.execute(
+                        source_file=self.solution.files[0]
+                    )
 
                     if result.successful:
                         print(
@@ -223,8 +243,8 @@ class UserChatCommand(ChatCommand):
                     continue
                 else:
                     # Commands without parameters or returns are handled automatically.
-                    if command in self.command_runner.commands:
-                        self.command_runner.commands[command].execute()
+                    if command in ComponentLoader().commands:
+                        ComponentLoader().commands[command].execute()
                         continue
                     print("Error: Unknown command...")
                     continue
