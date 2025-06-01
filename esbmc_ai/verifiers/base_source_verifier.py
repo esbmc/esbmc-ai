@@ -101,12 +101,10 @@ class BaseSourceVerifier(BaseComponent):
         self,
         *,
         solution: Solution,
-        timeout: int | None = None,
         **kwargs: Any,
     ) -> VerifierOutput:
         """Verifies source_file, the kwargs are optional arguments that are
         implementation dependent."""
         _ = solution
-        _ = timeout
         _ = kwargs
         raise NotImplementedError()
