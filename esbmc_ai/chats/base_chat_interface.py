@@ -149,9 +149,17 @@ class BaseChatInterface:
         all_messages = self._system_messages.copy()
         all_messages.extend(self.messages.copy())
 
+        if message:
+            self._logger.debug(f"LLM Prompt: {message}")
+
         response: ChatResponse = self.send_messages(
-            self.ai_model, self.llm, all_messages
+            ai_model=self.ai_model,
+            llm=self.llm,
+            messages=all_messages,
+            logger=self._logger,
         )
+
+        self._logger.debug(f"LLM Response: {message}")
 
         self.push_to_message_stack(message=response.message)
         return response

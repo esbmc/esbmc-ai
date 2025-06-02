@@ -17,7 +17,7 @@ def test_load_custom_ai() -> None:
         }
     }
 
-    Config()._load_custom_ai(custom_ai_config)
+    Config().load_custom_ai(custom_ai_config)
 
     assert AIModels().is_valid_ai_model("example_ai")
 

@@ -333,7 +333,10 @@ class AIModels(metaclass=SingletonMeta):
         self._cache_dir.mkdir(parents=True, exist_ok=True)
 
     def load_models(
-        self, api_keys: dict[str, str], refresh_duration_seconds: int = 86400
+        self,
+        api_keys: dict[str, str],
+        refresh_duration_seconds: int = 86400,
+        replace: bool = False,
     ) -> None:
         """Loads the AI models."""
 
@@ -348,6 +351,7 @@ class AIModels(metaclass=SingletonMeta):
                 v.strip(),
                 AIModelOpenAI.get_max_tokens(v),
             ),
+            replace=replace,
         )
         self._load_ai_model_list(
             source_name="Anthropic",
@@ -358,6 +362,7 @@ class AIModels(metaclass=SingletonMeta):
                 v.strip(),
                 AIModelAnthropic.get_max_tokens(v),
             ),
+            replace=replace,
         )
 
     @property
@@ -390,11 +395,12 @@ class AIModels(metaclass=SingletonMeta):
 
         raise KeyError(f'The AI "{name}" was not found...')
 
-    def add_ai_model(self, ai_model: AIModel) -> None:
+    def add_ai_model(self, ai_model: AIModel, replace: bool = False) -> None:
         """Registers a custom AI model."""
         # Check if AI already already exists.
-        if ai_model.name in self._ai_models:
+        if ai_model.name in self._ai_models and not replace:
             raise KeyError(f'AI Model "{ai_model.name}" already exists...')
+
         self._ai_models[ai_model.name] = ai_model
 
     def _load_ai_model_list(
@@ -404,6 +410,7 @@ class AIModels(metaclass=SingletonMeta):
         refresh_duration_seconds: int,
         get_models_list: Callable[[], list[str]],
         new_ai_model: Callable[[str], AIModel],
+        replace: bool = False,
     ) -> None:
         """Loads the service model names from cache or refreshes them from the internet."""
 
@@ -432,7 +439,7 @@ class AIModels(metaclass=SingletonMeta):
         # Add models that have been loaded.
         for model_name in models_list:
             try:
-                self.add_ai_model(new_ai_model(model_name))
+                self.add_ai_model(new_ai_model(model_name), replace=replace)
             except ValueError as e:
                 # Ignore models that don't count, like image only models.
                 self._logger.debug(f"Could not add model: {e}")

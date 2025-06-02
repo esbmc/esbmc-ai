@@ -14,6 +14,7 @@ from typing_extensions import Optional
 
 from esbmc_ai.base_component import BaseComponent
 from esbmc_ai.chat_command import ChatCommand
+from esbmc_ai.component_loader import ComponentLoader
 from esbmc_ai.verifiers.base_source_verifier import BaseSourceVerifier
 from esbmc_ai.config_field import ConfigField
 from esbmc_ai.config import Config
@@ -71,11 +72,6 @@ class AddonLoader(metaclass=SingletonMeta):
             addons: list[BaseComponent] = self.load_addons_module(m)
             for addon in addons:
                 print(f"\t* {addon.name} by {addon.authors}")
-
-        # Check verifeier
-        verifier: BaseSourceVerifier = self._config.get_value("verifier.name")
-        if verifier not in self.verifier_addon_names + ["esbmc"]:
-            self._logger.error(f"Invalid verifier specified: {verifier.name}")
 
     @property
     def chat_command_addons(self) -> dict[str, ChatCommand]:

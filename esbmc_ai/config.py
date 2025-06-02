@@ -80,10 +80,9 @@ class Config(BaseConfig, metaclass=makecls(SingletonMeta)):
             ConfigField(
                 name="ai_custom",
                 default_value=[],
-                on_read=self._load_custom_ai,
+                on_read=self.load_custom_ai,
                 error_message="Invalid custom AI specification",
             ),
-            # This needs to be before "ai_model" - Loads the AI Models
             ConfigField(
                 name="llm_requests.model_refresh_seconds",
                 # Default is to refresh once a day
@@ -99,12 +98,9 @@ class Config(BaseConfig, metaclass=makecls(SingletonMeta)):
                 validate=lambda v: 0 <= v,
                 help_message="Cooldown applied in seconds between LLM requests.",
             ),
-            # This needs to be processed after ai_custom
             ConfigField(
                 name="ai_model",
                 default_value=None,
-                # Api keys are loaded from system env so they are already
-                # available
                 validate=lambda v: isinstance(v, str),
                 help_message="Which AI model to use.",
             ),
@@ -599,7 +595,7 @@ class Config(BaseConfig, metaclass=makecls(SingletonMeta)):
 
         return True
 
-    def _load_custom_ai(self, config_file: dict) -> list[AIModel]:
+    def load_custom_ai(self, config_file: dict) -> list[AIModel]:
         """Loads custom AI defined in the config and ascociates it with the AIModels
         module."""
 

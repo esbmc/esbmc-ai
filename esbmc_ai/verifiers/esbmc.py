@@ -319,6 +319,10 @@ class ESBMC(BaseSourceVerifier):
             output=output,
         )
 
+        self.logger.debug(f"Verification Successful: {result.successful()}")
+        self.logger.debug(f"ESBMC Exit Code: {return_code}")
+        self.logger.debug(f"ESBMC Output: {output}")
+
         if enable_cache:
             self._save_cached(cache_properties, result)
 
