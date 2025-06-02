@@ -2,6 +2,7 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, replace
 from datetime import timedelta, datetime
 from pathlib import Path
 from typing import Any, Callable, Iterable
@@ -36,6 +37,7 @@ class AIModel(ABC):
     required properties to invoke the underlying langchain implementation
     BaseChatModel. To configure the properties, call the bind method and set
     them."""
+    """This base class represents an abstract AI model."""
 
     name: str
     tokens: int
@@ -46,6 +48,7 @@ class AIModel(ABC):
 
     def __post_init__(self):
         object.__setattr__(self, "_llm", self.create_llm())
+    _llm: BaseChatModel | None = None
 
     @abstractmethod
     def create_llm(self) -> BaseChatModel:
@@ -66,6 +69,14 @@ class AIModel(ABC):
         if not self._llm:
             raise ValueError("LLM is not initialized, call bind.")
         return self._llm.invoke(input, **kwargs)
+        llm: BaseChatModel = self._llm or self.create_llm()
+        return replace(self, _llm=llm, **kwargs)
+
+    def invoke(self, input: LanguageModelInput) -> BaseMessage:
+        """Invokes the underlying BaseChatModel implementation and returns the
+        message."""
+        llm: BaseChatModel = self._llm or self.create_llm()
+        return llm.invoke(input)
 
     def get_num_tokens(self, content: str) -> int:
         """Gets the number of tokens for this AI model."""
@@ -404,6 +415,26 @@ class AIModels(metaclass=SingletonMeta):
                 api_key=api_key,
                 refresh_duration_seconds=refresh_duration_seconds,
             )
+        self._load_ai_model_list(
+            source_name="OpenAI",
+            cache_name="openai_models.txt",
+            refresh_duration_seconds=refresh_duration_seconds,
+            get_models_list=self._get_openai_models_list,
+            new_ai_model=lambda v: AIModelOpenAI(
+                name=v.strip(),
+                tokens=AIModelOpenAI.get_max_tokens(v),
+            ),
+        )
+        self._load_ai_model_list(
+            source_name="Anthropic",
+            cache_name="anthropic_models.txt",
+            refresh_duration_seconds=refresh_duration_seconds,
+            get_models_list=self._get_anthropic_models_list,
+            new_ai_model=lambda v: AIModelAnthropic(
+                name=v.strip(),
+                tokens=AIModelAnthropic.get_max_tokens(v),
+            ),
+        )
 
     @property
     def model_names(self) -> list[str]:
