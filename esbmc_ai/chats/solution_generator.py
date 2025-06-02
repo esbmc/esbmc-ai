@@ -92,7 +92,6 @@ class SolutionGenerator(BaseChatInterface):
     def __init__(
         self,
         scenarios: dict[str, FixCodeScenario],
-        llm: BaseChatModel,
         ai_model: AIModel,
         source_code_format: str = "full",
         esbmc_output_type: str = "full",
@@ -101,7 +100,6 @@ class SolutionGenerator(BaseChatInterface):
 
         super().__init__(
             ai_model=ai_model,
-            llm=llm,
             system_messages=[],  # Empty as it will be updated in the update method.
         )
 

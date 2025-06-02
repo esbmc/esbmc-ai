@@ -1,10 +1,12 @@
 # Author: Yiannis Charalambous
 
-from abc import abstractmethod
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, replace
 from datetime import timedelta, datetime
 from pathlib import Path
 from typing import Any, Callable, Iterable
 from platformdirs import user_cache_dir
+from pydantic.types import SecretStr
 from typing_extensions import override
 import tiktoken
 import structlog
@@ -12,7 +14,7 @@ import structlog
 from anthropic import Anthropic as AnthropicClient
 from openai import Client as OpenAIClient
 
-from langchain_core.language_models import BaseChatModel
+from langchain_core.language_models import BaseChatModel, LanguageModelInput
 from langchain_core.messages import get_buffer_string
 from langchain_openai import ChatOpenAI
 from langchain_ollama import ChatOllama
@@ -28,34 +30,51 @@ from esbmc_ai.log_utils import LogCategories
 from esbmc_ai.singleton import SingletonMeta
 
 
-class AIModel:
-    """This base class represents an abstract AI model."""
+@dataclass(frozen=True, kw_only=True)
+class AIModel(ABC):
+    """This base class represents an abstract AI model. Each AIModel has the
+    required properties to invoke the underlying langchain implementation
+    BaseChatModel. To configure the properties, call the bind method and set
+    them."""
 
-    def __init__(
-        self,
-        name: str,
-        tokens: int,
-    ) -> None:
-        self.name: str = name
-        self.tokens: int = tokens
+    name: str
+    tokens: int
+    temperature: float = 1.0
+    requests_max_tries: int = 5
+    requests_timeout: float = 60
+    _llm: BaseChatModel | None = None
 
     @abstractmethod
-    def create_llm(
-        self,
-        temperature: float = 1.0,
-        requests_max_tries: int = 5,
-        requests_timeout: float = 60,
-    ) -> BaseChatModel:
-        """Initializes a large language model model with the provided parameters."""
+    def create_llm(self) -> BaseChatModel:
+        """Initializes a langchain BaseChatModel with the provided parameters.
+        Used internally by low-level functions. Bind should be used for
+        AIModels."""
         raise NotImplementedError()
+
+    def bind(self, **kwargs: Any) -> "AIModel":
+        """Returns a new model with new parameters."""
+        new_ai_model: AIModel = replace(self, **kwargs)
+        llm: BaseChatModel = new_ai_model.create_llm()
+        return replace(new_ai_model, _llm=llm)
+
+    def invoke(self, input: LanguageModelInput, **kwargs: Any) -> BaseMessage:
+        """Invokes the underlying BaseChatModel implementation and returns the
+        message."""
+        if not self._llm:
+            raise ValueError("LLM is not initialized, call bind.")
+        return self._llm.invoke(input, **kwargs)
 
     def get_num_tokens(self, content: str) -> int:
         """Gets the number of tokens for this AI model."""
-        return self.create_llm().get_num_tokens(content)
+        if not self._llm:
+            raise ValueError("LLM is not initialized, call bind.")
+        return self._llm.get_num_tokens(content)
 
     def get_num_tokens_from_messages(self, messages: list[BaseMessage]) -> int:
         """Gets the number of tokens for this AI model for a list of messages."""
-        return self.create_llm().get_num_tokens_from_messages(messages)
+        if not self._llm:
+            raise ValueError("LLM is not initialized, call bind.")
+        return self._llm.get_num_tokens_from_messages(messages)
 
     @classmethod
     def convert_messages_to_tuples(
@@ -166,8 +185,11 @@ class AIModel:
         return result
 
 
+@dataclass(frozen=True, kw_only=True)
 class AIModelService(AIModel):
     """Represents an AI model from a service."""
+
+    api_key: str = ""
 
     @staticmethod
     def _get_max_tokens(name: str, token_groups: dict[str, int]) -> int:
@@ -190,11 +212,12 @@ class AIModelService(AIModel):
         raise ValueError(f"Could not figure out max tokens for model: {name}")
 
 
+@dataclass(frozen=True, kw_only=True)
 class AIModelOpenAI(AIModelService):
     """OpenAI model."""
 
-    context_length_exceeded_error: str = "context_length_exceeded"
-    """Error code for when the length has been reached."""
+    requests_max_tries: int = 5
+    requests_timeout: float = 60
 
     @property
     def _reason_model(self) -> bool:
@@ -203,18 +226,14 @@ class AIModelOpenAI(AIModelService):
         return False
 
     @override
-    def create_llm(
-        self,
-        temperature: float = 1.0,
-        requests_max_tries: int = 5,
-        requests_timeout: float = 60,
-    ) -> BaseChatModel:
+    def create_llm(self) -> BaseChatModel:
         return ChatOpenAI(
             model=self.name,
-            temperature=None if self._reason_model else temperature,
+            temperature=None if self._reason_model else self.temperature,
             reasoning_effort="high" if self._reason_model else None,
-            max_retries=requests_max_tries,
-            timeout=requests_timeout,
+            max_retries=self.requests_max_tries,
+            timeout=self.requests_timeout,
+            api_key=SecretStr(self.api_key) or None,
             model_kwargs={},
         )
 
@@ -246,28 +265,20 @@ class AIModelOpenAI(AIModelService):
         return cls._get_max_tokens(name, tokens)
 
 
+@dataclass(frozen=True, kw_only=True)
 class OllamaAIModel(AIModel):
     """A model that is running on the Ollama service."""
 
-    def __init__(self, name: str, tokens: int, url: str) -> None:
-        super().__init__(name, tokens)
-        self.url: str = url
+    url: str
 
     @override
-    def create_llm(
-        self,
-        temperature: float = 1,
-        requests_max_tries: int = 5,
-        requests_timeout: float = 60,
-    ) -> BaseChatModel:
-        # Ollama does not use API keys
-        _ = requests_max_tries
+    def create_llm(self) -> BaseChatModel:
         return ChatOllama(
             base_url=self.url,
             model=self.name,
-            temperature=temperature,
+            temperature=self.temperature,
             client_kwargs={
-                "timeout": requests_timeout,
+                "timeout": self.requests_timeout,
             },
         )
 
@@ -276,17 +287,13 @@ class AIModelAnthropic(AIModelService):
     """An AI model that uses the Anthropic service."""
 
     @override
-    def create_llm(
-        self,
-        temperature: float = 1,
-        requests_max_tries: int = 5,
-        requests_timeout: float = 60,
-    ) -> BaseChatModel:
+    def create_llm(self) -> BaseChatModel:
         return ChatAnthropic(  # pyright: ignore [reportCallIssue]
             model_name=self.name,
-            temperature=temperature,
-            timeout=requests_timeout,
-            max_retries=requests_max_tries,
+            temperature=self.temperature,
+            timeout=self.requests_timeout,
+            max_retries=self.requests_max_tries,
+            api_key=SecretStr(self.api_key) or None,
         )
 
     @classmethod
@@ -348,8 +355,8 @@ class AIModels(metaclass=SingletonMeta):
             refresh_duration_seconds=refresh_duration_seconds,
             get_models_list=self._get_openai_models_list,
             new_ai_model=lambda v: AIModelOpenAI(
-                v.strip(),
-                AIModelOpenAI.get_max_tokens(v),
+                name=v.strip(),
+                tokens=AIModelOpenAI.get_max_tokens(v),
             ),
             replace=replace,
         )
@@ -359,8 +366,8 @@ class AIModels(metaclass=SingletonMeta):
             refresh_duration_seconds=refresh_duration_seconds,
             get_models_list=self._get_anthropic_models_list,
             new_ai_model=lambda v: AIModelAnthropic(
-                v.strip(),
-                AIModelAnthropic.get_max_tokens(v),
+                name=v.strip(),
+                tokens=AIModelAnthropic.get_max_tokens(v),
             ),
             replace=replace,
         )

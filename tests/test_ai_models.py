@@ -1,5 +1,7 @@
 # Author: Yiannis Charalambous
 
+from dataclasses import dataclass, field
+from typing import override
 from langchain.prompts.chat import ChatPromptValue
 from langchain.schema import (
     AIMessage,
@@ -8,6 +10,7 @@ from langchain.schema import (
     PromptValue,
     SystemMessage,
 )
+from langchain_core.language_models import BaseChatModel, FakeListChatModel
 from pytest import raises
 
 from esbmc_ai.ai_models import (
@@ -17,14 +20,23 @@ from esbmc_ai.ai_models import (
 )
 
 
+@dataclass(frozen=True, kw_only=True)
 class MockAIModel(AIModel):
     """Used to test AIModels, it implements some mock versions of abstract
     methods."""
 
+    responses: list[str] = field(default_factory=list[str])
+
+    @override
+    def create_llm(self) -> BaseChatModel:
+        return FakeListChatModel(responses=self.responses)
+
+    @override
     def get_num_tokens(self, content: str) -> int:
         _ = content
         return len(content)
 
+    @override
     def get_num_tokens_from_messages(self, messages: list[BaseMessage]) -> int:
         _ = messages
         return sum(len(str(msg.content)) for msg in messages)
