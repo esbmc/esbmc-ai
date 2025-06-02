@@ -6,6 +6,7 @@ from .help_command import HelpCommand
 from .list_models_command import ListModelsCommand
 from .help_config import HelpConfigCommand
 from .fix_code_command import FixCodeCommand
+from .reload_models_command import ReloadAIModelsCommand
 
 __all__ = [
     "ExitCommand",
@@ -13,4 +14,5 @@ __all__ = [
     "HelpConfigCommand",
     "ListModelsCommand",
     "FixCodeCommand",
+    "ReloadAIModelsCommand",
 ]
