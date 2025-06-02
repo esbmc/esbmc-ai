@@ -15,8 +15,6 @@ from typing import (
 
 from esbmc_ai.config_field import ConfigField
 
-default_scenario: str = "base"
-
 
 class BaseConfig(ABC):
     """Config loader for ESBMC-AI"""

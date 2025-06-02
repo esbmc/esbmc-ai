@@ -17,8 +17,7 @@ from esbmc_ai.command_result import CommandResult
 from esbmc_ai.log_utils import LogCategories
 from esbmc_ai.verifiers.base_source_verifier import BaseSourceVerifier
 from esbmc_ai.verifiers.esbmc import ESBMC
-from esbmc_ai.verifier_runner import VerifierRunner
-from esbmc_ai.command_runner import CommandRunner
+from esbmc_ai.component_loader import ComponentLoader
 import esbmc_ai.commands
 
 # Enables arrow key functionality for input(). Do not remove import.
@@ -29,13 +28,17 @@ HELP_MESSAGE: str = (
     'the subcommand "help".'
 )
 
+_default_command_name: str = "help"
+
 
 def _init_builtin_components() -> None:
     """Initializes the builtin verifiers and commands."""
     # Built-in verifiers
     esbmc = ESBMC.create()
     assert isinstance(esbmc, BaseSourceVerifier)
-    VerifierRunner().add_verifier(esbmc)
+    ComponentLoader().add_verifier(esbmc)
+    # Default Verigier
+    ComponentLoader().set_verifier_by_name("esbmc")
     # Init built-in commands
     commands: list[ChatCommand] = []
     for cmd_classname in getattr(esbmc_ai.commands, "__all__"):
@@ -43,10 +46,9 @@ def _init_builtin_components() -> None:
         assert issubclass(cmd_type, ChatCommand), f"{cmd_type} is not a ChatCommand"
         cmd: object = cmd_type.create()
         assert isinstance(cmd, ChatCommand)
+        cmd.config = Config()
         commands.append(cmd)
-    CommandRunner(
-        builtin_commands=commands,
-    )
+    ComponentLoader().set_builtin_commands(commands)
 
 
 def _run_command_mode(command: ChatCommand, args: argparse.Namespace) -> None:
@@ -68,10 +70,10 @@ def _init_args(
     loading the rest of the config.
 
     Args:
-        * parser: The parser to add the arguments into.
-        * map_field_names: The parser will map the config fields to use
+        - parser: The parser to add the arguments into.
+        - map_field_names: The parser will map the config fields to use
         alternative names.
-        * ignore_fields: Dictionary of field names to not encode automatically.
+        - ignore_fields: Dictionary of field names to not encode automatically.
         This takes precedence over map_fields. The field that matches the key
         in this dictionary will not be mapped. It is a dictionary because they
         can optionally be manually initialized and mapped in the Config, so it
@@ -81,7 +83,7 @@ def _init_args(
         "command",
         type=str,
         nargs="?",
-        default="userchat",
+        default=_default_command_name,
         help=(
             "The command to run using the program. To see addon commands "
             "available: Run with 'help' as the default command."
@@ -90,7 +92,6 @@ def _init_args(
 
     parser.add_argument(
         *ignore_fields["solution.filenames"],
-        default=[],
         type=str,
         # nargs=argparse.REMAINDER,
         nargs=argparse.ZERO_OR_MORE,
@@ -148,8 +149,6 @@ def _init_args(
 
         action: Any
         match f.default_value:
-            case str():
-                action = "store"
             case bool():
                 action = "store_true"
             case _:
@@ -195,6 +194,7 @@ def main() -> None:
         epilog=f"Made by {__author__}",
     )
 
+    # Will rename these config fields
     arg_mappings: dict[str, list[str]] = {
         "solution.entry_function": ["entry-function"],
         "ai_model": ["m", "ai-model"],
@@ -204,6 +204,7 @@ def main() -> None:
         "log.by_name": ["log-by-name"],
     }
 
+    # Will not expose these to the arguments.
     manual_mappings: dict[str, list[str]] = {
         "solution.filenames": ["filenames"],
         "ai_custom": ["ai_custom"],  # Block
@@ -221,7 +222,11 @@ def main() -> None:
     print(f"Made by {__author__}")
     print()
 
-    Config().load(args, arg_mappings | manual_mappings)
+    Config().load(
+        args=args,
+        arg_mapping_overrides=arg_mappings | manual_mappings,
+        compound_load_args=[v for values in manual_mappings.values() for v in values],
+    )
     logger: BoundLogger = get_logger().bind(category=LogCategories.SYSTEM)
 
     logger.info(f"Config File: {Config().get_value("ESBMCAI_CONFIG_FILE")}")
@@ -234,19 +239,19 @@ def main() -> None:
     # Load addons
     AddonLoader(Config())
     # Bind addons to command runner and verifier runner.
-    CommandRunner().addon_commands.update(AddonLoader().chat_command_addons)
-    VerifierRunner()._verifiers = (
-        VerifierRunner()._verifiers | AddonLoader().verifier_addons
+    ComponentLoader().addon_commands.update(AddonLoader().chat_command_addons)
+    ComponentLoader()._verifiers = (
+        ComponentLoader()._verifiers | AddonLoader().verifier_addons
     )
     # Set verifier to use
-    VerifierRunner().set_verifier_by_name(Config().get_value("verifier.name"))
+    ComponentLoader().set_verifier_by_name(Config().get_value("verifier.name"))
 
     # Run the command
     command = args.command
-    command_names: list[str] = CommandRunner().command_names
+    command_names: list[str] = ComponentLoader().command_names
     if command in command_names:
         logger.info(f"Running Command: {command}\n")
-        _run_command_mode(command=CommandRunner().commands[command], args=args)
+        _run_command_mode(command=ComponentLoader().commands[command], args=args)
         sys.exit(0)
     else:
         logger.error(

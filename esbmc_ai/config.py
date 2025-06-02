@@ -2,7 +2,6 @@
 
 
 import argparse
-from dataclasses import dataclass
 import logging
 import os
 import sys
@@ -10,20 +9,18 @@ from platform import system as system_name
 from pathlib import Path
 from typing import (
     Any,
-    Dict,
-    List,
     override,
 )
 import argparse
 
 from dotenv import load_dotenv, find_dotenv
-from langchain.schema import HumanMessage, BaseMessage
 import structlog
 
+from esbmc_ai.chats.base_chat_interface import BaseChatInterface
+from esbmc_ai.component_loader import ComponentLoader
 from esbmc_ai.singleton import SingletonMeta, makecls
 from esbmc_ai.config_field import ConfigField
-from esbmc_ai.base_config import BaseConfig, default_scenario
-from esbmc_ai.chat_response import list_to_base_messages
+from esbmc_ai.base_config import BaseConfig
 from esbmc_ai.log_utils import (
     CategoryFileHandler,
     LogCategories,
@@ -40,43 +37,6 @@ from esbmc_ai.ai_models import (
 )
 
 
-@dataclass
-class FixCodeScenario:
-    """Type for scenarios. A single scenario contains initial and system components."""
-
-    initial: BaseMessage
-    system: tuple[BaseMessage, ...]
-
-
-def _validate_prompt_template_conversation(prompt_template: List[Dict]) -> bool:
-    """Used to validate if a prompt template conversation is of the correct format
-    in the config before loading it."""
-
-    for msg in prompt_template:
-        if (
-            not isinstance(msg, dict)
-            or "content" not in msg
-            or "role" not in msg
-            or not isinstance(msg["content"], str)
-            or not isinstance(msg["role"], str)
-        ):
-            return False
-    return True
-
-
-def _validate_prompt_template(conv: Dict[str, List[Dict]]) -> bool:
-    """Used to check if a prompt template (contains conversation and initial message) is
-    of the correct format."""
-    if (
-        "initial" not in conv
-        or not isinstance(conv["initial"], str)
-        or "system" not in conv
-        or not _validate_prompt_template_conversation(conv["system"])
-    ):
-        return False
-    return True
-
-
 class Config(BaseConfig, metaclass=makecls(SingletonMeta)):
     """Config loader for ESBMC-AI"""
 
@@ -86,6 +46,7 @@ class Config(BaseConfig, metaclass=makecls(SingletonMeta)):
 
         self._args: argparse.Namespace
         self._arg_mappings: dict[str, list[str]] = {}
+        self._compound_load_args: list[str] = []
         self._logger: structlog.stdlib.BoundLogger
 
         # Huggingface warning supress
@@ -131,6 +92,12 @@ class Config(BaseConfig, metaclass=makecls(SingletonMeta)):
                 help_message="How often to refresh the models list provided by OpenAI. "
                 "Make sure not to spam them as they can IP block. Default is once a day.",
                 error_message="Invalid value, needs to be an int in seconds",
+            ),
+            ConfigField(
+                name="llm_requests.cooldown_seconds",
+                default_value=0.0,
+                validate=lambda v: 0 <= v,
+                help_message="Cooldown applied in seconds between LLM requests.",
             ),
             # This needs to be processed after ai_custom
             ConfigField(
@@ -319,112 +286,45 @@ class Config(BaseConfig, metaclass=makecls(SingletonMeta)):
                 validate=lambda v: isinstance(v, int),
                 help_message="The timeout for querying the AI service.",
             ),
-            ConfigField(
-                name="user_chat.temperature",
-                default_value=1.0,
-                validate=lambda v: isinstance(v, float) and 0 <= v <= 2.0,
-                error_message="Temperature needs to be a value between 0 and 2.0",
-                help_message="The temperature of the LLM for the user chat command.",
-            ),
-            ConfigField(
-                name="user_chat.initial_prompt_template",
-                default_value=None,
-                validate=lambda v: isinstance(v, str),
-                on_load=lambda v: HumanMessage(content=v),
-                help_message="The initial prompt for the user chat command.",
-            ),
-            ConfigField(
-                name="user_chat.system_prompt_templates",
-                default_value=None,
-                validate=_validate_prompt_template_conversation,
-                on_load=list_to_base_messages,
-                help_message="The system prompt for the user chat command.",
-            ),
-            ConfigField(
-                name="user_chat.set_solution_prompt_templates",
-                default_value=None,
-                validate=_validate_prompt_template_conversation,
-                on_load=list_to_base_messages,
-                help_message="The prompt for the user chat command when a solution "
-                "is found by the fix code command.",
-            ),
-            ConfigField(
-                name="fix_code.verifier_output_type",
-                default_value="full",
-                validate=lambda v: v in ["full", "vp", "ce"],
-                help_message="The type of output from ESBMC in the fix code command.",
-            ),
-            ConfigField(
-                name="fix_code.temperature",
-                default_value=1.0,
-                validate=lambda v: isinstance(v, float) and 0 <= v <= 2,
-                error_message="Temperature needs to be a value between 0 and 2.0",
-                help_message="The temperature of the LLM for the fix code command.",
-            ),
-            ConfigField(
-                name="fix_code.max_attempts",
-                default_value=5,
-                validate=lambda v: isinstance(v, int),
-                help_message="Fix code command max attempts.",
-            ),
-            ConfigField(
-                name="fix_code.message_history",
-                default_value="normal",
-                validate=lambda v: v in ["normal", "latest_only", "reverse"],
-                error_message='fix_code.message_history can only be "normal", '
-                + '"latest_only", "reverse"',
-                help_message="The type of history to be shown in the fix code command.",
-            ),
-            ConfigField(
-                name="fix_code.raw_conversation",
-                default_value=False,
-                help_message="Print the raw conversation at different parts of execution.",
-            ),
-            ConfigField(
-                name="fix_code.source_code_format",
-                default_value="full",
-                validate=lambda v: isinstance(v, str) and v in ["full", "single"],
-                error_message="source_code_format can only be 'full' or 'single'",
-                help_message="The source code format in the fix code prompt.",
-            ),
-            # Here we have a list of prompt templates that are for each scenario.
-            # The base scenario prompt template is required.
-            ConfigField(
-                name="fix_code.prompt_templates",
-                default_value=None,
-                validate=lambda v: default_scenario in v
-                and all(
-                    _validate_prompt_template(prompt_template)
-                    for prompt_template in v.values()
-                ),
-                on_read=lambda config_file: (
-                    {
-                        scenario: FixCodeScenario(
-                            initial=HumanMessage(content=conv["initial"]),
-                            system=list_to_base_messages(conv["system"]),
-                        )
-                        for scenario, conv in config_file["fix_code"][
-                            "prompt_templates"
-                        ].items()
-                    }
-                    if "prompt_templates" in config_file["fix_code"]
-                    else {}
-                ),
-                help_message="Scenario prompt templates for differnet types of bugs "
-                "for the fix code command.",
-            ),
         ]
 
-    def load(self, args: Any, arg_mappings: dict[str, list[str]]) -> None:
-        """Will load the config from the args, the env file and then from config file."""
+    def load(
+        self,
+        args: Any,
+        arg_mapping_overrides: dict[str, list[str]],
+        compound_load_args: list[str],
+    ) -> None:
+        """Begins the loading procedure to load the configuration.
+
+        1. Environment variables
+        2. Arguments (the arguments are mapped 1:1 to the config file, if there
+        is a difference in mapping it is specified in the arg_mapping_overrides).
+        Some config fields should be loaded when the config file has been loaded
+        too, so defer_loading_args should have a list of argument names to skip
+        and defer the loading behaviour to the config file loading. This process
+        is not automated, so the respective ConfigField should specify how to
+        load from the args.
+
+        Args:
+            - args: The values from the argument parser. They will take precedence
+                over the config file.
+            - arg_mapping_overrides: A dictionary that maps configuration field
+                IDs to custom argument names. Use this to override the default
+                mapping, allowing arguments to have names different from their
+                corresponding configuration fields.
+            - compound_load_fields: A list of argument names that,
+                when supplied, should be loaded from both command-line arguments
+                and a config file.
+        """
 
         self._args = args
         # Create an argument mapping of all the config files, the arg_mapping is
         # applied over that to translate the mappings from the arguments to the
         # mappings of the config fields.
-        self._arg_mappings: dict[str, list[str]] = {
+        self._arg_mappings = {
             f.name: [f.name] for f in self.get_config_fields()
-        } | arg_mappings
+        } | arg_mapping_overrides
+        self._compound_load_args = compound_load_args
 
         # Init logging
         init_logging(level=get_log_level(args.verbose))
@@ -507,6 +407,11 @@ class Config(BaseConfig, metaclass=makecls(SingletonMeta)):
             self.get_value("llm_requests.model_refresh_seconds"),
         )
         self.set_value("ai_model", AIModels().get_ai_model(self.get_value("ai_model")))
+        # BaseChatInterface cooldown
+        BaseChatInterface.cooldown_total = self.get_value(
+            "llm_requests.cooldown_seconds"
+        )
+        self._logger.debug(f"LLM Cooldown Total: {BaseChatInterface.cooldown_total}")
 
     def _load_envs(self, *fields: ConfigField) -> None:
         """Loads the environment variables.
@@ -634,13 +539,29 @@ class Config(BaseConfig, metaclass=makecls(SingletonMeta)):
         reverse_mappings: dict[str, str] = self._arg_reverse_mappings
 
         for mapped_name in vars(self._args).keys():
-            # Check if a field is set in args
-            if mapped_name in reverse_mappings:
+            # Check if a field is set in args (exclude if in compound load list)
+            if (
+                mapped_name in reverse_mappings
+                and mapped_name not in self._compound_load_args
+            ):
                 # Get the field name
                 fields_set.add(reverse_mappings[mapped_name])
 
         load_fields: list[ConfigField] = [f for f in fields if f.name not in fields_set]
         return super().load_config_fields(cfg_path, load_fields)
+
+    def _filenames_load(self, file_names: list[str]) -> list[Path]:
+        """Loads the filenames from the command line first then from the config."""
+
+        results: list[Path] = []
+
+        if len(self._args.filenames):
+            results.extend(Path(f).absolute() for f in self._args.filenames)
+
+        for file in file_names:
+            results.append(Path(file).absolute())
+
+        return results
 
     def _validate_custom_ai(self, ai_config_list: dict) -> bool:
         for name, ai_config in ai_config_list.items():
@@ -718,18 +639,6 @@ class Config(BaseConfig, metaclass=makecls(SingletonMeta)):
             AIModels().add_ai_model(llm)
 
         return custom_ai
-
-    def _filenames_load(self, file_names: list[str]) -> list[Path]:
-        """Loads the filenames from the command line first then from the config."""
-
-        results: list[Path] = []
-
-        if len(self._args.filenames):
-            results.extend(Path(f).absolute() for f in self._args.filenames)
-
-        for file in file_names:
-            results.append(Path(file).absolute())
-        return results
 
     @staticmethod
     def _filenames_error_msg(file_names: list) -> str:

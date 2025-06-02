@@ -6,7 +6,7 @@ from typing import Any
 from typing_extensions import override
 
 from esbmc_ai.chat_command import ChatCommand
-from esbmc_ai.command_runner import CommandRunner
+from esbmc_ai.component_loader import ComponentLoader
 
 
 class HelpCommand(ChatCommand):
@@ -24,16 +24,16 @@ class HelpCommand(ChatCommand):
     @override
     def execute(self, **_: Any) -> Any:
         print("Commands:")
-        for command in CommandRunner().builtin_commands.values():
+        for command in ComponentLoader().builtin_commands.values():
             print(f"* {command.command_name}: {command.help_message}")
             if command.authors:
                 print(f"\tAuthors: {command.authors}")
 
-        if CommandRunner().addon_commands:
+        if ComponentLoader().addon_commands:
             print("\nAddon Commands:")
         else:
             self.logger.info("No addon commands to show...")
-        for command in CommandRunner().addon_commands.values():
+        for command in ComponentLoader().addon_commands.values():
             print(f"* {command.command_name}: {command.help_message}")
             if command.authors:
                 print(f"\tAuthors: {command.authors}")

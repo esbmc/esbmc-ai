@@ -14,7 +14,6 @@ from esbmc_ai.__about__ import __version__ as esbmc_ai_version
 from esbmc_ai.base_component import BaseComponent
 from esbmc_ai.log_utils import LogCategories
 from esbmc_ai.solution import Solution
-from esbmc_ai.base_config import BaseConfig, default_scenario
 from esbmc_ai.verifier_output import VerifierOutput
 from esbmc_ai.program_trace import ProgramTrace
 
@@ -54,13 +53,6 @@ class BaseSourceVerifier(BaseComponent):
         super().__init__()
         self._name = verifier_name
         self._authors = authors
-
-        pattern = re.compile(r"[a-zA-Z_]\w*")
-        assert pattern.match(
-            verifier_name
-        ), f"Invalid toml-friendly verifier name: {verifier_name}"
-
-        self._config: BaseConfig
 
     @property
     def verifier_name(self) -> str:
@@ -109,60 +101,10 @@ class BaseSourceVerifier(BaseComponent):
         self,
         *,
         solution: Solution,
-        timeout: int | None = None,
         **kwargs: Any,
     ) -> VerifierOutput:
         """Verifies source_file, the kwargs are optional arguments that are
         implementation dependent."""
         _ = solution
-        _ = timeout
         _ = kwargs
-        raise NotImplementedError()
-
-    def apply_formatting(self, verifier_output: str, format: str) -> str:
-        """Applies a formatting style to the verifier output. This is used to
-        change the output to a different form for when it is supplied to the
-        LLM."""
-        _ = verifier_output
-        _ = format
-        raise NotImplementedError()
-
-    def get_error_line(self, verifier_output: str) -> int:
-        """Returns the line number of where the error as occurred."""
-        _ = verifier_output
-        raise NotImplementedError()
-
-    def get_error_line_idx(self, verifier_output: str) -> int:
-        """Returns the line index of where the error as occurred."""
-        _ = verifier_output
-        raise NotImplementedError()
-
-    def get_error_type(self, verifier_output: str) -> str:
-        """Returns a string of the type of error found by the verifier output."""
-        _ = verifier_output
-        raise NotImplementedError()
-
-    def get_error_scenario(self, verifier_output: str) -> str:
-        """Gets the scenario for fixing the error from verifier output"""
-        _ = verifier_output
-        return default_scenario
-
-    def get_stack_trace(self, verifier_output: str) -> str:
-        """Gets the stack trace that points to the error."""
-        _ = verifier_output
-        raise NotImplementedError()
-
-    def get_trace(
-        self,
-        solution: Solution,
-        verifier_output: str,
-        include_libs=False,
-        add_missing_source=False,
-    ) -> list[ProgramTrace]:
-        """Returns a more detailed trace. Each line that causes the error is
-        returned. Given a counterexample."""
-        _ = solution
-        _ = verifier_output
-        _ = include_libs
-        _ = add_missing_source
         raise NotImplementedError()

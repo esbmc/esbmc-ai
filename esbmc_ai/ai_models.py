@@ -408,7 +408,7 @@ class AIModels(metaclass=SingletonMeta):
         """Loads the service model names from cache or refreshes them from the internet."""
 
         duration = timedelta(seconds=refresh_duration_seconds)
-        print(f"Loading {source_name} models list")
+        self._logger.info(f"Loading {source_name} models list")
         models_list: list[str] = []
 
         # Read the last updated date to determine if a new update is required
@@ -416,16 +416,16 @@ class AIModels(metaclass=SingletonMeta):
             last_update, models_list = self._load_cache(cache_name)
             # Write new & updated cache file
             if datetime.now() >= last_update + duration:
-                print("\tModels list outdated, refreshing...")
+                self._logger.info("\tModels list outdated, refreshing...")
                 models_list = get_models_list()
                 self._write_cache(cache_name, models_list)
         except ValueError as e:
-            print(f"Error while loading {source_name} models list:", e)
-            print("\tCreating new models list.")
+            self._logger.error(f"Loading {source_name} models list failed:", e)
+            self._logger.info("\tCreating new models list.")
             models_list = get_models_list()
             self._write_cache(cache_name, models_list)
         except FileNotFoundError:
-            print("\tModels list not found, creating new...")
+            self._logger.info("\tModels list not found, creating new...")
             models_list = get_models_list()
             self._write_cache(cache_name, models_list)
 

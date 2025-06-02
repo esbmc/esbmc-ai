@@ -51,6 +51,7 @@ dependencies = [
   "ipykernel",
   "py",        # Dependency of pytest-regtest
   "twine",
+  "pydeps",
 ]
 
 [tool.hatch.envs.default.scripts]
@@ -131,6 +132,8 @@ docker build \\
   --build-arg EXTRA_PIP_PACKAGES="{args}" \\
   .
 """
+
+find-cycles = "pydeps esbmc_ai --show-cycles --no-show -o esbmc_ai.svg"
 
 [tool.hatch.envs.hatch-test]
 description = "Used when running pytest. Using hatch test..."

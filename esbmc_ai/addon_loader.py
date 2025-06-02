@@ -207,7 +207,9 @@ class AddonLoader(metaclass=SingletonMeta):
                 exposed_class = getattr(m, exposed_class_name)
                 # Check if valid addon type and import
                 if issubclass(exposed_class, BaseComponent):
-                    result.append(self.init_base_component(exposed_class))
+                    addon: BaseComponent = self.init_base_component(exposed_class)
+                    self._loaded_addons[addon.name] = addon
+                    result.append(addon)
 
         except ModuleNotFoundError as e:
             self._logger.error("error while loading module: traceback:")
@@ -227,8 +229,6 @@ class AddonLoader(metaclass=SingletonMeta):
         # Register config with modules
         addon.config = self._config
 
-        # Add to addon list.
-        self._loaded_addons[addon.name] = addon
         return addon
 
     def _load_addon_config(self, addon: BaseComponent) -> None:

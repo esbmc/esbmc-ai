@@ -5,18 +5,6 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "UserChat on Open File",
-      "type": "debugpy",
-      "request": "launch",
-      "module": "esbmc_ai",
-      "justMyCode": true,
-      "cwd": "${workspaceFolder}",
-      "args": [
-        "userchat",
-        "${file}"
-      ]
-    },
-    {
       "name": "Fix Code on Open File",
       "type": "debugpy",
       "request": "launch",
@@ -31,6 +19,21 @@
         "-r",
         "fix-code",
         "${file}"
+      ]
+    },
+    {
+      "name": "Fix Code on Config File",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "esbmc_ai",
+      "justMyCode": true,
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "ESBMCAI_CONFIG_FILE": "${workspaceFolder}/config_dev.toml"
+      },
+      "args": [
+        "-vvv",
+        "fix-code",
       ]
     },
     {
