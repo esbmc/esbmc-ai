@@ -32,7 +32,7 @@ class ComponentLoader(metaclass=SingletonMeta):
         self._logger: structlog.stdlib.BoundLogger = structlog.get_logger(
             self.__class__.__name__
         ).bind(category=LogCategories.SYSTEM)
-        self._verifiers: dict[str, BaseSourceVerifier] = {}
+        self.verifiers: dict[str, BaseSourceVerifier] = {}
         self._verifier: BaseSourceVerifier | None = None
 
         self._builtin_commands: dict[str, ChatCommand] = {}
@@ -60,7 +60,7 @@ class ComponentLoader(metaclass=SingletonMeta):
     @verfifier.setter
     def verifier(self, value: BaseSourceVerifier) -> None:
         assert (
-            value not in self._verifiers
+            value not in self.verifiers
         ), f"Unregistered verifier set: {value.verifier_name}"
         self._verifier = value
 
@@ -68,14 +68,15 @@ class ComponentLoader(metaclass=SingletonMeta):
         """Adds a verifier."""
         from esbmc_ai.config import Config
 
-        self._verifiers[verifier.name] = verifier
+        self.verifiers[verifier.name] = verifier
         verifier.config = Config()
 
     def set_verifier_by_name(self, value: str) -> None:
-        self.verifier = self._verifiers[value]
+        self.verifier = self.verifiers[value]
+        self._logger.info(f"Main Verifier: {value}")
 
     def get_verifier(self, value: str) -> BaseSourceVerifier | None:
-        return self._verifiers.get(value)
+        return self.verifiers.get(value)
 
     @property
     def commands(self) -> dict[str, ChatCommand]:
