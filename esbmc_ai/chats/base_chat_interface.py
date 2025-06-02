@@ -29,7 +29,6 @@ class BaseChatInterface:
     def __init__(
         self,
         system_messages: list[BaseMessage],
-        llm: BaseChatModel,
         ai_model: AIModel,
     ) -> None:
         super().__init__()
@@ -39,7 +38,6 @@ class BaseChatInterface:
         self.ai_model: AIModel = ai_model
         self._system_messages: list[BaseMessage] = system_messages
         self.messages: list[BaseMessage] = []
-        self.llm: BaseChatModel = llm
 
     def compress_message_stack(self) -> None:
         """Compress the message stack, is abstract and needs to be implemented."""
@@ -103,7 +101,6 @@ class BaseChatInterface:
     @staticmethod
     def send_messages(
         ai_model: AIModel,
-        llm: BaseChatModel,
         messages: list[BaseMessage],
         logger: structlog.stdlib.BoundLogger | None = None,
     ) -> ChatResponse:
@@ -118,7 +115,7 @@ class BaseChatInterface:
             sleep(sleep_total_seconds)
         BaseChatInterface._last_attempt = time()
 
-        response_message: BaseMessage = llm.invoke(input=messages)
+        response_message: BaseMessage = ai_model.invoke(input=messages)
 
         # Check if token limit has been exceeded.
         new_tokens: int = ai_model.get_num_tokens_from_messages(
@@ -149,9 +146,7 @@ class BaseChatInterface:
         all_messages = self._system_messages.copy()
         all_messages.extend(self.messages.copy())
 
-        response: ChatResponse = self.send_messages(
-            self.ai_model, self.llm, all_messages
-        )
+        response: ChatResponse = self.send_messages(self.ai_model, all_messages)
 
         self.push_to_message_stack(message=response.message)
         return response

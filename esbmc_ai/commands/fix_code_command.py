@@ -212,8 +212,7 @@ class FixCodeCommand(ChatCommand):
         match message_history:
             case "normal":
                 solution_generator = SolutionGenerator(
-                    ai_model=ai_model,
-                    llm=ai_model.create_llm(
+                    ai_model=ai_model.bind(
                         temperature=temperature,
                         requests_max_tries=max_tries,
                         requests_timeout=timeout,
@@ -224,8 +223,7 @@ class FixCodeCommand(ChatCommand):
                 )
             case "latest_only":
                 solution_generator = LatestStateSolutionGenerator(
-                    ai_model=ai_model,
-                    llm=ai_model.create_llm(
+                    ai_model=ai_model.bind(
                         temperature=temperature,
                         requests_max_tries=max_tries,
                         requests_timeout=timeout,
@@ -236,8 +234,7 @@ class FixCodeCommand(ChatCommand):
                 )
             case "reverse":
                 solution_generator = ReverseOrderSolutionGenerator(
-                    ai_model=ai_model,
-                    llm=ai_model.create_llm(
+                    ai_model=ai_model.bind(
                         temperature=temperature,
                         requests_max_tries=max_tries,
                         requests_timeout=timeout,
