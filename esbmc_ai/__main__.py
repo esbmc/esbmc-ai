@@ -37,8 +37,6 @@ def _init_builtin_components() -> None:
     esbmc = ESBMC.create()
     assert isinstance(esbmc, BaseSourceVerifier)
     ComponentLoader().add_verifier(esbmc)
-    # Default Verigier
-    ComponentLoader().set_verifier_by_name("esbmc")
     # Init built-in commands
     commands: list[ChatCommand] = []
     for cmd_classname in getattr(esbmc_ai.commands, "__all__"):
@@ -238,12 +236,10 @@ def main() -> None:
 
     # Load addons
     AddonLoader(Config())
-    # Bind addons to command runner and verifier runner.
+
+    # Bind addons to component loader.
     ComponentLoader().addon_commands.update(AddonLoader().chat_command_addons)
-    ComponentLoader()._verifiers = (
-        ComponentLoader()._verifiers | AddonLoader().verifier_addons
-    )
-    # Set verifier to use
+    ComponentLoader().verifiers.update(AddonLoader().verifier_addons)
     ComponentLoader().set_verifier_by_name(Config().get_value("verifier.name"))
 
     # Run the command
