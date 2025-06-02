@@ -6,6 +6,7 @@ from datetime import timedelta, datetime
 from pathlib import Path
 from typing import Any, Callable, Iterable
 from platformdirs import user_cache_dir
+from pydantic.types import SecretStr
 from typing_extensions import override
 import tiktoken
 import structlog
@@ -31,7 +32,10 @@ from esbmc_ai.singleton import SingletonMeta
 
 @dataclass(frozen=True, kw_only=True)
 class AIModel(ABC):
-    """This base class represents an abstract AI model."""
+    """This base class represents an abstract AI model. Each AIModel has the
+    required properties to invoke the underlying langchain implementation
+    BaseChatModel. To configure the properties, call the bind method and set
+    them."""
 
     name: str
     tokens: int
@@ -49,22 +53,28 @@ class AIModel(ABC):
 
     def bind(self, **kwargs: Any) -> "AIModel":
         """Returns a new model with new parameters."""
-        llm: BaseChatModel = self._llm or self.create_llm()
-        return replace(self, _llm=llm, **kwargs)
+        new_ai_model: AIModel = replace(self, **kwargs)
+        llm: BaseChatModel = new_ai_model.create_llm()
+        return replace(new_ai_model, _llm=llm)
 
-    def invoke(self, input: LanguageModelInput) -> BaseMessage:
+    def invoke(self, input: LanguageModelInput, **kwargs: Any) -> BaseMessage:
         """Invokes the underlying BaseChatModel implementation and returns the
         message."""
-        llm: BaseChatModel = self._llm or self.create_llm()
-        return llm.invoke(input)
+        if not self._llm:
+            raise ValueError("LLM is not initialized, call bind.")
+        return self._llm.invoke(input, **kwargs)
 
     def get_num_tokens(self, content: str) -> int:
         """Gets the number of tokens for this AI model."""
-        return self.create_llm().get_num_tokens(content)
+        if not self._llm:
+            raise ValueError("LLM is not initialized, call bind.")
+        return self._llm.get_num_tokens(content)
 
     def get_num_tokens_from_messages(self, messages: list[BaseMessage]) -> int:
         """Gets the number of tokens for this AI model for a list of messages."""
-        return self.create_llm().get_num_tokens_from_messages(messages)
+        if not self._llm:
+            raise ValueError("LLM is not initialized, call bind.")
+        return self._llm.get_num_tokens_from_messages(messages)
 
     @classmethod
     def convert_messages_to_tuples(
@@ -179,6 +189,8 @@ class AIModel(ABC):
 class AIModelService(AIModel):
     """Represents an AI model from a service."""
 
+    api_key: str = ""
+
     @staticmethod
     def _get_max_tokens(name: str, token_groups: dict[str, int]) -> int:
         """Dynamically resolves the max tokens from a base model."""
@@ -221,6 +233,7 @@ class AIModelOpenAI(AIModelService):
             reasoning_effort="high" if self._reason_model else None,
             max_retries=self.requests_max_tries,
             timeout=self.requests_timeout,
+            api_key=SecretStr(self.api_key) or None,
             model_kwargs={},
         )
 
@@ -280,6 +293,7 @@ class AIModelAnthropic(AIModelService):
             temperature=self.temperature,
             timeout=self.requests_timeout,
             max_retries=self.requests_max_tries,
+            api_key=SecretStr(self.api_key) or None,
         )
 
     @classmethod

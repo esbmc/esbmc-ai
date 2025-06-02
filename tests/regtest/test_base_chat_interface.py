@@ -1,21 +1,24 @@
 # Author: Yiannis Charalambous
 
-from langchain_core.language_models import FakeListChatModel
 import pytest
 
 from langchain.schema import BaseMessage, HumanMessage, AIMessage, SystemMessage
 
+from esbmc_ai.ai_models import AIModel
 from esbmc_ai.chat_response import ChatResponse
 from esbmc_ai.chats.base_chat_interface import BaseChatInterface
 from tests.test_ai_models import MockAIModel
+from pprint import pprint
 
 
 @pytest.fixture
-def setup():
+def setup() -> BaseChatInterface:
     responses: list[str] = ["OK 1", "OK 2", "OK 3"]
-    llm: FakeListChatModel = FakeListChatModel(responses=responses)
 
-    ai_model: MockAIModel = MockAIModel("test", 1024)
+    ai_model: AIModel = MockAIModel(
+        name="test", tokens=1024, responses=responses
+    ).bind()
+    assert isinstance(ai_model, MockAIModel)
 
     system_messages = [
         SystemMessage(content="System message"),
@@ -25,8 +28,8 @@ def setup():
     chat: BaseChatInterface = BaseChatInterface(
         system_messages=system_messages,
         ai_model=ai_model,
-        llm=llm,
     )
+    chat.cooldown_total = 0
 
     return chat
 
@@ -53,23 +56,17 @@ def test_push_message_stack(regtest, setup) -> None:
 
 
 def test_send_message(regtest, setup) -> None:
-    chat = setup
-
-    chat_responses: list[ChatResponse] = [
-        chat.send_message("Test 1"),
-        chat.send_message("Test 2"),
-        chat.send_message("Test 3"),
-    ]
+    chat: BaseChatInterface = setup
 
     with regtest:
-        print("System Messages:")
-        for m in chat._system_messages:
-            print(f"{m.type}: {m.content}")
-        print("Chat Messages:")
-        for m in chat.messages:
-            print(f"{m.type}: {m.content}")
-        print("Responses:")
-        for m in chat_responses:
-            print(
-                f"{m.message.type}({m.total_tokens} - {m.finish_reason}): {m.message.content}"
-            )
+        r: ChatResponse = chat.send_message("Test 1")
+        print(r.finish_reason, r.total_tokens, r.message.content)
+        r = chat.send_message("Test 2")
+        print(r.finish_reason, r.total_tokens, r.message.content)
+        r = chat.send_message("Test 3")
+        print(r.finish_reason, r.total_tokens, r.message.content)
+        # Show system messages
+        for idx, msg in enumerate(chat._system_messages):
+            print("System message:", idx, msg.content)
+        for idx, msg in enumerate(chat.messages):
+            print("Message:", idx, msg.content)

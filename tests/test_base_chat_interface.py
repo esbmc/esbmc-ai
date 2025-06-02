@@ -1,6 +1,7 @@
 # Author: Yiannis Charalambous
 
 from langchain_core.language_models import FakeListChatModel
+from openai import responses
 import pytest
 
 from langchain.schema import AIMessage, BaseMessage, HumanMessage, SystemMessage
@@ -11,25 +12,23 @@ from tests.test_ai_models import MockAIModel
 
 @pytest.fixture(scope="module")
 def setup():
-    ai_model: MockAIModel = MockAIModel("test", 1024)
+    responses: list[str] = ["OK 1", "OK 2", "OK 3"]
+    ai_model: MockAIModel = MockAIModel(name="test", tokens=1024, responses=responses)
 
     system_messages: list[BaseMessage] = [
         SystemMessage(content="First system message"),
         AIMessage(content="OK"),
     ]
 
-    return ai_model, system_messages
+    return ai_model, system_messages, responses
 
 
 def test_push_message_stack(setup) -> None:
-    llm: FakeListChatModel = FakeListChatModel(responses=[])
-
-    ai_model, system_messages = setup
+    ai_model, system_messages, _ = setup
 
     chat: BaseChatInterface = BaseChatInterface(
         system_messages=system_messages,
         ai_model=ai_model,
-        llm=llm,
     )
 
     for msg, chat_msg in zip(system_messages, chat._system_messages):
@@ -61,15 +60,11 @@ def test_push_message_stack(setup) -> None:
 
 
 def test_send_message(setup) -> None:
-    responses: list[str] = ["OK 1", "OK 2", "OK 3"]
-    llm: FakeListChatModel = FakeListChatModel(responses=responses)
-
-    ai_model, system_messages = setup
+    ai_model, system_messages, responses = setup
 
     chat: BaseChatInterface = BaseChatInterface(
         system_messages=system_messages,
-        ai_model=ai_model,
-        llm=llm,
+        ai_model=ai_model.bind(),
     )
 
     chat_responses: list[ChatResponse] = [
@@ -84,7 +79,7 @@ def test_send_message(setup) -> None:
 
 
 def test_apply_template() -> None:
-    ai_model: MockAIModel = MockAIModel("test", 1024)
+    ai_model: MockAIModel = MockAIModel(name="test", tokens=1024)
 
     system_messages: list[BaseMessage] = [
         SystemMessage(content="This is a {source_code} message"),
@@ -100,12 +95,10 @@ def test_apply_template() -> None:
         "Replace with also replaced message",
         "replacedalso replaced",
     ]
-    llm: FakeListChatModel = FakeListChatModel(responses=responses)
 
     chat: BaseChatInterface = BaseChatInterface(
         system_messages=system_messages,
         ai_model=ai_model,
-        llm=llm,
     )
 
     chat.apply_template_value(source_code="replaced")
