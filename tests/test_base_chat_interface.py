@@ -1,5 +1,7 @@
 # Author: Yiannis Charalambous
 
+from langchain_core.language_models import FakeListChatModel
+from openai import responses
 import pytest
 
 from langchain.schema import AIMessage, BaseMessage, HumanMessage, SystemMessage
@@ -63,6 +65,7 @@ def test_send_message(setup) -> None:
     chat: BaseChatInterface = BaseChatInterface(
         system_messages=system_messages,
         ai_model=ai_model,
+        ai_model=ai_model.bind(),
     )
 
     chat_responses: list[ChatResponse] = [
