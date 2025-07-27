@@ -3,7 +3,6 @@
 """Contains code for automatically repairing code using ESBMC."""
 
 from dataclasses import dataclass, replace
-from langchain_core.language_models import BaseChatModel
 from typing_extensions import override
 from langchain.schema import BaseMessage
 
@@ -42,7 +41,7 @@ def apply_formatting(esbmc_output: ESBMCOutput, format: str) -> str:
 
     match format:
         case "vp":
-            value: str | None = esbmc_output._esbmc_get_violated_property()
+            value: str | None = esbmc_output.get_violated_property()
             if not value:
                 raise ValueError("Not found violated property." + esbmc_output.output)
             return value
