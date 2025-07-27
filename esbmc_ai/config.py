@@ -17,7 +17,6 @@ from dotenv import load_dotenv, find_dotenv
 import structlog
 
 from esbmc_ai.chats.base_chat_interface import BaseChatInterface
-from esbmc_ai.component_loader import ComponentLoader
 from esbmc_ai.singleton import SingletonMeta, makecls
 from esbmc_ai.config_field import ConfigField
 from esbmc_ai.base_config import BaseConfig
@@ -552,10 +551,10 @@ class Config(BaseConfig, metaclass=makecls(SingletonMeta)):
         results: list[Path] = []
 
         if len(self._args.filenames):
-            results.extend(Path(f).absolute() for f in self._args.filenames)
+            results.extend(Path(f) for f in self._args.filenames)
 
         for file in file_names:
-            results.append(Path(file).absolute())
+            results.append(Path(file))
 
         return results
 
