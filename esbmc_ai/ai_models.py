@@ -231,7 +231,6 @@ class AIModelOpenAI(AIModelService):
             reasoning_effort="high" if self._reason_model else None,
             max_retries=self.requests_max_tries,
             timeout=self.requests_timeout,
-            api_key=SecretStr(self.api_key) or None,
             model_kwargs={},
             **kwargs,
         )
@@ -293,6 +292,7 @@ class AIModelOpenAI(AIModelService):
     def get_canonical_name(cls) -> str:
         """Get the canonical name of the OpenAI service."""
         return "openai"
+
 
 @dataclass(frozen=True, kw_only=True)
 class OllamaAIModel(AIModel):
