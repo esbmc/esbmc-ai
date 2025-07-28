@@ -256,6 +256,7 @@ class AIModelOpenAI(AIModelService):
         kwargs = {}
         if self.api_key:
             kwargs["api_key"] = (SecretStr(self.api_key) or None,)
+
         return ChatOpenAI(
             model=self.name,
             temperature=None if self._reason_model else self.temperature,
@@ -323,7 +324,6 @@ class AIModelOpenAI(AIModelService):
     def get_canonical_name(cls) -> str:
         """Get the canonical name of the OpenAI service."""
         return "openai"
-
 
 @dataclass(frozen=True, kw_only=True)
 class OllamaAIModel(AIModel):
