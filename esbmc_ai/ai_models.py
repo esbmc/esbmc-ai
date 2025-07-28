@@ -107,7 +107,6 @@ class AIModel(ABC):
                     break
                 # Count how many sequences of the char are occuring
                 count: int = 1
-                # FIXME Add bounds check here
                 while (
                     len(content) > char_idx + count
                     and content[char_idx + count] == char
