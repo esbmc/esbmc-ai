@@ -123,6 +123,60 @@ class AIModel(ABC):
 
         template = Template(content)
         return template.safe_substitute(**values)
+        def add_safeguards(content: str, char: str, allowed_keys: list[str]) -> str:
+            start_idx: int = 0
+            while True:
+                char_idx: int = content.find(char, start_idx)
+                if char_idx == -1:
+                    break
+                # Count how many sequences of the char are occuring
+                count: int = 1
+                while (
+                    len(content) > char_idx + count
+                    and content[char_idx + count] == char
+                ):
+                    count += 1
+
+                # Check if the next sequence is in the allowed keys, if it is, then
+                # skip to the next one.
+                is_allowed: bool = False
+                for key in allowed_keys:
+                    if key == content[char_idx + count : char_idx + count + len(key)]:
+                        is_allowed = True
+                        break
+
+                # Now change start_idx to reflect new location. The start index is at the end of
+                # all the chars (including the inserted one).
+                start_idx = char_idx + count + 1
+
+                # If inside allowed keys, then continue to next iteration.
+                if is_allowed:
+                    continue
+
+                # Check if odd number (will need to add extra char)
+                if count % 2 != 0:
+                    content = (
+                        content[: char_idx + count] + char + content[char_idx + count :]
+                    )
+            return content
+
+        reversed_keys: list[str] = [key[::-1] for key in allowed_keys]
+
+        result: list[BaseMessage] = []
+        for msg in messages:
+            content: str = str(msg.content)
+            look_pointer: int = 0
+            # Open curly check
+            if content.find("{", look_pointer) != -1:
+                content = add_safeguards(content, "{", allowed_keys)
+            # Close curly check
+            if content.find("}", look_pointer) != -1:
+                # Do it in reverse with reverse keys.
+                content = add_safeguards(content[::-1], "}", reversed_keys)[::-1]
+            new_msg = msg.model_copy()
+            new_msg.content = content
+            result.append(new_msg)
+        return result
 
     def apply_chat_template(
         self,
