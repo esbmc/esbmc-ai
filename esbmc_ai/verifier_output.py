@@ -24,31 +24,34 @@ class VerifierOutput(ABC):
         """If the verification was successful."""
         raise NotImplementedError()
 
+    @abstractmethod
     def get_error_line(self) -> int:
         """Returns the line number of where the error as occurred."""
         raise NotImplementedError()
 
+    @abstractmethod
     def get_error_line_idx(self) -> int:
         """Returns the line index of where the error as occurred."""
         raise NotImplementedError()
 
+    @abstractmethod
     def get_error_type(self) -> str:
         """Returns a string of the type of error found by the verifier output."""
         raise NotImplementedError()
 
+    @abstractmethod
     def get_stack_trace(self) -> str:
         """Gets the stack trace that points to the error."""
         raise NotImplementedError()
 
+    @abstractmethod
     def get_trace(
         self,
         solution: "Solution",
-        include_libs=False,
-        add_missing_source=False,
+        load_libs=False,
     ) -> list[ProgramTrace]:
         """Returns a more detailed trace. Each line that causes the error is
         returned. Given a counterexample."""
         _ = solution
-        _ = include_libs
-        _ = add_missing_source
+        _ = load_libs
         raise NotImplementedError()

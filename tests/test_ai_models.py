@@ -12,6 +12,7 @@ from langchain.schema import (
 )
 from langchain_core.language_models import BaseChatModel, FakeListChatModel
 from pytest import raises
+import pytest
 
 from esbmc_ai.ai_models import (
     AIModel,
@@ -40,6 +41,16 @@ class MockAIModel(AIModel):
     def get_num_tokens_from_messages(self, messages: list[BaseMessage]) -> int:
         _ = messages
         return sum(len(str(msg.content)) for msg in messages)
+
+
+@pytest.fixture(autouse=True)
+def clear_ai_models():
+    """Clear the AIModels singleton state before each test."""
+    # Clear the singleton's internal state
+    AIModels()._ai_models.clear()
+    yield
+    # Optionally clear after test as well
+    AIModels()._ai_models.clear()
 
 
 def test_is_not_valid_ai_model() -> None:

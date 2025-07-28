@@ -31,6 +31,8 @@ from esbmc_ai.log_utils import (
 )
 from esbmc_ai.ai_models import (
     AIModel,
+    AIModelAnthropic,
+    AIModelOpenAI,
     AIModels,
     OllamaAIModel,
 )
@@ -392,12 +394,14 @@ class Config(BaseConfig, metaclass=makecls(SingletonMeta)):
                 default_value={},
             ),
             value={
-                "openai": self.get_value("OPENAI_API_KEY"),
-                "anthropic": self.get_value("ANTHROPIC_API_KEY"),
+                AIModelOpenAI.get_canonical_name(): self.get_value("OPENAI_API_KEY"),
+                AIModelAnthropic.get_canonical_name(): self.get_value(
+                    "ANTHROPIC_API_KEY"
+                ),
             },
         )
         # Load AI models and set ai_model
-        AIModels().load_models(
+        AIModels().load_default_models(
             self.get_value("api_keys"),
             self.get_value("llm_requests.model_refresh_seconds"),
         )
