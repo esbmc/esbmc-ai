@@ -81,7 +81,7 @@ class SourceFile:
         assert lower_idx < upper_idx
         return ai_model.get_num_tokens(self.content[lower_idx:upper_idx])
 
-    def get_patch(self, source_file_2: "SourceFile") -> str:
+    def get_diff(self, source_file_2: "SourceFile") -> str:
         """Return diff between two SourceFiles."""
         # Save as temp files
         with (
