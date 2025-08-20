@@ -1,0 +1,147 @@
+# ESBMC-AI Contributor License Agreement
+
+This ESBMC-AI Contributor License Agreement ("**Agreement**") describes the terms and conditions for your Contributions submitted to the ESBMC-AI Project and is concluded between you ("**You**") and The University of Manchester, Oxford Road, Manchester, M13 9PL, United Kingdom ("**University of Manchester**" or "**University**").
+
+The Agreement is for Your protection as a contributor as well as the protection of the University of Manchester, the ESBMC-AI Project maintainers, and ESBMC-AI Project users; and applies to all Contributions Submitted by You to the ESBMC-AI Project. Please read it carefully before signing and keep a copy for Your records.
+
+Please note that in case You Submit Contributions on behalf of different companies and/or individuals, a separate contributor license agreement shall be concluded for each of such company and/or individual.
+
+You accept the Agreement once You sign it or (in the absence of a signed agreement) as of the moment You Submit the Contribution.
+
+## 1. Definitions
+
+**1.1.** "**Contribution**" means any original work of authorship, including any modifications or additions to an existing work of authorship, Submitted by You to the University of Manchester for potential inclusion in the ESBMC-AI Project. Contributions may include Patented Contributions.
+
+**1.2.** "**Patented Contribution**" means a Contribution, or a combination of one or more Contributions, or a combination of one or more Contributions with one or more ESBMC-AI Project components, in respect of which You own or control a valid patent and rights arising in connection with this patent.
+
+**1.3.** "**ESBMC-AI Project**" means the research project initiated and managed by Yiannis Charalambous at The University of Manchester, including all associated software, documentation, data, and derivative works.
+
+**1.4.** "**Contribution Date**" means the date You first Submitted a given Contribution to the University of Manchester.
+
+**1.5.** "**Submit**" means the act of uploading, transmission, submitting or distributing of a Contribution to the University of Manchester and/or Yiannis Charalambous and/or a representative of either through any electronic, audiovisual, verbal, written or any other means, including electronic mailing lists, source code control systems, and issue tracking systems.
+
+**1.6.** "**ESBMC-AI Project Users**" mean the users of the ESBMC-AI Project, including those who receive a given Contribution directly or indirectly from the University of Manchester.
+
+## 2. Grant of Rights
+
+**2.1.** Subject to the terms and conditions of this Agreement, You hereby grant to the University of Manchester a **perpetual, worldwide, exclusive, no-charge, royalty-free, irrevocable, and transferable** license:
+
+**(i)** to use, copy, reproduce, prepare derivative works of, distribute, sublicense, and publicly perform and display the Contribution and any derivative works **under any licensing terms** (including without limitation open source licenses and binary, proprietary, or commercial licenses) **directly or via a third party**; 
+
+**(ii)** to **assign, sell, transfer, or otherwise dispose of** all rights in the Contribution to any third party without restriction;
+
+**(iii)** to **relicense or change the license** of the ESBMC-AI Project or any portion thereof at the University's sole discretion; and
+
+**(iv)** in relation to a Patented Contribution, to make, commission, use, sell, offer to sell, import, and otherwise transfer the Patented Contribution alone or in combination with one or more ESBMC-AI Project components.
+
+**2.2.** **License Scope and Term.** You grant the University of Manchester the right to license the Contribution under any license terms applicable to the ESBMC-AI Project as determined by the University of Manchester in its sole discretion, and grant a copyright and patent license to the ESBMC-AI Project Users corresponding to such terms.
+
+All licenses and rights granted under this Agreement commence as of the Contribution Date, irrespective of the date on which You enter into this Agreement.
+
+**2.3.** **Copyright Assignment.** You hereby **irrevocably assign** to the University of Manchester all right, title, and interest worldwide in all copyrights covering the Contribution. To the extent such assignment is not legally effective in any jurisdiction, You grant the University of Manchester the exclusive license set forth in Section 2.1 above.
+
+**2.4.** **Waiver of Moral Rights.** To the maximum extent permitted by applicable law, You **waive and agree not to assert** any moral rights (including rights of paternity and integrity) that You may have in the Contribution against the University of Manchester, its successors, assigns, licensees, or users of the ESBMC-AI Project.
+
+**2.5.** **Other Rights Reserved.** You acknowledge that the University of Manchester shall have full ownership and control over the Contribution and may exercise all rights of ownership without restriction. Except for this Assignment, You retain no other rights in the Contribution.
+
+## 3. Limitations and Acknowledgments
+
+**3.1.** The licenses granted by You under this Agreement do not apply to materials provided by You to the University of Manchester that are clearly and prominently designated by You and brought to the University of Manchester's attention as "Not a Contribution."
+
+**3.2.** **Unacceptable Contributions.** You may not make a Contribution or enter into this Agreement if You are younger than 18 years of age.
+
+**3.3.** You acknowledge and agree that the Contributions and information about them may be maintained indefinitely and disclosed publicly. This information may also include Your name or the name of a person and/or a company You act on behalf of.
+
+**3.4.** **Support.** You may, but are not obliged, to provide support for Your Contributions. You may provide support for free or for a fee. Unless expressly agreed with the University of Manchester prior to provision of support, all such support is provided for free.
+
+**3.5.** **No Obligation to Include or Maintain.** You understand and acknowledge that nothing in this Agreement implies any obligation of the University of Manchester to include in the ESBMC-AI Project or use in any other way any of the Contributions Submitted under the Agreement. The University of Manchester reserves the right to remove Contributions at any time as determined by the University of Manchester in its sole discretion.
+
+**3.6.** **No Revenue Sharing or Royalties.** You acknowledge and agree that You shall have **no right to receive any revenue, royalties, compensation, or other financial benefit** from the commercialization, licensing, sale, assignment, or any other exploitation of the ESBMC-AI Project or any Contribution, whether such commercialization occurs during Your lifetime or thereafter. This waiver applies regardless of the commercial success of the Project or the extent to which Your Contribution is used.
+
+**3.7.** **No Permission Required for Future Actions.** You acknowledge that the University of Manchester shall have no obligation to seek Your permission, consent, or approval for any action it takes with respect to the ESBMC-AI Project or Your Contributions, including but not limited to commercialization, licensing changes, project direction changes, or any other business decisions.
+
+## 4. Representations and Warranties
+
+**4.1.** You represent and warrant that each of Your Contributions is Your original work and that You are legally entitled to grant the rights set forth in this Agreement.
+
+**4.2.** You represent and assure that You have sufficient intellectual property rights to the Contributions and are legally entitled to enter into this Agreement and grant the above licenses and assignments.
+
+**4.3.** You represent that Your Contributions do not infringe any third party's intellectual property rights, including but not limited to copyrights, patents, trademarks, trade secrets, or moral rights.
+
+**4.4.** If You Submit as a company, You agree that: (a) Your employees, contractors, and representatives may Submit Contributions on Your behalf; and (b) the individual signing this Agreement on Your behalf has the necessary authority including the authority to bind You to the Agreement.
+
+**4.5.** If You act on behalf of Your employer or other third party, You represent that You are authorized and have the right to Submit the Contribution on behalf of Your employer or the mentioned third party.
+
+**4.6.** You represent that each of the statements in this Agreement is true as of the effective date of this Agreement and as of each Contribution Date, and You are and will remain legally entitled to grant the rights described in this Agreement.
+
+**4.7.** You agree to notify the University of Manchester of any facts or circumstances of which You become aware that would make these representations inaccurate in any respect.
+
+## 5. Disclaimer of Warranty
+
+UNLESS REQUIRED BY APPLICABLE LAW, SPECIFICALLY AGREED IN WRITING, OR STATED IN THIS AGREEMENT, YOU PROVIDE YOUR CONTRIBUTIONS ON AN "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND OTHER THAN THOSE CONTAINED IN THIS AGREEMENT, EITHER EXPRESS OR IMPLIED.
+
+## 6. Indemnification
+
+You agree to indemnify, defend, and hold harmless the University of Manchester, its officers, employees, agents, and representatives from and against any and all claims, demands, losses, costs, damages, and expenses (including reasonable attorneys' fees) arising out of or relating to: (a) Your breach of this Agreement; (b) Your violation of any law or regulation; (c) Your infringement of any third party's intellectual property or other rights; or (d) any claim that Your Contribution infringes any third party's intellectual property rights.
+
+## 7. General Provisions
+
+**7.1.** **Partnership.** Nothing in this Agreement implies a partnership, an employment arrangement, joint venture, or similar arrangement.
+
+**7.2.** **Interpretation.** Any heading, title, or paragraph summary is only for convenience and does not affect interpretation of this Agreement. Any reference to an inclusive word, such as 'including', is not comprehensive and refers to other items in that category. Defined terms include their grammatical variants.
+
+**7.3.** **Notice.** In case of any questions and/or notices related to the Agreement You can reach out to the University of Manchester Innovation Factory via the contact information available on their website, or to Yiannis Charalambous via the ESBMC-AI Project repository.
+
+**7.4.** **Governing Law.** This Agreement is governed by the laws of England and Wales, and the parties consent to exclusive jurisdiction and venue in the courts thereof.
+
+**7.5.** **Entire Agreement.** This Agreement is the entire agreement between the parties, and supersedes any and all prior agreements, understandings, and communications, written or oral, between the parties relating to the subject matter hereof. The Agreement may be executed through the means of electronic signature.
+
+**7.6.** **Assignment.** This Agreement may be assigned by the University of Manchester without restriction to any party, including but not limited to commercial entities, research institutions, or individual parties. You may not assign this Agreement without the prior written consent of the University of Manchester.
+
+**7.7.** **Severability.** If any provision of this Agreement is found to be unenforceable, the remainder of this Agreement will remain in effect.
+
+**7.8.** **Amendment.** This Agreement may only be amended by a written instrument signed by both parties.
+
+---
+
+## Signature Block
+
+**Contributor Information:**
+
+**Full Name:** ________________________________________
+
+**Signature:** _________________________________________
+
+**Date:** _____________________________________________
+
+**E-mail:** ____________________________________________
+
+**GitHub username:** ____________________________________________
+
+**Mailing Address:** ____________________________________________
+
+**If You are signing as an authorized representative on behalf of a company, please include the following:**
+
+**Company Name:** ____________________________________________
+
+**Title/Position:** ____________________________________________
+
+**Company Address:** ____________________________________________
+
+**Date of Authorization:** ____________________________________________
+
+---
+
+**University of Manchester Acceptance:**
+
+**Name:** ________________________________________
+
+**Title:** ________________________________________
+
+**Signature:** _________________________________________
+
+**Date:** _____________________________________________
+
+---
+
+*This Contributor License Agreement is designed to provide the University of Manchester with comprehensive rights over contributed intellectual property to enable maximum flexibility in project management, commercialization, and licensing decisions. The Agreement ensures that the ESBMC-AI Project maintainers have all necessary rights to operate, modify, distribute, and commercialize the project without restrictions or ongoing obligations to contributors.*
