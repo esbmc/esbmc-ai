@@ -10,6 +10,7 @@ from esbmc_ai.chat_command import ChatCommand
 from esbmc_ai.base_component import BaseComponent
 from esbmc_ai.verifiers import BaseSourceVerifier
 from esbmc_ai.ai_models import AIModel, AIModels
+from esbmc_ai.log_utils import LogCategories
 
 __all__ = [
     "ConfigField",
@@ -19,4 +20,5 @@ __all__ = [
     "BaseSourceVerifier",
     "AIModel",
     "AIModels",
+    "LogCategories",
 ]

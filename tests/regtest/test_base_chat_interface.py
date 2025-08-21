@@ -15,9 +15,7 @@ from pprint import pprint
 def setup() -> BaseChatInterface:
     responses: list[str] = ["OK 1", "OK 2", "OK 3"]
 
-    ai_model: AIModel = MockAIModel(
-        name="test", tokens=1024, responses=responses
-    ).bind()
+    ai_model: AIModel = MockAIModel(name="test", tokens=1024, responses=responses)
     assert isinstance(ai_model, MockAIModel)
 
     system_messages = [

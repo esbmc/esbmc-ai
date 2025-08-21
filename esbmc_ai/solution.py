@@ -8,12 +8,36 @@ from pathlib import Path
 from subprocess import PIPE, STDOUT, run, CompletedProcess
 from tempfile import NamedTemporaryFile, TemporaryDirectory
 from shutil import copytree
+from typing import override
 
 import lizard
 
 from esbmc_ai.ai_models import AIModel
 from esbmc_ai.log_utils import get_log_level, print_horizontal_line
 from esbmc_ai.verifier_output import VerifierOutput
+
+
+class SolutionIntegrityError(Exception):
+    """Raised when the solution disk integrity check fails."""
+
+    def __init__(self, files: list["SourceFile"]):
+        assert all(
+            isinstance(f, SourceFile) for f in files
+        ), "Accept only a list of SourceFiles"
+        self.invalid_files: list[SourceFile] = [
+            f for f in files if not f.verify_file_integrity()
+        ]
+        super().__init__(self._build_message())
+
+    def _build_message(self):
+        files_list = "\n\t* " + "\n\t* ".join(
+            str(f.file_path) for f in self.invalid_files
+        )
+        return (
+            "Solution disk integrity check failed. There are unsaved "
+            "changes. Save solution to a temporary location on disk.\n"
+            "The following files are invalid:" + files_list
+        )
 
 
 @dataclass
@@ -52,9 +76,19 @@ class SourceFile:
 
     def __init__(self, file_path: Path, base_path: Path, content: str) -> None:
         self.file_path: Path = file_path
+        """Relative file path"""
         self.base_path: Path = base_path
         self.content: str = content
         self.verifier_output: VerifierOutput | None = None
+        assert self.verify_file_integrity()
+
+    @override
+    def __repr__(self) -> str:
+        return f"SourceFile({self.file_path}, valid={self.verify_file_integrity()})"
+
+    @override
+    def __str__(self) -> str:
+        return f"SourceFile({self.file_path})"
 
     @property
     def abs_path(self) -> Path:
@@ -124,20 +158,20 @@ class SourceFile:
         ) as temp_dir:
             return self.save_file(Path(temp_dir) / self.file_path)
 
-    def save_file(self, file_path: Path) -> Path:
+    def save_file(self, abs_path: Path) -> Path:
         """Saves the source code file."""
 
-        with open(file_path, "w") as file:
+        with open(abs_path, "w") as file:
             file.write(self.content)
             return Path(file.name)
 
     def verify_file_integrity(self) -> bool:
         """Verifies that this file matches with the file on disk and does not
         contain any differences."""
-        if not self.abs_path.exists() or not self.abs_path.is_file():
+        if not (self.abs_path.exists() and self.abs_path.is_file()):
             return False
 
-        with open(self.abs_path) as file:
+        with open(self.abs_path, "r") as file:
             content: str = str(file.read())
 
         return content == self.content
@@ -169,11 +203,11 @@ class Solution:
         file_paths: list[Path] | None = None,
         include_dirs: list[Path] | None = None,
     ) -> "Solution":
-        """Creates a solution from a base directory. Can override with files manually."""
+        """Creates a solution from a base directory. Can append with files manually."""
         path = path.absolute()
 
         if file_paths:
-            return Solution(file_paths, path)
+            return Solution(files=file_paths, base_dir=path, include_dirs=include_dirs)
 
         result: list[Path] = []
         for dir_path, _, files in walk(path):
@@ -203,9 +237,11 @@ class Solution:
         if include_dirs:
             for d in include_dirs:
                 assert d.is_dir(), f"Path is not a directory: {d}"
-                rel_path: Path = d.absolute().relative_to(self.base_dir)
-                # TODO for now do not init SourceFiles
-                self._include_dirs[Path(rel_path)] = []
+                include_files: list[Path] = [p for p in d.rglob("*") if p.is_file()]
+                self._include_dirs[d] = [
+                    SourceFile.load(file_path=p, base_path=self.base_dir)
+                    for p in include_files
+                ]
 
     @property
     def include_dirs(self) -> dict[Path, list[SourceFile]]:
@@ -243,25 +279,24 @@ class Solution:
         # Copy individual source files.
         new_file_paths: list[Path] = []
         for source_file in self.files:
-            relative_path: Path = source_file.file_path
-            new_path: Path = base_dir_path / relative_path
+            new_file_paths.append(source_file.file_path)
+            new_path: Path = base_dir_path / source_file.file_path
             # Write new file
-            new_file_paths.append(new_path)
             new_path.parent.mkdir(parents=True, exist_ok=True)
             source_file.save_file(new_path)
 
         # Copy include directories there
-        new_include_dirs: list[Path] = []
         for d in self.include_dirs:
             new_dir: Path = base_dir_path / d
             copytree(src=d, dst=new_dir, symlinks=True, dirs_exist_ok=True)
-            new_include_dirs.append(new_dir)
 
-        return Solution(
-            new_file_paths,
-            Path(base_dir_path),
-            include_dirs=new_include_dirs,
+        sol = Solution(
+            files=new_file_paths,
+            base_dir=Path(base_dir_path),
+            include_dirs=list(self.include_dirs.keys()),
         )
+
+        return sol
 
     def verify_solution_integrity(self) -> bool:
         """Verifies if the content of the solution match with the files on disk.
@@ -294,11 +329,16 @@ class Solution:
     def load_source_file(self, file_path: Path) -> None:
         """Add a source file to the solution. If content is provided then it will
         not be loaded."""
-        file_path = file_path.absolute()
         # Get the relative path to the base dir.
-        rel_path: Path = file_path.relative_to(self.base_dir)
-        with open(file_path, "r") as file:
-            self._files.append(SourceFile(rel_path, self.base_dir, file.read()))
+        assert not file_path.is_absolute()
+        with open(self.base_dir / file_path, "r") as file:
+            self._files.append(
+                SourceFile(
+                    file_path=file_path,
+                    base_path=self.base_dir,
+                    content=file.read(),
+                )
+            )
 
     def get_diff(self, other: "Solution") -> str:
         """Gets the diff with another solution. The following params are used: -ruN"""

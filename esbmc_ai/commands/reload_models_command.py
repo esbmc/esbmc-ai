@@ -18,4 +18,4 @@ class ReloadAIModelsCommand(ChatCommand):
         _ = kwargs
 
         self.logger.info("Reloading AI Models...")
-        AIModels().load_models(self.get_config_value("api_keys"), replace=True)
+        AIModels().load_default_models(self.get_config_value("api_keys"))

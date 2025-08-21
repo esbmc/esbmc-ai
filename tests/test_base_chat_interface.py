@@ -1,7 +1,5 @@
 # Author: Yiannis Charalambous
 
-from langchain_core.language_models import FakeListChatModel
-from openai import responses
 import pytest
 
 from langchain.schema import AIMessage, BaseMessage, HumanMessage, SystemMessage
@@ -64,7 +62,7 @@ def test_send_message(setup) -> None:
 
     chat: BaseChatInterface = BaseChatInterface(
         system_messages=system_messages,
-        ai_model=ai_model.bind(),
+        ai_model=ai_model,
     )
 
     chat_responses: list[ChatResponse] = [
@@ -82,15 +80,15 @@ def test_apply_template() -> None:
     ai_model: MockAIModel = MockAIModel(name="test", tokens=1024)
 
     system_messages: list[BaseMessage] = [
-        SystemMessage(content="This is a {source_code} message"),
-        SystemMessage(content="Replace with {esbmc_output} message"),
-        SystemMessage(content="{source_code}{esbmc_output}"),
+        SystemMessage(content="This is a $source_code message"),
+        SystemMessage(content="Replace with $esbmc_output message"),
+        SystemMessage(content="$source_code$esbmc_output"),
     ]
 
     responses: list[str] = [
         "This is a replaced message",
-        "Replace with {esbmc_output} message",
-        "replaced{esbmc_output}",
+        "Replace with $esbmc_output message",
+        "replaced$esbmc_output",
         "This is a replaced message",
         "Replace with also replaced message",
         "replacedalso replaced",
@@ -112,3 +110,24 @@ def test_apply_template() -> None:
     assert chat._system_messages[0].content == responses[3]
     assert chat._system_messages[1].content == responses[4]
     assert chat._system_messages[2].content == responses[5]
+
+
+def test_apply_template_escape_characters() -> None:
+    ai_model: MockAIModel = MockAIModel(name="test", tokens=1024)
+
+    system_messages: list[BaseMessage] = [
+        SystemMessage(content="This is a $$source_code message"),
+        SystemMessage(content="Escaped $$aaa but not $source_code"),
+    ]
+
+    chat: BaseChatInterface = BaseChatInterface(
+        system_messages=system_messages,
+        ai_model=ai_model,
+    )
+
+    chat.apply_template_value(source_code="replaced", aaa="should_not_appear")
+
+    # $$source_code should become $source_code (escaped)
+    assert chat._system_messages[0].content == "This is a $source_code message"
+    # $$aaa should become $aaa (escaped), but $source_code should be replaced
+    assert chat._system_messages[1].content == "Escaped $aaa but not replaced"

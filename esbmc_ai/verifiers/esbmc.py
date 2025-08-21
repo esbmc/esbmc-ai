@@ -5,14 +5,23 @@ import sys
 import re
 from subprocess import PIPE, STDOUT, run, CompletedProcess
 from pathlib import Path
-import structlog
+from typing import NamedTuple
 from typing_extensions import Any, override
 
-from esbmc_ai.solution import Solution
+from esbmc_ai.solution import Solution, SolutionIntegrityError
 
 from esbmc_ai.verifier_output import VerifierOutput
 from esbmc_ai.verifiers.base_source_verifier import BaseSourceVerifier
 from esbmc_ai.program_trace import ProgramTrace
+
+
+class _TraceResult(NamedTuple):
+    filename: Path
+    line_number: int
+    error_line: str
+    state_number: int
+    method_name: str
+    thread_index: int
 
 
 class ESBMCOutput(VerifierOutput):
@@ -20,7 +29,7 @@ class ESBMCOutput(VerifierOutput):
     def successful(self) -> bool:
         return self.return_code == 0
 
-    def _esbmc_get_violated_property(self) -> str | None:
+    def get_violated_property(self) -> str | None:
         """Gets the violated property line of the ESBMC output."""
         # Find "Violated property:" string in ESBMC output
         lines: list[str] = self.output.splitlines()
@@ -38,7 +47,7 @@ class ESBMCOutput(VerifierOutput):
 
     def _get_esbmc_err_line(self) -> int | None:
         """Return from the counterexample the line where the error occurs."""
-        violated_property: str | None = self._esbmc_get_violated_property()
+        violated_property: str | None = self.get_violated_property()
         if violated_property:
             # Get the line of the violated property.
             pos_line: str = violated_property.splitlines()[1]
@@ -112,17 +121,7 @@ class ESBMCOutput(VerifierOutput):
     @staticmethod
     def _parse_trace_line(
         line: str,
-    ) -> (
-        tuple[
-            int | None,
-            str,
-            int,
-            str | None,
-            int | None,
-            str | None,
-        ]
-        | None
-    ):
+    ) -> _TraceResult | None:
         """Parses a line in the trace and returns the following from it:
         * State idx
         * Filename (or None if missing)
@@ -167,81 +166,129 @@ class ESBMCOutput(VerifierOutput):
             match = pattern.search(line)
             error_line = match.group(1) if match else None
 
-        return (
-            state_number,
-            filename,
-            line_number,
-            method_name,
-            thread_index,
-            error_line,
+        return _TraceResult(
+            state_number=state_number or -1,
+            filename=Path(filename),
+            line_number=line_number,
+            method_name=method_name or "",
+            thread_index=thread_index or -1,
+            error_line=error_line or "",
         )
 
     @override
     def get_trace(
         self,
         solution: Solution,
-        include_libs: bool = False,
-        add_missing_source: bool = False,
-        logger: structlog.stdlib.BoundLogger | None = None,
+        load_libs: bool = False,
     ) -> list[ProgramTrace]:
         """Gets the trace from the CE of the verifier output. Uses "[Counterexample]"
-        as the starting anchor. If include_libs is True, then the files that are
+        as the starting anchor. If load_libs is True, then the files that are
         outside of the base path will be included, mainly libraries and external files.
-        If add_missing_source is True will add source code that was specified as an
-        include libs but not in the files."""
+        If load_libs is True, it will modify the internal state of Solution by
+        loading the additional files.
+        """
+
+        # Check if parsing error
+        if "ERROR: PARSING ERROR" in self.output:
+            return self._get_trace_parsing_error(solution=solution)
+
         # Get [Counterexample] string idx
         ce_idx: int = self.output.index("[Counterexample]") + len("[Counterexample]")
         ce_idx_end: int = ce_idx
         traces: list[ProgramTrace] = []
 
-        if not add_missing_source:
-            solution = solution.save_temp()
-
-        file_name: str
-        line_number: int
-        method_name: str | None
         trace_idx: int = 0
 
         # Get the traces
         while True:
-            try:
-                ce_idx = self.output.index("State ", ce_idx)
-                # Get the end of line, which is 3 lines after.
-                ce_idx_end = ce_idx
-                ce_idx_end = self.output.index("\n", ce_idx_end) + 1
-                ce_idx_end = self.output.index("\n", ce_idx_end) + 1
-                ce_idx_end = self.output.index("\n", ce_idx_end) + 1
-                # Get the information from the state line.
-                trace_results = self._parse_trace_line(self.output[ce_idx:ce_idx_end])
-                if trace_results:
-                    _, file_name, line_number, method_name, _, _ = trace_results
-
-                    if include_libs or Path(file_name).absolute().is_relative_to(
-                        solution.base_dir.absolute()
-                    ):
-                        # Create Source file if not exists
-                        if file_name not in solution.files_mapped:
-                            solution.load_source_file(Path(file_name))
-
-                        traces.append(
-                            ProgramTrace(
-                                trace_type="statement",
-                                trace_index=trace_idx,
-                                source_file=solution.files_mapped[file_name],
-                                line_idx=line_number,
-                                name=method_name if method_name else "",
-                            )
-                        )
-
-                ce_idx = ce_idx_end + 1
-                trace_idx += 1
-            except ValueError as e:
-                # Gets a value error from the str index method. This is an indicator
-                # that we don't have any more traces to parse.
-                if logger:
-                    logger.debug(str(e))
+            # Check if done
+            if self.output.find("State ", ce_idx) == -1:
                 break
+
+            ce_idx = self.output.index("State ", ce_idx)
+            # Get the end of line, which is 3 lines after.
+            ce_idx_end = ce_idx
+            ce_idx_end = self.output.index("\n", ce_idx_end) + 1
+            ce_idx_end = self.output.index("\n", ce_idx_end) + 1
+            ce_idx_end = self.output.index("\n", ce_idx_end) + 1
+            # Get the information from the state line.
+            trace_results: _TraceResult | None = self._parse_trace_line(
+                self.output[ce_idx:ce_idx_end]
+            )
+            if trace_results:
+                file_name: Path = trace_results.filename
+                line_number: int = trace_results.line_number
+                method_name: str = trace_results.method_name
+
+                # If we include foreign libs or if there's an unloaded file in
+                # the base dir.
+                if load_libs or (
+                    (solution.base_dir / file_name).exists()
+                    and str(file_name) in solution.files_mapped
+                ):
+                    traces.append(
+                        ProgramTrace(
+                            trace_source="verifier",
+                            trace_index=trace_idx,
+                            source_file=solution.files_mapped[str(file_name)],
+                            line_idx=line_number,
+                            name=method_name if method_name else "",
+                        )
+                    )
+
+            ce_idx = ce_idx_end + 1
+            trace_idx += 1
         return traces
+
+    def _get_trace_parsing_error(self, solution: Solution) -> list[ProgramTrace]:
+        """Parses the parsing error lines of the compiler.
+
+        Format:
+        ```
+        <filename>:<line>:<col>: <warning/error>: <comment>
+        <line>
+        ```
+        """
+        output_split: list[str] = self.output.splitlines(True)
+        results: list[ProgramTrace] = []
+        # Find the first line not starting with Parsing. Skip first 2 lines since
+        # they have the ESBMC program text.
+        start_line: int = 2
+        for idx, l in enumerate(output_split[start_line:], start=start_line):
+            if not l.startswith("Parsing"):
+                start_line = idx
+                break
+
+        idx: int = start_line
+        while True:
+            if idx >= len(output_split):
+                break
+
+            l = output_split[idx]
+            line_split: list[str] = l.split(":")
+            if len(line_split) != 5:
+                # Shift forward, means that a non-wanted line was found
+                idx += 1
+                continue
+
+            line_type = line_split[3].strip()
+            # Only act if line is an error...
+            if line_type == "error":
+                filename: str = line_split[0]
+                line: int = int(line_split[1])
+                # col: int = int(line_split[2])
+                comment: str = line_split[4].strip()
+                results.append(
+                    ProgramTrace(
+                        trace_source="parser",
+                        trace_index=idx // 3,
+                        source_file=solution.files_mapped[filename],
+                        comment=comment,
+                        line_idx=line,
+                    )
+                )
+            idx += 3
+        return results
 
 
 class ESBMC(BaseSourceVerifier):
@@ -292,10 +339,8 @@ class ESBMC(BaseSourceVerifier):
             sys.exit(1)
 
         # Verify source is not responsible for saving the solution.
-        assert solution.verify_solution_integrity(), (
-            "Solution disk integrity check failed. There are unsaved changes. "
-            "Save solution to a temporary location on disk."
-        )
+        if not solution.verify_solution_integrity():
+            raise SolutionIntegrityError(solution.files)
 
         # Check if cached version exists.
         enable_cache: bool = self.get_config_value("verifier.enable_cache")

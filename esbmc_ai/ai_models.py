@@ -1,7 +1,7 @@
 # Author: Yiannis Charalambous
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import timedelta, datetime
 from pathlib import Path
 from typing import Any, Callable, Iterable
@@ -42,7 +42,10 @@ class AIModel(ABC):
     temperature: float = 1.0
     requests_max_tries: int = 5
     requests_timeout: float = 60
-    _llm: BaseChatModel | None = None
+    _llm: BaseChatModel | None = field(default=None)
+
+    def __post_init__(self):
+        object.__setattr__(self, "_llm", self.create_llm())
 
     @abstractmethod
     def create_llm(self) -> BaseChatModel:
@@ -87,70 +90,13 @@ class AIModel(ABC):
         return [(message.type, str(message.content)) for message in messages]
 
     @classmethod
-    def escape_messages(
-        cls,
-        messages: Iterable[BaseMessage],
-        allowed_keys: list[str],
-    ) -> Iterable[BaseMessage]:
-        """Adds escape curly braces to the messages, will make sure that the sequential
-        curly braces in the messages is even (and hence escaped). Will ignore curly braces
-        with `allowed_keys`."""
+    def safe_substitute(cls, content: str, **values: Any) -> str:
+        """Safe template substitution. Replaces $var with provided values,
+        leaves undefined $vars unchanged."""
+        from string import Template
 
-        def add_safeguards(content: str, char: str, allowed_keys: list[str]) -> str:
-            start_idx: int = 0
-            while True:
-                char_idx: int = content.find(char, start_idx)
-                if char_idx == -1:
-                    break
-                # Count how many sequences of the char are occuring
-                count: int = 1
-                # FIXME Add bounds check here
-                while (
-                    len(content) > char_idx + count
-                    and content[char_idx + count] == char
-                ):
-                    count += 1
-
-                # Check if the next sequence is in the allowed keys, if it is, then
-                # skip to the next one.
-                is_allowed: bool = False
-                for key in allowed_keys:
-                    if key == content[char_idx + count : char_idx + count + len(key)]:
-                        is_allowed = True
-                        break
-
-                # Now change start_idx to reflect new location. The start index is at the end of
-                # all the chars (including the inserted one).
-                start_idx = char_idx + count + 1
-
-                # If inside allowed keys, then continue to next iteration.
-                if is_allowed:
-                    continue
-
-                # Check if odd number (will need to add extra char)
-                if count % 2 != 0:
-                    content = (
-                        content[: char_idx + count] + char + content[char_idx + count :]
-                    )
-            return content
-
-        reversed_keys: list[str] = [key[::-1] for key in allowed_keys]
-
-        result: list[BaseMessage] = []
-        for msg in messages:
-            content: str = str(msg.content)
-            look_pointer: int = 0
-            # Open curly check
-            if content.find("{", look_pointer) != -1:
-                content = add_safeguards(content, "{", allowed_keys)
-            # Close curly check
-            if content.find("}", look_pointer) != -1:
-                # Do it in reverse with reverse keys.
-                content = add_safeguards(content[::-1], "}", reversed_keys)[::-1]
-            new_msg = msg.model_copy()
-            new_msg.content = content
-            result.append(new_msg)
-        return result
+        template = Template(content)
+        return template.safe_substitute(**values)
 
     def apply_chat_template(
         self,
@@ -158,13 +104,17 @@ class AIModel(ABC):
         **format_values: Any,
     ) -> PromptValue:
         """Applies the formatted values onto the message chat template. For example,
-        if the message contains the token {source}, then format_values contains a
-        value for {source} then it will be substituted."""
-        escaped_messages = AIModel.escape_messages(messages, list(format_values.keys()))
-        message_tuples = AIModel.convert_messages_to_tuples(escaped_messages)
-        return ChatPromptTemplate.from_messages(messages=message_tuples).format_prompt(
-            **format_values,
-        )
+        if the message contains the token $source, then format_values contains a
+        value for source then it will be substituted."""
+        result_messages = []
+        for msg in messages:
+            content = AIModel.safe_substitute(str(msg.content), **format_values)
+            new_msg = msg.model_copy()
+            new_msg.content = content
+            result_messages.append(new_msg)
+
+        from langchain.prompts.chat import ChatPromptValue
+        return ChatPromptValue(messages=result_messages)
 
     def apply_str_template(
         self,
@@ -172,17 +122,9 @@ class AIModel(ABC):
         **format_values: Any,
     ) -> str:
         """Applies the formatted values onto a string template. For example,
-        if the message contains the token {source}, then format_values contains a
-        value for {source} then it will be substituted."""
-
-        prompt: HumanMessage = HumanMessage(content=text)
-        result: str = str(
-            self.apply_chat_template(messages=[prompt], **format_values)
-            .to_messages()[0]
-            .content
-        )
-
-        return result
+        if the message contains the token $source, then format_values contains a
+        value for source then it will be substituted."""
+        return AIModel.safe_substitute(text, **format_values)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -211,6 +153,30 @@ class AIModelService(AIModel):
 
         raise ValueError(f"Could not figure out max tokens for model: {name}")
 
+    @classmethod
+    @abstractmethod
+    def get_models_list(cls, api_key: str) -> list[str]:
+        """Get available models from the API service."""
+        raise NotImplementedError()
+
+    @classmethod
+    @abstractmethod
+    def create_model(cls, name: str) -> "AIModel":
+        """Create an AI model instance from model name."""
+        raise NotImplementedError()
+
+    @classmethod
+    @abstractmethod
+    def get_cache_filename(cls) -> str:
+        """Get the cache filename for this service."""
+        raise NotImplementedError()
+
+    @classmethod
+    @abstractmethod
+    def get_canonical_name(cls) -> str:
+        """Get the canonical name of this service for dictionary access (lowercase)."""
+        raise NotImplementedError()
+
 
 @dataclass(frozen=True, kw_only=True)
 class AIModelOpenAI(AIModelService):
@@ -227,14 +193,18 @@ class AIModelOpenAI(AIModelService):
 
     @override
     def create_llm(self) -> BaseChatModel:
+        kwargs = {}
+        if self.api_key:
+            kwargs["api_key"] = (SecretStr(self.api_key) or None,)
+
         return ChatOpenAI(
             model=self.name,
             temperature=None if self._reason_model else self.temperature,
             reasoning_effort="high" if self._reason_model else None,
             max_retries=self.requests_max_tries,
             timeout=self.requests_timeout,
-            api_key=SecretStr(self.api_key) or None,
             model_kwargs={},
+            **kwargs,
         )
 
     @override
@@ -264,6 +234,36 @@ class AIModelOpenAI(AIModelService):
         }
         return cls._get_max_tokens(name, tokens)
 
+    @classmethod
+    def get_models_list(cls, api_key: str) -> list[str]:
+        """Get available models from the OpenAI API service."""
+        if not api_key:
+            return []
+        try:
+            return [
+                str(model.id)
+                for model in OpenAIClient(api_key=api_key).models.list().data
+            ]
+        except ImportError:
+            return []
+
+    @classmethod
+    def create_model(cls, name: str) -> "AIModel":
+        """Create an OpenAI AI model instance from model name."""
+        return cls(
+            name=name.strip(),
+            tokens=cls.get_max_tokens(name),
+        )
+
+    @classmethod
+    def get_cache_filename(cls) -> str:
+        """Get the cache filename for OpenAI service."""
+        return "openai_models.txt"
+
+    @classmethod
+    def get_canonical_name(cls) -> str:
+        """Get the canonical name of the OpenAI service."""
+        return "openai"
 
 @dataclass(frozen=True, kw_only=True)
 class OllamaAIModel(AIModel):
@@ -288,12 +288,15 @@ class AIModelAnthropic(AIModelService):
 
     @override
     def create_llm(self) -> BaseChatModel:
+        kwargs = {}
+        if self.api_key:
+            kwargs["api_key"] = SecretStr(self.api_key) or None
         return ChatAnthropic(  # pyright: ignore [reportCallIssue]
             model_name=self.name,
             temperature=self.temperature,
             timeout=self.requests_timeout,
             max_retries=self.requests_max_tries,
-            api_key=SecretStr(self.api_key) or None,
+            **kwargs,
         )
 
     @classmethod
@@ -325,6 +328,42 @@ class AIModelAnthropic(AIModelService):
             messages[-1].content = str(messages[-1].content).strip()
         return super().get_num_tokens_from_messages(messages)
 
+    @classmethod
+    def get_models_list(cls, api_key: str) -> list[str]:
+        """Get available models from the Anthropic API service."""
+        if not api_key:
+            return []
+        client = AnthropicClient(api_key=api_key)
+        return [str(i.id) for i in client.models.list()] + [
+            # Include also latest models ID not returned by the API but can be
+            # used to use the latest version of a model.
+            # docs.anthropic.com/en/docs/about-claude/models/overview#model-aliases
+            "claude-opus-4-0",
+            "claude-sonnet-4-0",
+            "claude-3-7-sonnet-latest",
+            "claude-3-5-sonnet-latest",
+            "claude-3-5-haiku-latest",
+            "claude-3-opus-latest",
+        ]
+
+    @classmethod
+    def create_model(cls, name: str) -> "AIModel":
+        """Create an Anthropic AI model instance from model name."""
+        return cls(
+            name=name.strip(),
+            tokens=cls.get_max_tokens(name),
+        )
+
+    @classmethod
+    def get_cache_filename(cls) -> str:
+        """Get the cache filename for Anthropic service."""
+        return "anthropic_models.txt"
+
+    @classmethod
+    def get_canonical_name(cls) -> str:
+        """Get the canonical name of the Anthropic service."""
+        return "anthropic"
+
 
 class AIModels(metaclass=SingletonMeta):
     """Manages the loading of AI Models from different sources."""
@@ -339,38 +378,32 @@ class AIModels(metaclass=SingletonMeta):
         self._ai_models: dict[str, AIModel] = {}
         self._cache_dir.mkdir(parents=True, exist_ok=True)
 
-    def load_models(
+    def load_default_models(
         self,
         api_keys: dict[str, str],
         refresh_duration_seconds: int = 86400,
-        replace: bool = False,
     ) -> None:
-        """Loads the AI models."""
+        """Loads the default AI models from OpenAI and Anthropic services.
+
+        Args:
+            api_keys - Dictionary with the canonical names of the models as keys
+                for API access. If a model does not come with a valid API key,
+                then it will not load the models.
+            refresh_duration_seconds - If the refresh duration has passed since
+                the last update, then the models will be loaded from the API
+                rather from cache."""
 
         self._api_keys = api_keys
 
-        self._load_ai_model_list(
-            source_name="OpenAI",
-            cache_name="openai_models.txt",
-            refresh_duration_seconds=refresh_duration_seconds,
-            get_models_list=self._get_openai_models_list,
-            new_ai_model=lambda v: AIModelOpenAI(
-                name=v.strip(),
-                tokens=AIModelOpenAI.get_max_tokens(v),
-            ),
-            replace=replace,
-        )
-        self._load_ai_model_list(
-            source_name="Anthropic",
-            cache_name="anthropic_models.txt",
-            refresh_duration_seconds=refresh_duration_seconds,
-            get_models_list=self._get_anthropic_models_list,
-            new_ai_model=lambda v: AIModelAnthropic(
-                name=v.strip(),
-                tokens=AIModelAnthropic.get_max_tokens(v),
-            ),
-            replace=replace,
-        )
+        # Load models from each service
+        services = [AIModelOpenAI, AIModelAnthropic]
+        for service in services:
+            api_key = api_keys.get(service.get_canonical_name(), "")
+            self._load_service_ai_models_list(
+                service=service,
+                api_key=api_key,
+                refresh_duration_seconds=refresh_duration_seconds,
+            )
 
     @property
     def model_names(self) -> list[str]:
@@ -410,19 +443,18 @@ class AIModels(metaclass=SingletonMeta):
 
         self._ai_models[ai_model.name] = ai_model
 
-    def _load_ai_model_list(
+    def _load_service_ai_models_list(
         self,
-        source_name: str,
-        cache_name: str,
+        service: type[AIModelService],
+        api_key: str,
         refresh_duration_seconds: int,
-        get_models_list: Callable[[], list[str]],
-        new_ai_model: Callable[[str], AIModel],
-        replace: bool = False,
     ) -> None:
         """Loads the service model names from cache or refreshes them from the internet."""
 
         duration = timedelta(seconds=refresh_duration_seconds)
-        self._logger.info(f"Loading {source_name} models list")
+        service_name = service.get_canonical_name().title()
+        cache_name = service.get_cache_filename()
+        self._logger.info(f"Loading {service_name} models list")
         models_list: list[str] = []
 
         # Read the last updated date to determine if a new update is required
@@ -431,22 +463,22 @@ class AIModels(metaclass=SingletonMeta):
             # Write new & updated cache file
             if datetime.now() >= last_update + duration:
                 self._logger.info("\tModels list outdated, refreshing...")
-                models_list = get_models_list()
+                models_list = service.get_models_list(api_key)
                 self._write_cache(cache_name, models_list)
         except ValueError as e:
-            self._logger.error(f"Loading {source_name} models list failed:", e)
+            self._logger.error(f"Loading {service_name} models list failed:", e)
             self._logger.info("\tCreating new models list.")
-            models_list = get_models_list()
+            models_list = service.get_models_list(api_key)
             self._write_cache(cache_name, models_list)
         except FileNotFoundError:
             self._logger.info("\tModels list not found, creating new...")
-            models_list = get_models_list()
+            models_list = service.get_models_list(api_key)
             self._write_cache(cache_name, models_list)
 
         # Add models that have been loaded.
         for model_name in models_list:
             try:
-                self.add_ai_model(new_ai_model(model_name), replace=replace)
+                self.add_ai_model(service.create_model(model_name), replace=True)
             except ValueError as e:
                 # Ignore models that don't count, like image only models.
                 self._logger.debug(f"Could not add model: {e}")
@@ -467,30 +499,3 @@ class AIModels(metaclass=SingletonMeta):
                 file.readline().strip(), "%Y-%m-%d %H:%M:%S"
             )
             return last_update, file.readlines()
-
-    def _get_openai_models_list(self) -> list[str]:
-        """Gets the open AI models from the API service and returns them."""
-
-        if "openai" not in self._api_keys:
-            return []
-
-        try:
-            return [str(model.id) for model in OpenAIClient().models.list().data]
-        except ImportError:
-            return []
-
-    def _get_anthropic_models_list(self) -> list[str]:
-        if "anthropic" not in self._api_keys:
-            return []
-        client = AnthropicClient(api_key=self._api_keys["anthropic"])
-        return [str(i.id) for i in client.models.list()] + [
-            # Include also latest models ID not returned by the API but can be
-            # used to use the latest version of a model.
-            # docs.anthropic.com/en/docs/about-claude/models/overview#model-aliases
-            "claude-opus-4-0",
-            "claude-sonnet-4-0",
-            "claude-3-7-sonnet-latest",
-            "claude-3-5-sonnet-latest",
-            "claude-3-5-haiku-latest",
-            "claude-3-opus-latest",
-        ]

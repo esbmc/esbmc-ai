@@ -18,13 +18,13 @@ _logging_format: str = "%(name)s %(message)s"
 
 
 class LogCategories(Enum):
-    NONE = "none"
-    ALL = "all"
-    SYSTEM = "esbmc_ai"
-    VERIFIER = "verifier"
-    COMMAND = "command"
-    CONFIG = "config"
-    CHAT = "chat"
+    NONE = "NONE"
+    ALL = "ALL"
+    SYSTEM = "ESBMC_AI"
+    VERIFIER = "VERIFIER"
+    COMMAND = "COMMAND"
+    CONFIG = "CONFIG"
+    CHAT = "CHAT"
 
 
 _largest_cat_len: int = min(10, max(len(cat.value) for cat in LogCategories))
@@ -109,6 +109,7 @@ def init_logging(
     ):
         logging.getLogger(noisy_lib).setLevel(logging.WARN)
 
+    # Use the basic unformatted logger instead.
     if init_basic:
         _init_logging_basic(level=level)
         return
@@ -118,6 +119,7 @@ def init_logging(
             # structlog.processors.TimeStamper(fmt="iso"),
             structlog.processors.add_log_level,
             _add_category_field,
+            _render_prefix_logger_name_to_event,
             _render_prefix_category_to_event,
             structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
         ],
@@ -218,7 +220,8 @@ def _render_prefix_category_to_event(
 ) -> EventDict:
     """
     If 'category' is present, prefix it to the event message in square brackets,
-    then remove 'category' from the event dict.
+    don't remove the key from event dict, delegate it to _filter_keys_processor
+    because it's needed by the CategoryFileHandler.
     """
     _ = logger, method_name
     category_raw: Enum | str | None = event_dict.get("category", None)
@@ -236,7 +239,38 @@ def _render_prefix_category_to_event(
     return event_dict
 
 
-def _add_category_field(logger: object, method_name: str, event_dict: EventDict):
+def _render_prefix_logger_name_to_event(
+    logger: object, method_name: str, event_dict: EventDict
+) -> EventDict:
+    """
+    Prefix the logger's name (if available) to the event message in square
+    brackets. Then remove the prefix_name from the text.
+    """
+    _ = method_name
+
+    prepend_name: bool | str = event_dict.get("prefix_name") or False
+    if not prepend_name:
+        return event_dict
+
+    # Remove
+    event_dict.pop("prefix_name", None)
+
+    # Try to get logger's name attribute, fallback to None
+    logger_name: str | None = (
+        getattr(logger, "name", None)
+        if isinstance(prepend_name, bool)
+        else prepend_name
+    )
+
+    event = event_dict.get("event")
+    if logger_name and isinstance(event, str):
+        event_dict["event"] = f"[ {logger_name} ] {event}"
+    return event_dict
+
+
+def _add_category_field(
+    logger: object, method_name: str, event_dict: EventDict
+) -> EventDict:
     _ = logger, method_name
     # Ensure 'category' is in the event_dict, or set a default
     event_dict.setdefault("category", LogCategories.NONE.value)
@@ -295,11 +329,17 @@ class CategoryFileHandler(logging.Handler):
     def emit(self, record: logging.LogRecord) -> None:
         # Grab the category (because of wrap_for_formatter)
         # Try attribute first (for stdlib logging)
-        category: str | None = getattr(record, "category", None)
+        category: str | Enum | None = getattr(record, "category", None)
 
         # If not present, try to get it from record.msg (structlog dict)
         if category is None and isinstance(record.msg, dict):
             category = record.msg.get("category", None)
+
+        # Convert to string
+        if isinstance(category, Enum):
+            category = category.value
+
+        assert isinstance(category, str)
 
         # Skip uncategorized if desired
         if (
@@ -319,8 +359,10 @@ class CategoryFileHandler(logging.Handler):
 
         # Lazily build the per‐category FileHandler
         if category not in self.handlers:
-            fn = f"{self.base_path}-{category}.log"
-            fh = logging.FileHandler(fn, mode="a" if self.append else "w")
+            fn: Path = Path(f"{self.base_path}-{category}.log")
+            fh: logging.FileHandler = logging.FileHandler(
+                fn, mode="a" if self.append else "w"
+            )
             fh.setFormatter(self.formatter)
             self.handlers[category] = fh
 

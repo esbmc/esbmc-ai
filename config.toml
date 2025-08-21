@@ -40,18 +40,18 @@ max_attempts = 5
 message_history = "normal"
 
 [fix_code.prompt_templates.base]
-initial = "The ESBMC output is:\n\n```\n{esbmc_output}\n```\n\nThe source code is:\n\n```c\n{source_code}\n```\n Using the ESBMC output, show the fixed text."
+initial = "The ESBMC output is:\n\n```\n$esbmc_output\n```\n\nThe source code is:\n\n```c\n$source_code\n```\n Using the ESBMC output, show the fixed text."
 
 [[fix_code.prompt_templates.base.system]]
 role = "System"
 content = "From now on, act as an Automated Code Repair Tool that repairs AI C code. You will be shown AI C code, along with ESBMC output. Pay close attention to the ESBMC output, which contains a stack trace along with the type of error that occurred and its location that you need to fix. Provide the repaired C code as output, as would an Automated Code Repair Tool. Aside from the corrected source code, do not output any other text."
 
 [fix_code.prompt_templates."division by zero"]
-initial = "The ESBMC output is:\n\n```\n{esbmc_output}\n```\n\nThe source code is:\n\n```c\n{source_code}\n```\n Using the ESBMC output, show the fixed text."
+initial = "The ESBMC output is:\n\n```\n$esbmc_output\n```\n\nThe source code is:\n\n```c\n$source_code\n```\n Using the ESBMC output, show the fixed text."
 
 [[fix_code.prompt_templates."division by zero".system]]
 role = "System"
-content = "Here's a C program with a vulnerability:\n```c\n{source_code}\n```\nA Formal Verification tool identified a division by zero issue:\n{esbmc_output}\nTask: Modify the C code to safely handle scenarios where division by zero might occur. The solution should prevent undefined behavior or crashes due to division by zero. \nGuidelines: Focus on making essential changes only. Avoid adding or modifying comments, and ensure the changes are precise and minimal.\nGuidelines: Ensure the revised code avoids undefined behavior and handles division by zero cases effectively.\nGuidelines: Implement safeguards (like comparison) to prevent division by zero instead of using literal divisions like 1.0/0.0.Output: Provide the corrected, complete C code. The solution should compile and run error-free, addressing the division by zero vulnerability.\nStart the code snippet with ```c and end with ```. Reply OK if you understand."
+content = "Here's a C program with a vulnerability:\n```c\n$source_code\n```\nA Formal Verification tool identified a division by zero issue:\n$esbmc_output\nTask: Modify the C code to safely handle scenarios where division by zero might occur. The solution should prevent undefined behavior or crashes due to division by zero. \nGuidelines: Focus on making essential changes only. Avoid adding or modifying comments, and ensure the changes are precise and minimal.\nGuidelines: Ensure the revised code avoids undefined behavior and handles division by zero cases effectively.\nGuidelines: Implement safeguards (like comparison) to prevent division by zero instead of using literal divisions like 1.0/0.0.Output: Provide the corrected, complete C code. The solution should compile and run error-free, addressing the division by zero vulnerability.\nStart the code snippet with ```c and end with ```. Reply OK if you understand."
 
 [[fix_code.prompt_templates."division by zero".system]]
 role = "AI"

@@ -4,14 +4,13 @@
 conversation-based way."""
 
 from time import sleep, time
-from typing import Any, Optional
+from typing import Any, Optional, Sequence
 
 from langchain.schema import (
     BaseMessage,
     HumanMessage,
     PromptValue,
 )
-from langchain_core.language_models import BaseChatModel
 import structlog
 
 from esbmc_ai.chat_response import ChatResponse, FinishReason
@@ -48,6 +47,10 @@ class BaseChatInterface:
         message: BaseMessage | tuple[BaseMessage, ...] | list[BaseMessage],
     ) -> None:
         """Pushes a message(s) to the message stack without querying the LLM."""
+        assert isinstance(message, BaseMessage | Sequence)
+        if isinstance(message, Sequence):
+            for m in message:
+                assert isinstance(m, BaseMessage)
         if isinstance(message, list) or isinstance(message, tuple):
             self.messages.extend(list(message))
         else:
@@ -155,7 +158,7 @@ class BaseChatInterface:
             logger=self._logger,
         )
 
-        self._logger.debug(f"LLM Response: {message}")
+        self._logger.debug(f"LLM Response: {response.message.content}")
 
         self.push_to_message_stack(message=response.message)
         return response

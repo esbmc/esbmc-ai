@@ -77,48 +77,42 @@ def test_esbmc_get_violated_property(setup_get_data) -> None:
     start_idx: int = esbmc_output.output.find("Violated property:")
     end_idx: int = esbmc_output.output.find("VERIFICATION FAILED") - 3
     assert (
-        esbmc_output._esbmc_get_violated_property()
-        == esbmc_output.output[start_idx:end_idx]
+        esbmc_output.get_violated_property() == esbmc_output.output[start_idx:end_idx]
     )
 
     esbmc_output = data_esbmc_output["cartpole_92_safe.c-amalgamation-14.c"]
     start_idx = esbmc_output.output.find("Violated property:")
     end_idx = esbmc_output.output.find("VERIFICATION FAILED") - 3
     assert (
-        esbmc_output._esbmc_get_violated_property()
-        == esbmc_output.output[start_idx:end_idx]
+        esbmc_output.get_violated_property() == esbmc_output.output[start_idx:end_idx]
     )
 
     esbmc_output = data_esbmc_output["cartpole_95_safe.c-amalgamation-80.c"]
     start_idx = esbmc_output.output.find("Violated property:")
     end_idx = esbmc_output.output.find("VERIFICATION FAILED") - 3
     assert (
-        esbmc_output._esbmc_get_violated_property()
-        == esbmc_output.output[start_idx:end_idx]
+        esbmc_output.get_violated_property() == esbmc_output.output[start_idx:end_idx]
     )
 
     esbmc_output = data_esbmc_output["cartpole_26_safe.c-amalgamation-74.c"]
     start_idx = esbmc_output.output.find("Violated property:")
     end_idx = esbmc_output.output.find("VERIFICATION FAILED") - 3
     assert (
-        esbmc_output._esbmc_get_violated_property()
-        == esbmc_output.output[start_idx:end_idx]
+        esbmc_output.get_violated_property() == esbmc_output.output[start_idx:end_idx]
     )
 
     esbmc_output = data_esbmc_output["robot_5_safe.c-amalgamation-13.c"]
     start_idx = esbmc_output.output.find("Violated property:")
     end_idx = esbmc_output.output.find("VERIFICATION FAILED") - 3
     assert (
-        esbmc_output._esbmc_get_violated_property()
-        == esbmc_output.output[start_idx:end_idx]
+        esbmc_output.get_violated_property() == esbmc_output.output[start_idx:end_idx]
     )
 
     esbmc_output = data_esbmc_output["vdp_1_safe.c-amalgamation-28.c"]
     start_idx = esbmc_output.output.find("Violated property:")
     end_idx = esbmc_output.output.find("VERIFICATION FAILED") - 3
     assert (
-        esbmc_output._esbmc_get_violated_property()
-        == esbmc_output.output[start_idx:end_idx]
+        esbmc_output.get_violated_property() == esbmc_output.output[start_idx:end_idx]
     )
 
 
