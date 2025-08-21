@@ -4,7 +4,6 @@
 
 import sys
 
-import readline
 import argparse
 from typing import Any
 
@@ -19,9 +18,6 @@ from esbmc_ai.verifiers.base_source_verifier import BaseSourceVerifier
 from esbmc_ai.verifiers.esbmc import ESBMC
 from esbmc_ai.component_loader import ComponentLoader
 import esbmc_ai.commands
-
-# Enables arrow key functionality for input(). Do not remove import.
-_ = readline
 
 HELP_MESSAGE: str = (
     "Automated Program Repair platform. To view help on subcommands, run with "
