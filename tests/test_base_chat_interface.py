@@ -1,7 +1,5 @@
 # Author: Yiannis Charalambous
 
-from langchain_core.language_models import FakeListChatModel
-from openai import responses
 import pytest
 
 from langchain.schema import AIMessage, BaseMessage, HumanMessage, SystemMessage
