@@ -16,6 +16,7 @@ import structlog
 from esbmc_ai.chat_response import ChatResponse, FinishReason
 from esbmc_ai.ai_models import AIModel
 from esbmc_ai.log_utils import LogCategories
+from esbmc_ai.chats.template_key_provider import TemplateKeyProvider, GenericTemplateKeyProvider
 
 
 class BaseChatInterface:
@@ -29,6 +30,7 @@ class BaseChatInterface:
         self,
         system_messages: list[BaseMessage],
         ai_model: AIModel,
+        template_key_provider: Optional[TemplateKeyProvider] = None,
     ) -> None:
         super().__init__()
         self._logger: structlog.stdlib.BoundLogger = structlog.get_logger(
@@ -37,6 +39,7 @@ class BaseChatInterface:
         self.ai_model: AIModel = ai_model
         self._system_messages: list[BaseMessage] = system_messages
         self.messages: list[BaseMessage] = []
+        self._template_key_provider = template_key_provider or GenericTemplateKeyProvider()
 
     def compress_message_stack(self) -> None:
         """Compress the message stack, is abstract and needs to be implemented."""
@@ -56,16 +59,9 @@ class BaseChatInterface:
         else:
             self.messages.append(message)
 
-    def get_canonical_template_keys(
-        self, source_code: str, esbmc_output: str, error_line: str, error_type: str
-    ) -> dict[str, Any]:
-        """Gets the canonical template keys for applying in template values."""
-        return {
-            "source_code": source_code,
-            "esbmc_output": esbmc_output,
-            "error_line": error_line,
-            "error_type": error_type,
-        }
+    def get_template_keys(self, **kwargs: Any) -> dict[str, Any]:
+        """Gets template keys for applying in template values using the configured provider."""
+        return self._template_key_provider.get_template_keys(**kwargs)
 
     def apply_template_value(self, **kwargs: str) -> None:
         """Will substitute an f-string in the message stack and system messages to
