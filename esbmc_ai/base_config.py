@@ -4,7 +4,8 @@
 
 from abc import ABC
 import sys
-from pathlib import Path
+from pathlib import Path, PurePath
+from platform import system as system_name
 import tomllib as toml
 from typing import (
     Any,
@@ -12,6 +13,7 @@ from typing import (
     Dict,
     List,
 )
+import re 
 
 from esbmc_ai.config_field import ConfigField
 
@@ -27,12 +29,40 @@ class BaseConfig(ABC):
         self.config_file: dict[str, Any]
         self.on_load_value: list[Callable[[str], None]] = []
 
-    def load_config_fields(self, cfg_path: Path, fields: list[ConfigField]) -> None:
-        """Initializes the base config structures. Loads the config file and fields."""
+    def load_config_fields(self, cfg_path: Path, fields: list[ConfigField],cfg:PurePath) -> None:
+        """Initializes the base config structures. Loads the config file and fields."""  
+        #match the system name to ensure backslashes in windows are handled
+        match system_name():
+            case "Windows":
+                #dictionary to map hex escape sequences to their literal representations
+                hex_dict={"\x0a":"\\n",
+                          "\x09":"\\t",
+                          "\x0d":"\\r",
+                          "\x0b":"\\v",
+                          "\x08":"\\b",
+                          "\x0c":"\\f",
+                          "\x07":"\\a",
+                          }  
+                try:
+                    hex_str=str(cfg).split("\\")#split the pure path cfg to view the escaped charachters
+                    clean_str=[]#a second list to hold the corrected string
+                    for s in hex_str:
+                        decoded_str=s
+                        for hex_rep,letter in hex_dict.items():
+                            #replace hexadecimal representations in the filepath
+                            decoded_str=s.replace(hex_rep,letter)
+                        clean_str.append(decoded_str)
+                    cfg_path=Path("\\".join(clean_str)) #corrected path as a WindowsPath
+                except Exception as e:
+                    print(f"{cfg} is the pure path, exception:{e} occured")
+                if not (cfg_path.exists() and cfg_path.is_file()):
+                    print(f"Error: Config not found: {cfg_path}")
+                    sys.exit(1)
 
-        if not (cfg_path.exists() and cfg_path.is_file()):
-            print(f"Error: Config not found: {cfg_path}")
-            sys.exit(1)
+            case "Linux"|"Darwin":
+                if not (cfg_path.exists() and cfg_path.is_file()):
+                    print(f"Error: Config not found: {cfg_path}")
+                    sys.exit(1)
 
         with open(cfg_path, "r") as file:
             self.original_config_file = toml.loads(file.read())
