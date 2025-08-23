@@ -6,13 +6,12 @@ import logging
 import os
 import sys
 from platform import system as system_name
-from pathlib import Path
+from pathlib import Path, PurePath
 from typing import (
     Any,
     override,
 )
 import argparse
-
 from dotenv import load_dotenv, find_dotenv
 import structlog
 
@@ -350,7 +349,6 @@ class Config(BaseConfig, metaclass=makecls(SingletonMeta)):
         self._load_args(args, fields)
         # Base init needs to be called last
         self.load_config_fields(self.get_value("ESBMCAI_CONFIG_FILE"), fields)
-
         # =============== Post Init - Set to good values to fields ============
         # Add logging handlers with config options
         logging_handlers: list[logging.Handler] = []
@@ -547,7 +545,7 @@ class Config(BaseConfig, metaclass=makecls(SingletonMeta)):
                 fields_set.add(reverse_mappings[mapped_name])
 
         load_fields: list[ConfigField] = [f for f in fields if f.name not in fields_set]
-        return super().load_config_fields(cfg_path, load_fields)
+        return super().load_config_fields(cfg_path, load_fields, cfg_path)
 
     def _filenames_load(self, file_names: list[str]) -> list[Path]:
         """Loads the filenames from the command line first then from the config."""

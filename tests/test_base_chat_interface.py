@@ -63,6 +63,7 @@ def test_send_message(setup) -> None:
     chat: BaseChatInterface = BaseChatInterface(
         system_messages=system_messages,
         ai_model=ai_model,
+        ai_model=ai_model.bind(),
     )
 
     chat_responses: list[ChatResponse] = [

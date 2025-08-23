@@ -2,10 +2,12 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, replace
 from datetime import timedelta, datetime
 from pathlib import Path
 from typing import Any, Callable, Iterable
 from platformdirs import user_cache_dir
+from pydantic.types import SecretStr
 from pydantic.types import SecretStr
 from typing_extensions import override
 import tiktoken
@@ -36,6 +38,11 @@ class AIModel(ABC):
     required properties to invoke the underlying langchain implementation
     BaseChatModel. To configure the properties, call the bind method and set
     them."""
+    """This base class represents an abstract AI model. Each AIModel has the
+    required properties to invoke the underlying langchain implementation
+    BaseChatModel. To configure the properties, call the bind method and set
+    them."""
+    """This base class represents an abstract AI model."""
 
     name: str
     tokens: int
@@ -46,6 +53,7 @@ class AIModel(ABC):
 
     def __post_init__(self):
         object.__setattr__(self, "_llm", self.create_llm())
+    _llm: BaseChatModel | None = None
 
     @abstractmethod
     def create_llm(self) -> BaseChatModel:
@@ -59,6 +67,18 @@ class AIModel(ABC):
         new_ai_model: AIModel = replace(self, **kwargs)
         llm: BaseChatModel = new_ai_model.create_llm()
         return replace(new_ai_model, _llm=llm)
+        new_ai_model: AIModel = replace(self, **kwargs)
+        llm: BaseChatModel = new_ai_model.create_llm()
+        return replace(new_ai_model, _llm=llm)
+
+    def invoke(self, input: LanguageModelInput, **kwargs: Any) -> BaseMessage:
+        """Invokes the underlying BaseChatModel implementation and returns the
+        message."""
+        if not self._llm:
+            raise ValueError("LLM is not initialized, call bind.")
+        return self._llm.invoke(input, **kwargs)
+        llm: BaseChatModel = self._llm or self.create_llm()
+        return replace(self, _llm=llm, **kwargs)
 
     def invoke(self, input: LanguageModelInput, **kwargs: Any) -> BaseMessage:
         """Invokes the underlying BaseChatModel implementation and returns the
@@ -72,9 +92,15 @@ class AIModel(ABC):
         if not self._llm:
             raise ValueError("LLM is not initialized, call bind.")
         return self._llm.get_num_tokens(content)
+        if not self._llm:
+            raise ValueError("LLM is not initialized, call bind.")
+        return self._llm.get_num_tokens(content)
 
     def get_num_tokens_from_messages(self, messages: list[BaseMessage]) -> int:
         """Gets the number of tokens for this AI model for a list of messages."""
+        if not self._llm:
+            raise ValueError("LLM is not initialized, call bind.")
+        return self._llm.get_num_tokens_from_messages(messages)
         if not self._llm:
             raise ValueError("LLM is not initialized, call bind.")
         return self._llm.get_num_tokens_from_messages(messages)
@@ -97,6 +123,60 @@ class AIModel(ABC):
 
         template = Template(content)
         return template.safe_substitute(**values)
+        def add_safeguards(content: str, char: str, allowed_keys: list[str]) -> str:
+            start_idx: int = 0
+            while True:
+                char_idx: int = content.find(char, start_idx)
+                if char_idx == -1:
+                    break
+                # Count how many sequences of the char are occuring
+                count: int = 1
+                while (
+                    len(content) > char_idx + count
+                    and content[char_idx + count] == char
+                ):
+                    count += 1
+
+                # Check if the next sequence is in the allowed keys, if it is, then
+                # skip to the next one.
+                is_allowed: bool = False
+                for key in allowed_keys:
+                    if key == content[char_idx + count : char_idx + count + len(key)]:
+                        is_allowed = True
+                        break
+
+                # Now change start_idx to reflect new location. The start index is at the end of
+                # all the chars (including the inserted one).
+                start_idx = char_idx + count + 1
+
+                # If inside allowed keys, then continue to next iteration.
+                if is_allowed:
+                    continue
+
+                # Check if odd number (will need to add extra char)
+                if count % 2 != 0:
+                    content = (
+                        content[: char_idx + count] + char + content[char_idx + count :]
+                    )
+            return content
+
+        reversed_keys: list[str] = [key[::-1] for key in allowed_keys]
+
+        result: list[BaseMessage] = []
+        for msg in messages:
+            content: str = str(msg.content)
+            look_pointer: int = 0
+            # Open curly check
+            if content.find("{", look_pointer) != -1:
+                content = add_safeguards(content, "{", allowed_keys)
+            # Close curly check
+            if content.find("}", look_pointer) != -1:
+                # Do it in reverse with reverse keys.
+                content = add_safeguards(content[::-1], "}", reversed_keys)[::-1]
+            new_msg = msg.model_copy()
+            new_msg.content = content
+            result.append(new_msg)
+        return result
 
     def apply_chat_template(
         self,
@@ -130,6 +210,8 @@ class AIModel(ABC):
 @dataclass(frozen=True, kw_only=True)
 class AIModelService(AIModel):
     """Represents an AI model from a service."""
+
+    api_key: str = ""
 
     api_key: str = ""
 
@@ -265,6 +347,7 @@ class AIModelOpenAI(AIModelService):
         """Get the canonical name of the OpenAI service."""
         return "openai"
 
+
 @dataclass(frozen=True, kw_only=True)
 class OllamaAIModel(AIModel):
     """A model that is running on the Ollama service."""
@@ -296,6 +379,7 @@ class AIModelAnthropic(AIModelService):
             temperature=self.temperature,
             timeout=self.requests_timeout,
             max_retries=self.requests_max_tries,
+            api_key=SecretStr(self.api_key) or None,
             **kwargs,
         )
 
@@ -404,6 +488,26 @@ class AIModels(metaclass=SingletonMeta):
                 api_key=api_key,
                 refresh_duration_seconds=refresh_duration_seconds,
             )
+        self._load_ai_model_list(
+            source_name="OpenAI",
+            cache_name="openai_models.txt",
+            refresh_duration_seconds=refresh_duration_seconds,
+            get_models_list=self._get_openai_models_list,
+            new_ai_model=lambda v: AIModelOpenAI(
+                name=v.strip(),
+                tokens=AIModelOpenAI.get_max_tokens(v),
+            ),
+        )
+        self._load_ai_model_list(
+            source_name="Anthropic",
+            cache_name="anthropic_models.txt",
+            refresh_duration_seconds=refresh_duration_seconds,
+            get_models_list=self._get_anthropic_models_list,
+            new_ai_model=lambda v: AIModelAnthropic(
+                name=v.strip(),
+                tokens=AIModelAnthropic.get_max_tokens(v),
+            ),
+        )
 
     @property
     def model_names(self) -> list[str]:
