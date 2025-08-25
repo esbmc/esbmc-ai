@@ -4,7 +4,7 @@
 conversation-based way."""
 
 from time import sleep, time
-from typing import Any, Optional, Sequence
+from typing import Any, Sequence
 
 from langchain.schema import (
     BaseMessage,
@@ -16,7 +16,10 @@ import structlog
 from esbmc_ai.chat_response import ChatResponse, FinishReason
 from esbmc_ai.ai_models import AIModel
 from esbmc_ai.log_utils import LogCategories
-from esbmc_ai.chats.template_key_provider import TemplateKeyProvider, GenericTemplateKeyProvider
+from esbmc_ai.chats.template_key_provider import (
+    TemplateKeyProvider,
+    GenericTemplateKeyProvider,
+)
 
 
 class BaseChatInterface:
@@ -30,7 +33,7 @@ class BaseChatInterface:
         self,
         system_messages: list[BaseMessage],
         ai_model: AIModel,
-        template_key_provider: Optional[TemplateKeyProvider] = None,
+        template_key_provider: TemplateKeyProvider | None = None,
     ) -> None:
         super().__init__()
         self._logger: structlog.stdlib.BoundLogger = structlog.get_logger(
@@ -39,7 +42,9 @@ class BaseChatInterface:
         self.ai_model: AIModel = ai_model
         self._system_messages: list[BaseMessage] = system_messages
         self.messages: list[BaseMessage] = []
-        self._template_key_provider = template_key_provider or GenericTemplateKeyProvider()
+        self._template_key_provider = (
+            template_key_provider or GenericTemplateKeyProvider()
+        )
 
     def compress_message_stack(self) -> None:
         """Compress the message stack, is abstract and needs to be implemented."""
@@ -137,7 +142,7 @@ class BaseChatInterface:
 
         return response
 
-    def send_message(self, message: Optional[str] = None) -> ChatResponse:
+    def send_message(self, message: str | None = None) -> ChatResponse:
         """Sends a message to the AI model. Returns solution."""
         if message:
             self.push_to_message_stack(message=HumanMessage(content=message))
