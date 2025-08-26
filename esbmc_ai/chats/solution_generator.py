@@ -15,6 +15,7 @@ from esbmc_ai.verifiers.base_source_verifier import (
     VerifierTimedOutException,
 )
 from esbmc_ai.chats.base_chat_interface import BaseChatInterface
+from esbmc_ai.chats.template_key_provider import ESBMCTemplateKeyProvider
 from esbmc_ai.verifiers.esbmc import ESBMCOutput
 
 default_scenario: str = "base"
@@ -100,6 +101,7 @@ class SolutionGenerator(BaseChatInterface):
         super().__init__(
             ai_model=ai_model,
             system_messages=[],  # Empty as it will be updated in the update method.
+            template_key_provider=ESBMCTemplateKeyProvider(),
         )
 
         self.scenarios: dict[str, FixCodeScenario] = scenarios
@@ -256,7 +258,7 @@ class SolutionGenerator(BaseChatInterface):
 
         # Apply template substitution to message stack
         self.apply_template_value(
-            **self.get_canonical_template_keys(
+            **self.get_template_keys(
                 source_code=self.source_code_formatted,
                 esbmc_output=self.esbmc_output.output,
                 error_line=str(self.esbmc_output.get_error_line()),
