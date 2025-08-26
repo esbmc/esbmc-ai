@@ -29,7 +29,7 @@ class BaseConfig(ABC):
         self.config_file: dict[str, Any]
         self.on_load_value: list[Callable[[str], None]] = []
 
-    def load_config_fields(self, cfg_path: Path, fields: list[ConfigField],cfg:PurePath) -> None:
+    def load_config_fields(self, cfg_path: Path, fields: list[ConfigField],cfg:PurePath=None) -> None:
         """Initializes the base config structures. Loads the config file and fields."""  
         #match the system name to ensure backslashes in windows are handled
         match system_name():
