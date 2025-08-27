@@ -136,3 +136,49 @@ def test_get_clang_err_line_index(setup_clang_parse_errors) -> None:
     print(data_esbmc_output["threading.c"])
     line = data_esbmc_output["threading.c"]._get_clang_err_line()
     assert line == 26
+
+
+def test_esbmc_formal_verifier_methods(setup_get_data) -> None:
+    """Test the new FormalVerifierOutput methods implemented by ESBMCOutput."""
+    data_esbmc_output: dict[str, ESBMCOutput] = setup_get_data
+    
+    esbmc_output: ESBMCOutput = data_esbmc_output["cartpole_48_safe.c-amalgamation-6.c"]
+    
+    # Test get_counterexample (should return same as _esbmc_get_counter_example)
+    assert esbmc_output.get_counterexample() == esbmc_output._esbmc_get_counter_example()
+    
+    # Test get_violated_property override
+    violated_property = esbmc_output.get_violated_property()
+    assert violated_property is not None
+    assert "Violated property:" in violated_property
+    
+    # Test get_program_trace returns stack trace when available
+    program_trace = esbmc_output.get_program_trace()
+    if "Stack trace:" in esbmc_output.output:
+        assert program_trace is not None
+        assert len(program_trace) > 0
+    
+
+def test_esbmc_multi_issue_support(setup_get_data) -> None:
+    """Test that ESBMCOutput properly implements multi-issue support."""
+    data_esbmc_output: dict[str, ESBMCOutput] = setup_get_data
+    
+    esbmc_output: ESBMCOutput = data_esbmc_output["cartpole_48_safe.c-amalgamation-6.c"]
+    
+    # Test get_issues returns list of VerificationIssue
+    issues = esbmc_output.get_issues()
+    assert isinstance(issues, list)
+    assert len(issues) > 0  # Should have at least one issue since verification failed
+    
+    # Test primary issue
+    primary_issue = esbmc_output.get_primary_issue()
+    assert primary_issue is not None
+    assert primary_issue.severity == "error"
+    assert primary_issue.line_number > 0
+    
+    # Test legacy methods still work through primary issue
+    error_line = esbmc_output.get_error_line()
+    assert error_line == primary_issue.line_number
+    
+    error_line_idx = esbmc_output.get_error_line_idx()
+    assert error_line_idx == primary_issue.line_index

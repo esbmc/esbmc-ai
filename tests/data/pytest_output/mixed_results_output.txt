@@ -1,0 +1,42 @@
+============================== test session starts ===============================
+platform linux -- Python 3.12.0, pytest-8.3.5, pluggy-1.6.0
+rootdir: /test/project
+collected 10 items
+
+test_math.py::test_add PASSED                                            [ 10%]
+test_math.py::test_subtract PASSED                                       [ 20%]
+test_math.py::test_multiply FAILED                                       [ 30%]
+test_math.py::test_divide FAILED                                         [ 40%]
+test_math.py::test_power PASSED                                          [ 50%]
+test_string.py::test_concat PASSED                                       [ 60%]
+test_string.py::test_split PASSED                                        [ 70%]
+test_string.py::test_upper SKIPPED                                       [ 80%]
+test_string.py::test_lower FAILED                                        [ 90%]
+test_string.py::test_strip PASSED                                        [100%]
+
+=================================== FAILURES ===================================
+____________________________ test_multiply ____________________________________
+
+    def test_multiply():
+        result = multiply(3, 4)
+>       assert result == 13  # Should be 12
+E       assert 12 == 13
+
+test_math.py:15: AssertionError
+______________________________ test_divide ____________________________________
+
+    def test_divide():
+        result = divide(10, 2)
+>       assert result == 4  # Should be 5
+E       assert 5.0 == 4
+
+test_math.py:20: AssertionError
+______________________________ test_lower ____________________________________
+
+    def test_lower():
+        result = "HELLO".lower()
+>       assert result == "HELLO"  # Should be "hello"
+E       assert 'hello' == 'HELLO'
+
+test_string.py:15: AssertionError
+========================= 3 failed, 6 passed, 1 skipped in 0.45s ==============

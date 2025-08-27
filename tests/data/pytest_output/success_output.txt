@@ -1,0 +1,12 @@
+============================== test session starts ===============================
+platform linux -- Python 3.12.0, pytest-8.3.5, pluggy-1.6.0
+rootdir: /test/project
+collected 5 items
+
+test_math.py::test_add PASSED                                            [ 20%]
+test_math.py::test_subtract PASSED                                       [ 40%]
+test_math.py::test_multiply PASSED                                       [ 60%]
+test_math.py::test_divide PASSED                                         [ 80%]
+test_math.py::test_power PASSED                                          [100%]
+
+============================== 5 passed in 0.12s ===============================

@@ -10,7 +10,7 @@ from typing_extensions import Any, override
 
 from esbmc_ai.solution import Solution, SolutionIntegrityError
 
-from esbmc_ai.verifier_output import VerifierOutput
+from esbmc_ai.verifier_output import FormalVerifierOutput, VerificationIssue
 from esbmc_ai.verifiers.base_source_verifier import BaseSourceVerifier
 from esbmc_ai.program_trace import ProgramTrace
 
@@ -24,11 +24,58 @@ class _TraceResult(NamedTuple):
     thread_index: int
 
 
-class ESBMCOutput(VerifierOutput):
+class ESBMCOutput(FormalVerifierOutput):
     @override
     def successful(self) -> bool:
         return self.return_code == 0
 
+    @override
+    def get_issues(self) -> list[VerificationIssue]:
+        """Returns all verification issues found by ESBMC."""
+        if self.successful():
+            return []
+        
+        issues = []
+        
+        # Try to extract ESBMC counterexample issue
+        esbmc_line = self._get_esbmc_err_line()
+        if esbmc_line:
+            error_type = self._extract_esbmc_error_type()
+            violated_property = self.get_violated_property()
+            
+            issue = VerificationIssue(
+                file_path=Path("unknown"),  # ESBMC doesn't always provide clear file paths
+                line_number=esbmc_line,
+                issue_type=error_type,
+                severity="error",
+                message=violated_property or "Verification failed",
+                details=self._esbmc_get_counter_example()
+            )
+            issues.append(issue)
+        
+        # Try to extract clang compilation issue
+        clang_line = self._get_clang_err_line()
+        if clang_line and not esbmc_line:  # Only if no ESBMC issue found
+            issue = VerificationIssue(
+                file_path=Path("unknown"),
+                line_number=clang_line,
+                issue_type="compilation_error",
+                severity="error",
+                message="Compilation failed",
+                details=self.output
+            )
+            issues.append(issue)
+        
+        return issues
+    
+    def _extract_esbmc_error_type(self) -> str:
+        """Helper to extract ESBMC error type."""
+        try:
+            return self.get_error_type()
+        except Exception:
+            return "verification_failure"
+
+    @override
     def get_violated_property(self) -> str | None:
         """Gets the violated property line of the ESBMC output."""
         # Find "Violated property:" string in ESBMC output
@@ -38,12 +85,22 @@ class ESBMCOutput(VerifierOutput):
                 return "\n".join(lines[ix : ix + 3])
         return None
 
-    def _esbmc_get_counter_example(self) -> str | None:
+    @override
+    def get_counterexample(self) -> str | None:
         """Gets ESBMC output after and including [Counterexample]"""
         idx: int = self.output.find("[Counterexample]\n")
         if idx == -1:
             return None
         return self.output[idx:]
+    
+    def _esbmc_get_counter_example(self) -> str | None:
+        """Gets ESBMC output after and including [Counterexample]"""
+        return self.get_counterexample()
+
+    @override
+    def get_program_trace(self) -> str | None:
+        """Returns program execution trace leading to violation."""
+        return self.get_stack_trace() if self.get_stack_trace() else None
 
     def _get_esbmc_err_line(self) -> int | None:
         """Return from the counterexample the line where the error occurs."""

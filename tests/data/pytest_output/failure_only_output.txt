@@ -1,0 +1,25 @@
+============================== test session starts ===============================
+platform linux -- Python 3.12.0, pytest-8.3.5, pluggy-1.6.0
+rootdir: /test/project
+collected 2 items
+
+test_broken.py::test_broken_function FAILED                              [ 50%]
+test_broken.py::test_another_broken FAILED                               [100%]
+
+=================================== FAILURES ===================================
+__________________________ test_broken_function ____________________________
+
+    def test_broken_function():
+>       assert False, "This test is designed to fail"
+E       AssertionError: This test is designed to fail
+
+test_broken.py:5: AssertionError
+__________________________ test_another_broken ____________________________
+
+    def test_another_broken():
+        x = 1 / 0
+>       assert x > 0
+E       ZeroDivisionError: division by zero
+
+test_broken.py:10: ZeroDivisionError
+============================== 2 failed in 0.05s ===============================
