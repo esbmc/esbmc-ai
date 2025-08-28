@@ -488,6 +488,7 @@ class AIModels(metaclass=SingletonMeta):
                 api_key=api_key,
                 refresh_duration_seconds=refresh_duration_seconds,
             )
+            """
         self._load_ai_model_list(
             source_name="OpenAI",
             cache_name="openai_models.txt",
@@ -508,7 +509,7 @@ class AIModels(metaclass=SingletonMeta):
                 tokens=AIModelAnthropic.get_max_tokens(v),
             ),
         )
-
+"""
     @property
     def model_names(self) -> list[str]:
         return list(self._ai_models.keys())
