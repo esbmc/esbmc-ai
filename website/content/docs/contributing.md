@@ -3,7 +3,11 @@ title: "Contributing"
 weight: 3
 ---
 
-It is recommended to contribute to ESBMC-AI directly, especially if the feature would improve ESBMC-AI directly. When contributing you can create a pull request, and after all the issues are resolved, and it passes the code-review, it will be merged. Try to submit patches that follow the following rules:
+It is recommended to contribute to ESBMC-AI directly, especially if the feature would improve ESBMC-AI directly. When contributing you can create a pull request, and after all the issues are resolved, and it passes the code-review, it will be merged.
+
+**Important**: Contributing to ESBMC-AI requires agreeing to the terms and conditions set forth by the [Contributor License Agreement (CLA)](https://github.com/esbmc/esbmc-ai/blob/master/CLA.md). By submitting any contribution, you acknowledge that you have read, understood, and agree to be bound by the CLA.
+
+Try to submit patches that follow the following rules:
 
 1. Keep the coding style consistent. Use the [Black](https://pypi.org/project/black/) code formatter, it is specified as a development dependency, so it will be installed automatically.
 2. Document the contributions you make accordingly, if it is a new feature, please add the correct documentation. Keep the righting style professional when writing documentation.
