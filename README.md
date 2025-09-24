@@ -1,5 +1,6 @@
 # ESBMC AI
 
+
 [![Development](https://github.com/esbmc/esbmc-ai/actions/workflows/workflow.yml/badge.svg?branch=master)](https://github.com/esbmc/esbmc-ai/actions/workflows/workflow.yml)
 [![Docker Repository on Quay](https://quay.io/repository/yiannis128/esbmc-ai/status "Docker Repository on Quay")](https://quay.io/repository/yiannis128/esbmc-ai)
 
@@ -37,4 +38,5 @@ See [this page](esbmc.github.io/esbmc-ai/contributing).
 
 ## License
 
-[Modified GNU Affero General Public License v3.0](https://github.com/Yiannis128/esbmc-ai/blob/master/LICENSE)
+> [!NOTE]
+>This project is offered under a [dual-licence](LICENSE) model.
