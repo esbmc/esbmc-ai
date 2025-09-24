@@ -204,7 +204,7 @@ class FixCodeCommand(ChatCommand):
             self.logger.info("File verified successfully")
             returned_source: str
             if generate_patches:
-                returned_source = source_file.get_patch(source_file)
+                returned_source = source_file.get_diff(source_file)
             else:
                 returned_source = source_file.content
             return FixCodeCommandResult(True, 0, returned_source)
@@ -274,7 +274,7 @@ class FixCodeCommand(ChatCommand):
                     self.print_raw_conversation(solution_generator)
 
                 if generate_patches:
-                    result.repaired_source = source_file.get_patch(original_source_file)
+                    result.repaired_source = source_file.get_diff(original_source_file)
 
                 return result
 
