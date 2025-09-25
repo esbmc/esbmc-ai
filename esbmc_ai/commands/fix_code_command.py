@@ -1,8 +1,9 @@
 # Author: Yiannis Charalambous
 
 import os
-from pathlib import Path
+from pathlib import Path, PurePath
 import sys
+import argparse #import added to resolve filepath issue
 from typing import Any, Optional
 from langchain.schema import HumanMessage
 from typing_extensions import override
@@ -154,11 +155,22 @@ class FixCodeCommand(ChatCommand):
     def execute(self, **kwargs: Any) -> FixCodeCommandResult:
         ComponentLoader().load_base_component_config(self)
 
-        # Handle kwargs
+        #get base path and list of filepaths from the config
+        path=Path(os.getcwd())
+        list_path=self.get_config_value("solution.filenames")
+
+        #a second arg parse is introduced
+        parser = argparse.ArgumentParser()
+        parser.add_argument("fix-code")
+        parser.add_argument("echo")
+        args = parser.parse_args()
+
+
+        # Handle kwargs  
         source_file: SourceFile = SourceFile.load(
-            self.get_config_value("solution.filenames")[0],
-            Path(os.getcwd()),
-        )
+            (list_path[0] if len(list_path) else Path(f"{args.echo}")), #args taken from command line if list_path is null
+            path,
+            )
         original_source_file: SourceFile = SourceFile(
             source_file.file_path, source_file.base_path, source_file.content
         )
