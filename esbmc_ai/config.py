@@ -63,6 +63,11 @@ class Config(BaseConfig, metaclass=makecls(SingletonMeta)):
                 "directory so addons can be developed.",
             ),
             ConfigField(
+                name="json",
+                default_value=False,
+                help_message="Print the result of the chat command as a JSON output",
+            ),
+            ConfigField(
                 name="show_horizontal_lines",
                 default_value=True,
                 on_load=set_horizontal_lines,
