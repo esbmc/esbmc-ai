@@ -49,14 +49,6 @@ def _init_builtin_components() -> None:
     ComponentLoader().set_builtin_commands(commands)
 
 
-def _run_command_mode(command: ChatCommand, args: argparse.Namespace) -> None:
-    # TODO Test before doing this but command.execute(kwargs=vars(args))
-    result: CommandResult | None = command.execute()
-    if result:
-        get_logger().info("\n" + str(result), category=LogCategories.SYSTEM)
-    sys.exit(0)
-
-
 def _init_args(
     parser: argparse.ArgumentParser,
     map_field_names: dict[str, list[str]],
@@ -243,15 +235,22 @@ def main() -> None:
     ComponentLoader().set_verifier_by_name(Config().get_value("verifier.name"))
 
     # Run the command
-    command = args.command
+    command_name = args.command
     command_names: list[str] = ComponentLoader().command_names
-    if command in command_names:
-        logger.info(f"Running Command: {command}\n")
-        _run_command_mode(command=ComponentLoader().commands[command], args=args)
+    if command_name in command_names:
+        logger.info(f"Running Command: {command_name}\n")
+        command: ChatCommand = ComponentLoader().commands[command_name]
+        result: CommandResult | None = command.execute(kwargs=vars(args))
+        if result:
+            if Config().get_value("json"):
+                print(vars(result))
+            else:
+                print(result)
+
         sys.exit(0)
     else:
         logger.error(
-            f"Error: Unknown command: {command}. Choose from: "
+            f"Error: Unknown command: {command_name}. Choose from: "
             + ", ".join(command_names)
         )
         sys.exit(1)
