@@ -2,9 +2,9 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field, replace
-from datetime import timedelta, datetime
+from datetime import time, timedelta, datetime
 from pathlib import Path
-from typing import Any, Callable, Iterable
+from typing import Any, Iterable
 from platformdirs import user_cache_dir
 from pydantic.types import SecretStr
 from typing_extensions import override
@@ -14,15 +14,14 @@ import structlog
 from anthropic import Anthropic as AnthropicClient
 from openai import Client as OpenAIClient
 
+from langchain.prompts.chat import ChatPromptValue
 from langchain_core.language_models import BaseChatModel, LanguageModelInput
 from langchain_core.messages import get_buffer_string
 from langchain_openai import ChatOpenAI
 from langchain_ollama import ChatOllama
 from langchain_anthropic import ChatAnthropic
-from langchain.prompts.chat import ChatPromptTemplate
 from langchain.schema import (
     BaseMessage,
-    HumanMessage,
     PromptValue,
 )
 
@@ -112,8 +111,6 @@ class AIModel(ABC):
             new_msg = msg.model_copy()
             new_msg.content = content
             result_messages.append(new_msg)
-
-        from langchain.prompts.chat import ChatPromptValue
         return ChatPromptValue(messages=result_messages)
 
     def apply_str_template(
@@ -214,7 +211,19 @@ class AIModelOpenAI(AIModelService):
 
     @override
     def get_num_tokens_from_messages(self, messages: list[BaseMessage]) -> int:
-        encoding: tiktoken.Encoding = tiktoken.encoding_for_model(self.name)
+        encoding: tiktoken.Encoding
+        try:
+            encoding: tiktoken.Encoding = tiktoken.encoding_for_model(self.name)
+        except KeyError:
+            logger: structlog.stdlib.BoundLogger = structlog.get_logger().bind(
+                category=LogCategories.SYSTEM,
+            )
+            logger.error(
+                f"TikToken error: failed to map model {self.name} to an "
+                "encoder. This could possibly be because the model is new and "
+                "has not been added yet. Make sure you update TikToken."
+            )
+            raise
         return sum(len(encoding.encode(get_buffer_string([m]))) for m in messages)
 
     @classmethod
@@ -264,6 +273,7 @@ class AIModelOpenAI(AIModelService):
     def get_canonical_name(cls) -> str:
         """Get the canonical name of the OpenAI service."""
         return "openai"
+
 
 @dataclass(frozen=True, kw_only=True)
 class OllamaAIModel(AIModel):
@@ -451,9 +461,9 @@ class AIModels(metaclass=SingletonMeta):
     ) -> None:
         """Loads the service model names from cache or refreshes them from the internet."""
 
-        duration = timedelta(seconds=refresh_duration_seconds)
-        service_name = service.get_canonical_name().title()
-        cache_name = service.get_cache_filename()
+        duration: timedelta = timedelta(seconds=refresh_duration_seconds)
+        service_name: str = service.get_canonical_name().title()
+        cache_name: str = service.get_cache_filename()
         self._logger.info(f"Loading {service_name} models list")
         models_list: list[str] = []
 
@@ -498,4 +508,7 @@ class AIModels(metaclass=SingletonMeta):
             last_update: datetime = datetime.strptime(
                 file.readline().strip(), "%Y-%m-%d %H:%M:%S"
             )
-            return last_update, file.readlines()
+            model_names: list[str] = []
+            for line in file.readlines():
+                model_names.append(line.strip())
+            return last_update, model_names
