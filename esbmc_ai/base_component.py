@@ -6,21 +6,54 @@ components."""
 import inspect
 from abc import ABC
 import re
-from typing import Any
 
+from pydantic import BaseModel
+from pydantic_settings import SettingsConfigDict
 import structlog
 
-from esbmc_ai.base_config import BaseConfig
-from esbmc_ai.config_field import ConfigField
+from esbmc_ai.config import Config
+
+
+class BaseComponentConfig(BaseModel):
+    """Pydantic BaseModel preconfigured to be able to load config values."""
+
+    # Used to allow loading from cli and env.
+    model_config = SettingsConfigDict(
+        env_prefix="ESBMCAI_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        # Enables CLI parse support out-of-the-box
+        cli_parse_args=True,
+    )
+
+    def __init_subclass__(cls):
+        # Modify field aliases by adding prefix if alias is not explicit
+        for field_name, model_field in cls.model_fields.items():
+            if model_field.alias is None or model_field.alias == field_name:
+                # Set alias with prefix if none or default alias
+                new_alias = cls.prefix() + field_name
+                # Need to update alias in the field's metadata
+                model_field.alias = new_alias
+        super().__init_subclass__()
+
+    @classmethod
+    def prefix(cls) -> str:
+        return "addons."
 
 
 class BaseComponent(ABC):
     """The base component class that is inherited by chat commands and verifiers
-    and allows them to be loaded by the AddonLoader."""
+    and allows them to be loaded by the AddonLoader.
+
+    The model is mapped to the config via the prefix of the name it has. So if
+    the name of a BaseComponent is "MyComponent" and we have a Field "my_field"
+    then the value from config loaded will be "addons.MyComponent.my_field".
+    """
 
     @classmethod
     def create(cls) -> "BaseComponent":
-        """Factory method to instantiate a default version of this class."""
+        """Factory method to instantiate a default version of this class. Used
+        by AddonLoader."""
         # Check if __init__ takes only self (no required args)
         sig = inspect.signature(cls.__init__)
         params = list(sig.parameters.values())
@@ -36,7 +69,7 @@ class BaseComponent(ABC):
     def __init__(self) -> None:
         super().__init__()
 
-        self._config: BaseConfig
+        self._global_config: Config
         self._name: str = self.__class__.__name__
 
         pattern = re.compile(r"[a-zA-Z_]\w*")
@@ -65,22 +98,35 @@ class BaseComponent(ABC):
         return self._authors
 
     @property
-    def config(self) -> BaseConfig:
+    def global_config(self) -> Config:
         """Gets the config for this chat command."""
-        return self._config
+        return self._global_config
+
+    @global_config.setter
+    def global_config(self, value: Config) -> None:
+        self._global_config = value
+
+    @property
+    def config(self) -> BaseComponentConfig:
+        """Gets the component-specific configuration.
+
+        This property provides access to the component's configuration.
+        The configuration must be set by the ComponentManager before accessing.
+
+        Returns:
+            The component's configuration instance.
+
+        Raises:
+            RuntimeError: If configuration has not been set.
+        """
+        raise NotImplementedError(f"Configuration not set for component {self.name}")
 
     @config.setter
-    def config(self, value: BaseConfig) -> None:
-        self._config: BaseConfig = value
+    def config(self, value: BaseComponentConfig) -> None:
+        """Sets the component-specific configuration.
 
-    def get_config_fields(self) -> list[ConfigField]:
-        """Called during initialization, this is meant to return all config
-        fields that are going to be loaded from the config. The name that each
-        field has will automatically be prefixed with {verifier name}."""
-        return []
-
-    def get_config_value(self, key: str) -> Any:
-        """Loads a value from the config. If the value is defined in the namespace
-        of the verifier name then that value will be returned.
+        Args:
+            value: The configuration instance for this component.
         """
-        return self._config.get_value(key)
+        _ = value
+        raise NotImplementedError(f"Configuration not set for component {self.name}")

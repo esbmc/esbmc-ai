@@ -1,24 +1,22 @@
 # Author: Yiannis Charalambous
 
-"""Module contains class for keeping track and managing built-in base 
+"""Module contains class for keeping track and managing built-in base
 components."""
 
 
-from typing import Set
 import structlog
-import re
 
 from esbmc_ai.chat_command import ChatCommand
-from esbmc_ai.base_component import BaseComponent
-from esbmc_ai.config_field import ConfigField
 from esbmc_ai.singleton import SingletonMeta
 from esbmc_ai.verifiers.base_source_verifier import BaseSourceVerifier
 from esbmc_ai.log_utils import LogCategories
+from esbmc_ai.base_component import BaseComponent, BaseComponentConfig
 
-_loaded_fields: Set[str] = set()
+from pydantic_settings import PydanticBaseSettingsSource
+from pydantic_settings import CliApp
 
 
-class ComponentLoader(metaclass=SingletonMeta):
+class ComponentManager(metaclass=SingletonMeta):
     """Class for keeping track of and initializing local components.
 
     Local components are classes derived from BaseComponent that use base
@@ -38,18 +36,8 @@ class ComponentLoader(metaclass=SingletonMeta):
         self._builtin_commands: dict[str, ChatCommand] = {}
         self._addon_commands: dict[str, ChatCommand] = {}
 
-    def load_base_component_config(self, component: BaseComponent) -> None:
-        """Loads the config fields of a built-in base component, should be called at
-        execute."""
-        from esbmc_ai.config import Config
-
-        # Handle loading config (since this is a built-in module)
-        fields: list[ConfigField] = component.get_config_fields()
-        for f in fields:
-            if f.name in _loaded_fields:
-                continue
-            _loaded_fields.add(f.name)
-            Config().load_config_field(f)
+        # Store settings sources for component configuration loading
+        self._settings_sources: list[PydanticBaseSettingsSource] | None = None
 
     @property
     def verfifier(self) -> BaseSourceVerifier:
@@ -69,7 +57,7 @@ class ComponentLoader(metaclass=SingletonMeta):
         from esbmc_ai.config import Config
 
         self.verifiers[verifier.name] = verifier
-        verifier.config = Config()
+        verifier.global_config = Config()
 
     def set_verifier_by_name(self, value: str) -> None:
         self.verifier = self.verifiers[value]
@@ -107,16 +95,42 @@ class ComponentLoader(metaclass=SingletonMeta):
         """Sets the builtin commands."""
         self._builtin_commands = {cmd.command_name: cmd for cmd in builtin_commands}
 
-    @staticmethod
-    def parse_command(user_prompt_string: str) -> tuple[str, list[str]]:
-        """Parses a command and returns it based on the command rules outlined in
-        the wiki: https://github.com/Yiannis128/esbmc-ai/wiki/User-Chat-Mode"""
-        regex_pattern: str = (
-            r'\s+(?=(?:[^\\"]*(?:\\.[^\\"]*)*)$)|(?:(?<!\\)".*?(?<!\\)")|(?:\\.)+|\S+'
-        )
-        segments: list[str] = re.findall(regex_pattern, user_prompt_string)
-        parsed_array: list[str] = [segment for segment in segments if segment != " "]
-        # Remove all empty spaces.
-        command: str = parsed_array[0]
-        command_args: list[str] = parsed_array[1:]
-        return command, command_args
+    def set_settings_sources(
+        self, settings_sources: list[PydanticBaseSettingsSource]
+    ) -> None:
+        """Set the settings sources for component configuration loading."""
+        self._settings_sources = settings_sources
+
+    def load_component_config(self, component: BaseComponent) -> None:
+        """Load component-specific configuration using the same settings sources as main config."""
+        if self._settings_sources is None:
+            self._logger.warn(
+                f"Settings sources not set, skipping config load for {component.name}"
+            )
+            return
+
+        try:
+            # Check if component has a config instance set
+            if component.config is None:
+                self._logger.debug(f"Component {component.name} has no custom config")
+                return
+
+            # Get the config class from the existing instance
+            config_class = type(component.config)
+
+            # Create configuration instance using the global settings sources hierarchy
+            loaded_config = CliApp.run(
+                config_class, settings_sources=self._settings_sources
+            )
+
+            # Replace the component's config with the loaded one
+            component.config = loaded_config
+            self._logger.debug(f"Loaded component config for {component.name}")
+
+        except NotImplementedError:
+            self._logger.debug(f"No config for component: {component.name}")
+
+        except Exception as e:
+            self._logger.error(
+                f"Failed to load config for component {component.name}: {e}"
+            )

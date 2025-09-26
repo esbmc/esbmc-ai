@@ -152,8 +152,6 @@ class FixCodeCommand(ChatCommand):
 
     @override
     def execute(self, **kwargs: Any) -> FixCodeCommandResult:
-        ComponentLoader().load_base_component_config(self)
-
         # Handle kwargs
         source_file: SourceFile = SourceFile.load(
             self.get_config_value("solution.filenames")[0],

@@ -5,11 +5,9 @@
 from dataclasses import dataclass, replace
 from typing_extensions import override
 from langchain.schema import BaseMessage
+from langchain_core.language_models import BaseChatModel
 
-from esbmc_ai.chat_response import ChatResponse, FinishReason
 from esbmc_ai.solution import SourceFile
-
-from esbmc_ai.ai_models import AIModel
 from esbmc_ai.verifiers.base_source_verifier import (
     SourceCodeParseError,
     VerifierTimedOutException,
@@ -92,7 +90,7 @@ class SolutionGenerator(BaseChatInterface):
     def __init__(
         self,
         scenarios: dict[str, FixCodeScenario],
-        ai_model: AIModel,
+        ai_model: BaseChatModel,
         source_code_format: str = "full",
         esbmc_output_type: str = "full",
     ) -> None:
@@ -213,7 +211,7 @@ class SolutionGenerator(BaseChatInterface):
         self,
         override_scenario: str | None = None,
         ignore_system_message: bool = False,
-    ) -> tuple[str, FinishReason]:
+    ) -> str:
         """Prompts the LLM to repair the source code using the verifier output.
         If this is the first time the method is called, the system message will
         be sent to the LLM, unless ignore_system_message is True. Then the
@@ -267,8 +265,8 @@ class SolutionGenerator(BaseChatInterface):
         )
 
         # Generate the solution
-        response: ChatResponse = self.send_message()
-        solution: str = str(response.message.content)
+        response_message: BaseMessage = self.send_message()
+        solution: str = str(response_message.content)
 
         solution = SolutionGenerator.extract_code_from_solution(solution)
 
@@ -287,7 +285,7 @@ class SolutionGenerator(BaseChatInterface):
                     self.source_code_raw, solution, line, line
                 )
 
-        return solution, response.finish_reason
+        return solution
 
 
 class ReverseOrderSolutionGenerator(SolutionGenerator):
@@ -295,19 +293,19 @@ class ReverseOrderSolutionGenerator(SolutionGenerator):
     reverse order."""
 
     @override
-    def send_message(self, message: str | None = None) -> ChatResponse:
+    def send_message(self, message: str | None = None) -> BaseMessage:
         # Reverse the messages
         messages: list[BaseMessage] = self.messages.copy()
         self.messages.reverse()
 
-        response: ChatResponse = super().send_message(message)
+        response_message: BaseMessage = super().send_message(message)
 
         # Add to the reversed message the new message received by the LLM.
         messages.append(self.messages[-1])
         # Restore
         self.messages = messages
 
-        return response
+        return response_message
 
 
 class LatestStateSolutionGenerator(SolutionGenerator):
@@ -319,13 +317,13 @@ class LatestStateSolutionGenerator(SolutionGenerator):
         self,
         override_scenario: str | None = None,
         ignore_system_message: bool = False,
-    ) -> tuple[str, FinishReason]:
+    ) -> str:
         # Backup message stack and clear before sending base message. We want
         # to keep the message stack intact because we will print it with
         # print_raw_conversation.
         messages: list[BaseMessage] = self.messages
         self.messages: list[BaseMessage] = []
-        solution, finish_reason = super().generate_solution(
+        solution = super().generate_solution(
             override_scenario=override_scenario,
             ignore_system_message=ignore_system_message,
         )
@@ -333,4 +331,4 @@ class LatestStateSolutionGenerator(SolutionGenerator):
         messages.extend(self.messages)
         # Restore
         self.messages = messages
-        return solution, finish_reason
+        return solution
