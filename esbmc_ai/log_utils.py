@@ -3,32 +3,16 @@
 """Horizontal line logging integrated with Structlog."""
 
 from enum import Enum
-from pathlib import Path
-import re
-from typing import Optional, override
 from os import get_terminal_size
 import logging
 import structlog
 from structlog.typing import EventDict
 
-_enable_horizontal_lines: bool = True
-_horizontal_line_width: Optional[int] = None
+from esbmc_ai.log_categories import LogCategories
+
 _verbose_level: int = logging.INFO
 _logging_format: str = "%(name)s %(message)s"
-
-
-class LogCategories(Enum):
-    NONE = "NONE"
-    ALL = "ALL"
-    SYSTEM = "ESBMC_AI"
-    VERIFIER = "VERIFIER"
-    COMMAND = "COMMAND"
-    CONFIG = "CONFIG"
-    CHAT = "CHAT"
-
-
 _largest_cat_len: int = min(10, max(len(cat.value) for cat in LogCategories))
-_ansi_escape = re.compile(r"\x1b\[[0-9;]*m")
 
 
 def get_log_level(verbosity: int | None = None) -> int:
@@ -165,29 +149,22 @@ def init_logging(
     )
 
 
-def set_horizontal_lines(value: bool) -> None:
-    global _enable_horizontal_lines
-    _enable_horizontal_lines = value
-
-
-def set_horizontal_line_width(value: Optional[int]) -> None:
-    global _horizontal_line_width
-    _horizontal_line_width = value
-
-
 def print_horizontal_line(
     level: str | int = "info",
     *,
     char: str = "=",
     category: Enum | str = LogCategories.ALL,
-    width: Optional[int] = None,
+    width: int | None = None,
     logger: structlog.stdlib.BoundLogger | None = None,
 ) -> None:
     """
     Print a horizontal line if logging is enabled for the specified level. Both
     an int of the level or the verbose name could be surprised.
     """
-    if not _enable_horizontal_lines:
+    # Import Config locally to avoid circular import
+    from esbmc_ai.config import Config
+
+    if not Config().show_horizontal_lines:
         return
 
     # Convert level name to numeric value (e.g., "info" -> logging.INFO)
@@ -200,8 +177,8 @@ def print_horizontal_line(
     # Determine line width
     if width is not None:
         line_width = width
-    elif _horizontal_line_width is not None:
-        line_width = _horizontal_line_width
+    elif Config().horizontal_line_width is not None:
+        line_width = Config().horizontal_line_width
     else:
         try:
             line_width = get_terminal_size().columns
@@ -286,112 +263,3 @@ def _filter_keys_processor(
     event_dict.pop("_record", None)
     event_dict.pop("category", None)
     return event_dict
-
-
-def _strip_ansi_escape_processor(record: logging.LogRecord) -> bool | logging.LogRecord:
-    """
-    Remove ANSI escape sequences from all string values in the LogRecord.
-    """
-    for attr, value in list(record.__dict__.items()):
-        if isinstance(value, str):
-            setattr(record, attr, _ansi_escape.sub("", value))
-
-    args = record.args
-    if isinstance(args, tuple):
-        record.args = tuple(
-            _ansi_escape.sub("", v) if isinstance(v, str) else v for v in args
-        )
-    elif isinstance(args, dict):
-        record.args = {
-            k: (_ansi_escape.sub("", v) if isinstance(v, str) else v)
-            for k, v in args.items()
-        }
-
-    return record
-
-
-class CategoryFileHandler(logging.Handler):
-    """Logger that will save by category."""
-
-    def __init__(
-        self,
-        base_path: Path,
-        append: bool = False,
-        skip_uncategorized: bool = False,
-    ) -> None:
-        super().__init__()
-        self.base_path = base_path
-        self.append = append
-        self.skip_uncategorized = skip_uncategorized
-        self.handlers: dict[str, logging.FileHandler] = {}
-        self.addFilter(_strip_ansi_escape_processor)
-
-    def emit(self, record: logging.LogRecord) -> None:
-        # Grab the category (because of wrap_for_formatter)
-        # Try attribute first (for stdlib logging)
-        category: str | Enum | None = getattr(record, "category", None)
-
-        # If not present, try to get it from record.msg (structlog dict)
-        if category is None and isinstance(record.msg, dict):
-            category = record.msg.get("category", None)
-
-        # Convert to string
-        if isinstance(category, Enum):
-            category = category.value
-
-        assert isinstance(category, str)
-
-        # Skip uncategorized if desired
-        if (
-            not category or category == LogCategories.NONE.value
-        ) and self.skip_uncategorized:
-            return
-
-        # None category is a catch all
-        if not category:
-            category = LogCategories.NONE.value
-
-        # Write ALL category
-        if category == LogCategories.ALL.value:
-            for h in self.handlers.values():
-                h.emit(record)
-            return
-
-        # Lazily build the per‐category FileHandler
-        if category not in self.handlers:
-            fn: Path = Path(f"{self.base_path}-{category}.log")
-            fh: logging.FileHandler = logging.FileHandler(
-                fn, mode="a" if self.append else "w"
-            )
-            fh.setFormatter(self.formatter)
-            self.handlers[category] = fh
-
-        # Delegate to the per‐category handler
-        self.handlers[category].emit(record)
-
-
-class NameFileHandler(logging.Handler):
-    """Logging file handler that will write by logger name."""
-
-    def __init__(
-        self, base_path: Path, append: bool = False, skip_unnamed: bool = False
-    ) -> None:
-        super().__init__()
-        self.base_path: Path = base_path
-        self.append: bool = append
-        self.handlers: dict[str, logging.FileHandler] = {}
-        self.skip_unnamed: bool = skip_unnamed
-        self.addFilter(_strip_ansi_escape_processor)
-
-    @override
-    def emit(self, record: logging.LogRecord) -> None:
-        logger_name: str = record.name
-        # Write to file (and also to stdout, if desired)
-        if logger_name not in self.handlers:
-            handler = logging.FileHandler(
-                f"{self.base_path}-{logger_name}.log",
-                mode="a" if self.append else "w",
-            )
-            handler.setFormatter(self.formatter)
-            self.handlers[logger_name] = handler
-        self.handlers[logger_name].emit(record)

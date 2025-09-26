@@ -1,12 +1,13 @@
 # Author: Yiannis Charalambous
 
-
 from typing import Any
 from typing_extensions import override
+from pydantic.fields import FieldInfo
+from pydantic import BaseModel
 
-from esbmc_ai.addon_loader import Config, AddonLoader
-from esbmc_ai.config_field import ConfigField
+from esbmc_ai.config import Config
 from esbmc_ai.chat_command import ChatCommand
+from esbmc_ai.command_result import CommandResult
 
 
 class HelpConfigCommand(ChatCommand):
@@ -19,38 +20,66 @@ class HelpConfigCommand(ChatCommand):
         )
 
     @staticmethod
-    def _print_config_field(field: ConfigField) -> None:
-        value_type: type = type(field.default_value)
-        # Default value: for strings enforce a limit
-        default_value: Any = field.default_value
-        if value_type is str and len(field.default_value) > 30:
-            default_value = field.default_value[:30] + "..."
+    def _print_config_field(field_name: str, field_info: FieldInfo, level: int = 0) -> None:
+        """Print information about a single config field."""
+        # Create indentation based on level
+        indent = "\t" * (level + 1)
 
-        print(
-            f"\t* {field.name}: "
-            f'{value_type.__name__} = "{default_value}" - {field.help_message}'
-        )
+        # Get default value and format it
+        default_value = field_info.default
+        if isinstance(default_value, str) and len(default_value) > 30:
+            default_value = default_value[:30] + "..."
+
+        print(f"{indent}* {field_name}:")
+
+        if field_info.description:
+            print(f"{indent}  Description: {field_info.description}")
+
+        # Check if this field's annotation is a BaseModel type
+        field_annotation = field_info.annotation
+        if field_annotation and hasattr(field_annotation, '__origin__'):
+            # Handle generic types like list, dict, etc.
+            field_annotation = field_annotation.__origin__
+
+        # Check if the field type is a BaseModel subclass
+        if (field_annotation and
+            isinstance(field_annotation, type) and
+            issubclass(field_annotation, BaseModel)):
+
+            print(f"{indent}  Nested fields:")
+            # Recursively print fields of the BaseModel
+            for nested_field_name, nested_field_info in field_annotation.model_fields.items():
+                HelpConfigCommand._print_config_field(nested_field_name, nested_field_info, level + 1)
+        else:
+            # Print default value for non-BaseModel fields
+            if field_info.default is not None:
+                print(f"{indent}  Default: {default_value}")
+
+            if hasattr(field_info, 'alias') and field_info.alias:
+                print(f"{indent}  Alias: {field_info.alias}")
+
+        print()
 
     @override
-    def execute(self, **kwargs: Any | None) -> Any:
+    def execute(self, **kwargs: Any | None) -> CommandResult | None:
         _ = kwargs
 
-        addon_fields: list[ConfigField] = []
-
         print("ESBMC-AI Config Fields:")
-        for field in Config()._fields:
-            split_field_name: list[str] = field.name.split(".")
-            if (
-                len(split_field_name) > 1
-                and split_field_name[0] == AddonLoader.addon_prefix
-            ):
-                addon_fields.append(field)
-            else:
-                self._print_config_field(field)
+        print()
 
-        if addon_fields:
-            print("\nESBMC-AI Addon Fields:")
-            for field in addon_fields:
-                self._print_config_field(field)
+        # Get all fields from the Config model
+        config_fields = Config.model_fields
+
+        for field_name, field_info in config_fields.items():
+            # Skip excluded fields (like command_name and config_file)
+            if not getattr(field_info, 'exclude', False):
+                self._print_config_field(field_name, field_info)
+
+        print("Usage Notes:")
+        print("• Environment variables use ESBMCAI_ prefix (e.g., ESBMCAI_AI_MODEL)")
+        print("• CLI arguments use kebab-case (e.g., --ai-model)")
+        print("• Config file uses TOML format with nested sections")
+        print("• Set ESBMCAI_CONFIG_FILE environment variable to specify config file path")
+        print("• Hierarchy: CLI args → config file → env vars → .env file → defaults")
 
         return None

@@ -18,6 +18,7 @@ dependencies = [
   "langchain-ollama",
   "langchain-openai",
   "lizard",
+  "pydantic3",
   "structlog",
   "platformdirs",
   "python-dotenv",
