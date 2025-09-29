@@ -43,47 +43,31 @@ _default_command_name: str = "help"
 
 def _init_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
-        "command",
-        type=str,
-        nargs="?",
-        default=_default_command_name,
-        help=(
-            "The command to run using the program. To see addon commands "
-            "available: Run with 'help' as the default command."
-        ),
-    )
-
-    parser.add_argument(
-        "filenames",
-        type=str,
-        # nargs=argparse.REMAINDER,
-        nargs=argparse.ZERO_OR_MORE,
-        help="The filename(s) to pass to the verifier.",
-    )
-
-    parser.add_argument(
         "--version",
         action="version",
         version="%(prog)s {version}".format(version=__version__),
         help="Show version information.",
     )
 
-    # parser.add_argument(
-    #     "-v",
-    #     "--verbose",
-    #     action="count",
-    #     default=0,
-    #     help=(
-    #         "Show up to 3 levels of verbose output. Level 1: extra information."
-    #         " Level 2: show failed generations, show ESBMC output. Level 3: "
-    #         "print hidden pushes to the message stack."
-    #     ),
-    # )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="count",
+        default=0,
+        help=(
+            "Show up to 3 levels of verbose output. Level 1: extra information."
+            " Level 2: show failed generations, show ESBMC output. Level 3: "
+            "print hidden pushes to the message stack."
+        ),
+    )
 
 
 def _load_config(
     parser: argparse.ArgumentParser,
-) -> tuple[Config, list[PydanticBaseSettingsSource]]:
+) -> Config:
+    # Parse args to get verbose level before Pydantic CLI parsing
+    args, _ = parser.parse_known_args()
+    verbose_level: int = min(args.verbose, 3) if hasattr(args, "verbose") else 0
     # Create CLI settings source
     cli_settings: CliSettingsSource = CliSettingsSource(Config, root_parser=parser)
 
@@ -110,7 +94,11 @@ def _load_config(
     config = CliApp.run(
         Config, cli_settings_source=cli_settings, settings_sources=settings_sources
     )
-    return config, settings_sources
+
+    # Set argparse config values - These fields have exclude=True
+    config.verbose_level = verbose_level
+
+    return config
 
 
 def _init_builtin_components() -> None:
@@ -163,8 +151,7 @@ def main() -> None:
     _init_args(parser=parser)
 
     config: Config
-    settings_sources: list[PydanticBaseSettingsSource]
-    config, settings_sources = _load_config(parser=parser)
+    config = _load_config(parser=parser)
     # Set the config singleton
     Config.set_singleton(config)
     config: Config = Config()
@@ -179,9 +166,6 @@ def main() -> None:
     logger.debug("Global config loaded successfully")
     logger.debug("Initialized logging")
 
-    # Initialize ComponentManager with settings sources for proper config loading
-    ComponentManager().set_settings_sources(settings_sources)
-
     _init_builtin_components()
     logger.debug("Builtin components loaded successfully")
 
@@ -189,21 +173,26 @@ def main() -> None:
         logger.warn("Development Mode Activated")
 
     # Load addons
-    AddonLoader(config)
+    addon_loader: AddonLoader = AddonLoader(config)
     logger.debug("Addon components loaded successfully")
     logger.info("Configuration loaded successfully")
 
     # Bind addons to component loader.
-    ComponentManager().addon_commands.update(AddonLoader().chat_command_addons)
-    ComponentManager().verifiers.update(AddonLoader().verifier_addons)
-    ComponentManager().set_verifier_by_name(config.verifier.name)
+    cm = ComponentManager()
+    for command in addon_loader.chat_command_addons.values():
+        cm.add_command(command, builtin=False)
+
+    for verifier in addon_loader.verifier_addons.values():
+        cm.add_verifier(verifier, builtin=False)
+
+    cm.set_verifier_by_name(config.verifier.name)
 
     # Run the command
     command_name = config.command_name
-    command_names: list[str] = ComponentManager().command_names
+    command_names: list[str] = cm.command_names
     if command_name in command_names:
         logger.info(f"Running Command: {command_name}\n")
-        command: ChatCommand = ComponentManager().commands[command_name]
+        command: ChatCommand = cm.commands[command_name]
         result: CommandResult | None = command.execute(kwargs=vars(config))
         if result:
             if config.use_json:

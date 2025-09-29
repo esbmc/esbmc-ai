@@ -175,15 +175,19 @@ def print_horizontal_line(
     )
 
     # Determine line width
+    line_width: int
     if width is not None:
         line_width = width
-    elif Config().horizontal_line_width is not None:
-        line_width = Config().horizontal_line_width
+
     else:
-        try:
-            line_width = get_terminal_size().columns
-        except OSError:
-            line_width = 80 - _largest_cat_len
+        config_hlw: int | None = Config().horizontal_line_width
+        if config_hlw is not None:
+            line_width = config_hlw
+        else:
+            try:
+                line_width = get_terminal_size().columns
+            except OSError:
+                line_width = 80 - _largest_cat_len
 
     if logger is None:
         logger = structlog.get_logger()

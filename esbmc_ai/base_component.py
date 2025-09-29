@@ -7,38 +7,10 @@ import inspect
 from abc import ABC
 import re
 
-from pydantic import BaseModel
-from pydantic_settings import SettingsConfigDict
 import structlog
 
+from esbmc_ai.base_component_config import BaseComponentConfig
 from esbmc_ai.config import Config
-
-
-class BaseComponentConfig(BaseModel):
-    """Pydantic BaseModel preconfigured to be able to load config values."""
-
-    # Used to allow loading from cli and env.
-    model_config = SettingsConfigDict(
-        env_prefix="ESBMCAI_",
-        env_file=".env",
-        env_file_encoding="utf-8",
-        # Enables CLI parse support out-of-the-box
-        cli_parse_args=True,
-    )
-
-    def __init_subclass__(cls):
-        # Modify field aliases by adding prefix if alias is not explicit
-        for field_name, model_field in cls.model_fields.items():
-            if model_field.alias is None or model_field.alias == field_name:
-                # Set alias with prefix if none or default alias
-                new_alias = cls.prefix() + field_name
-                # Need to update alias in the field's metadata
-                model_field.alias = new_alias
-        super().__init_subclass__()
-
-    @classmethod
-    def prefix(cls) -> str:
-        return "addons."
 
 
 class BaseComponent(ABC):

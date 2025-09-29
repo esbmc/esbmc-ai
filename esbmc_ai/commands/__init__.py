@@ -5,10 +5,12 @@ from .exit_command import ExitCommand
 from .help_command import HelpCommand
 from .help_config import HelpConfigCommand
 from .fix_code_command import FixCodeCommand
+from .debug_config import DebugConfigViewCommand
 
 __all__ = [
     "ExitCommand",
     "HelpCommand",
     "HelpConfigCommand",
     "FixCodeCommand",
+    "DebugConfigViewCommand",
 ]

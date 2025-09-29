@@ -117,6 +117,7 @@ class AIModel:
     @classmethod
     def get_model(
         cls,
+        *,
         model: str,
         provider: str | None = None,
         temperature: float | None = None,

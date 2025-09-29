@@ -1,14 +1,15 @@
 # Author: Yiannis Charalambous 2023
 
 
+from collections import defaultdict
 from importlib.machinery import ModuleSpec
 from importlib.util import find_spec
 import logging
-import os
 from pathlib import Path
 
 from pydantic_settings import (
     BaseSettings,
+    CliPositionalArg,
     SettingsConfigDict,
 )
 from pydantic import (
@@ -19,12 +20,38 @@ from pydantic import (
     FilePath,
     field_validator,
 )
+from pydantic_settings.sources import CliSubCommand
 
 from esbmc_ai.singleton import SingletonMeta, makecls
 from esbmc_ai.log_handlers import (
     CategoryFileHandler,
     NameFileHandler,
 )
+
+
+class AIModelConfig(BaseModel):
+    id: str = Field(
+        default="openai:gpt-4.5-nano",
+        validation_alias=AliasChoices("ai_model", "ai-model"),
+        description="Which AI model to use. Prefix with openai, anthropic, or "
+        "ollama then separate with : and enter the model name to use.",
+    )
+
+    base_url: str | None = Field(
+        default=None,
+        exclude=True,
+        description="Gets initialized by the config if this model is an Ollama model.",
+    )
+
+    @property
+    def provider(self) -> str:
+        """The provider part of a model string."""
+        return self.id.split(":", maxsplit=1)[0]
+
+    @property
+    def name(self) -> str:
+        """The name part of a model string."""
+        return self.id.split(":", maxsplit=1)[1]
 
 
 class AICustomModelConfig(BaseModel):
@@ -99,27 +126,55 @@ class LogConfig(BaseModel):
 
 
 class SolutionConfig(BaseModel):
-    filenames: list[FilePath | DirectoryPath] = Field(
+    filenames: CliPositionalArg[list[str]] = Field(
         default_factory=list,
-        alias="filenames",
+        description="The filename(s) to pass to the verifier.",
     )
 
     @field_validator("filenames", mode="after")
     @classmethod
-    def on_set_filenames(cls, value: list[FilePath]) -> list[FilePath]:
-        """Validates that all the filenames are file paths or is one directory
-        path."""
-        file_count: int = 0
-        for v in value:
-            if isinstance(v, Path) and v.exists():
-                if v.is_file():
-                    file_count += 1
-                elif v.is_dir() and file_count != 0:
-                    raise ValueError(
-                        "filenames needs to be all file paths or " "one directory path"
-                    )
+    def on_set_filenames(cls, value: list[str]) -> list[Path]:
+        """Validates that filenames are either all file paths or a single directory path."""
+        if not value:
+            return []
 
-        return value
+        paths: list[Path] = []
+        files: list[str] = []
+        dirs: list[str] = []
+
+        for filename in value:
+            path = Path(filename).expanduser()
+
+            # Check if path exists
+            if not path.exists():
+                raise ValueError(f"File or directory not found: '{filename}'")
+
+            # Categorize as file or directory
+            if path.is_file():
+                files.append(filename)
+                paths.append(path)
+            elif path.is_dir():
+                dirs.append(filename)
+                paths.append(path)
+            else:
+                raise ValueError(
+                    f"Path exists but is neither a file nor directory: '{filename}'"
+                )
+
+        # Validate: either all files OR single directory
+        if dirs and files:
+            raise ValueError(
+                f"Cannot mix files and directories. Either provide file paths or a single directory.\n"
+                f"  Files provided: {', '.join(files)}\n"
+                f"  Directories provided: {', '.join(dirs)}"
+            )
+
+        if len(dirs) > 1:
+            raise ValueError(
+                f"Only one directory can be specified. Got {len(dirs)} directories: {', '.join(dirs)}"
+            )
+
+        return paths
 
     include_dirs: list[DirectoryPath] = Field(
         default_factory=list,
@@ -199,12 +254,12 @@ class Config(BaseSettings, metaclass=makecls(SingletonMeta)):
     config_file: FilePath | None = Field(
         default=None,
         exclude=True,
-        description="Path to configuration file (TOML format). Can be set via ESBMCAI_CONFIG_FILE environment variable.",
+        description="Path to configuration file (TOML format). Can be set via "
+        "ESBMCAI_CONFIG_FILE environment variable.",
     )
 
-    command_name: str = Field(
+    command_name: CliPositionalArg[str] = Field(
         default="help",
-        alias="command",
         exclude=True,
         description="The (sub-)command to run.",
     )
@@ -231,7 +286,7 @@ class Config(BaseSettings, metaclass=makecls(SingletonMeta)):
         default=0,
         ge=0,
         le=3,
-        validation_alias="verbose",
+        exclude=True,  # Exclude from Pydantic CLI parsing
         description="Show up to 3 levels of verbose output. Level 1: extra information."
         " Level 2: show failed generations, show ESBMC output. Level 3: "
         "print hidden pushes to the message stack.",
@@ -266,7 +321,7 @@ class Config(BaseSettings, metaclass=makecls(SingletonMeta)):
     )
 
     ai_custom: dict[str, AICustomModelConfig] = Field(
-        default_factory=dict,
+        default_factory=defaultdict,
         description=(
             "Dictionary of Ollama AI models configurations. "
             "Each key is a model name (arbitrary string), and each value is a "
@@ -279,7 +334,9 @@ class Config(BaseSettings, metaclass=makecls(SingletonMeta)):
 
     @field_validator("ai_custom", mode="after")
     @classmethod
-    def _validate_custom_ai(cls, ai_config_list: dict) -> bool:
+    def _validate_custom_ai(
+        cls, ai_config_list: dict[str, AICustomModelConfig]
+    ) -> dict[str, AICustomModelConfig]:
         for name, ai_config in ai_config_list.items():
             # Check the field is a dict not a list
             if not isinstance(ai_config, dict):
@@ -313,13 +370,11 @@ class Config(BaseSettings, metaclass=makecls(SingletonMeta)):
                     f"server_type for custom AI '{name}' is invalid, it needs to be a valid string"
                 )
 
-        return True
+        return ai_config_list
 
-    ai_model: str = Field(
-        default="openai:gpt-4.5-nano",
-        validation_alias=AliasChoices("ai_model", "ai-model"),
-        description="Which AI model to use. Prefix with openai, anthropic, or "
-        "ollama then separate with : and enter the model name to use.",
+    ai_model: AIModelConfig = Field(
+        default_factory=AIModelConfig,
+        description="AI Model configuration group.",
     )
 
     temp_auto_clean: bool = Field(
@@ -385,7 +440,9 @@ class Config(BaseSettings, metaclass=makecls(SingletonMeta)):
         env_file_encoding="utf-8",
         # Enables CLI parse support out-of-the-box for CliApp.run integration
         cli_parse_args=True,
-        # Allow extra fields for compatibility with pydantic_settings, since .env contains fields for services like OpenAI and Anthropic that isn't mapped to the config directly
+        # Allow extra fields for compatibility with pydantic_settings, since
+        # .env contains fields for services like OpenAI and Anthropic that isn't
+        # mapped to the config directly
         extra="ignore",
     )
 
@@ -396,11 +453,11 @@ class Config(BaseSettings, metaclass=makecls(SingletonMeta)):
         # to pass these arguments through to BaseSettings.__init__().
         super().__init__(**kwargs)
 
-        # Huggingface warning supress
-        os.environ["TOKENIZERS_PARALLELISM"] = "false"
+        # Populate ai_model.base_url from ai_custom if model exists there
+        if self.ai_model.id in self.ai_custom:
+            self.ai_model.base_url = self.ai_custom[self.ai_model.id].url
 
     @classmethod
     def set_singleton(cls, config: "Config") -> None:
         """Sets the singleton."""
-        print("DEBUG! Singleton set")
         getattr(cls, "_instances")[cls] = config
