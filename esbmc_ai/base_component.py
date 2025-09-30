@@ -5,12 +5,67 @@ components."""
 
 import inspect
 from abc import ABC
+import os
+from pathlib import Path
 import re
 
+from pydantic_settings import (
+    BaseSettings,
+    PydanticBaseSettingsSource,
+    SettingsConfigDict,
+    TomlConfigSettingsSource,
+)
 import structlog
 
-from esbmc_ai.base_component_config import BaseComponentConfig
 from esbmc_ai.config import Config
+
+
+class BaseComponentConfig(BaseSettings):
+    """Pydantic BaseSettings preconfigured to be able to load config values.
+
+    Component configs are loaded from the TOML file under the 'addons.<component_name>'
+    section by ComponentManager.
+    """
+
+    # Used to allow loading from cli and env.
+    model_config = SettingsConfigDict(
+        env_prefix="ESBMCAI_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        # Do not parse CLI args in component configs - only the main Config should
+        cli_parse_args=False,
+        # Ignore extra fields from .env file that don't match the component schema
+        extra="ignore",
+    )
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type["BaseSettings"],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        # Manually load .env file to get ESBMCAI_CONFIG_FILE before creating sources
+        from dotenv import load_dotenv
+        load_dotenv(".env", override=False)
+
+        # Get config file path from environment variable
+        config_file_path = os.getenv("ESBMCAI_CONFIG_FILE")
+
+        sources = [init_settings]
+
+        # Add TOML config source if config file is specified
+        # Component configs will get their specific section via init_settings
+        if config_file_path:
+            config_file = Path(config_file_path).expanduser()
+            if config_file.exists():
+                sources.append(TomlConfigSettingsSource(settings_cls, config_file))
+
+        # Priority order: init > TOML > env > dotenv > file_secret
+        sources.extend([env_settings, dotenv_settings, file_secret_settings])
+        return tuple(sources)
 
 
 class BaseComponent(ABC):

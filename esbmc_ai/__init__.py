@@ -6,8 +6,7 @@ from esbmc_ai.__about__ import __version__, __author__
 
 from esbmc_ai.config import Config
 from esbmc_ai.chat_command import ChatCommand
-from esbmc_ai.base_component import BaseComponent
-from esbmc_ai.base_component_config import BaseComponentConfig
+from esbmc_ai.base_component import BaseComponent, BaseComponentConfig
 from esbmc_ai.verifiers import BaseSourceVerifier
 from esbmc_ai.ai_models import AIModel
 from esbmc_ai.log_categories import LogCategories

@@ -5,12 +5,15 @@ from collections import defaultdict
 from importlib.machinery import ModuleSpec
 from importlib.util import find_spec
 import logging
+import os
 from pathlib import Path
 
 from pydantic_settings import (
     BaseSettings,
     CliPositionalArg,
+    PydanticBaseSettingsSource,
     SettingsConfigDict,
+    TomlConfigSettingsSource,
 )
 from pydantic import (
     AliasChoices,
@@ -20,7 +23,7 @@ from pydantic import (
     FilePath,
     field_validator,
 )
-from pydantic_settings.sources import CliSubCommand
+from pydantic_settings.sources import CliSubCommand, DotenvType
 
 from esbmc_ai.singleton import SingletonMeta, makecls
 from esbmc_ai.log_handlers import (
@@ -126,7 +129,7 @@ class LogConfig(BaseModel):
 
 
 class SolutionConfig(BaseModel):
-    filenames: CliPositionalArg[list[str]] = Field(
+    filenames: CliPositionalArg[list[Path]] = Field(
         default_factory=list,
         description="The filename(s) to pass to the verifier.",
     )
@@ -201,28 +204,20 @@ class SolutionConfig(BaseModel):
         return Path(value).expanduser()
 
 
-class VerifierConfig(BaseModel):
-
-    # The value is checked in AddonLoader.
-    name: str = Field(
-        default="esbmc",
-        description="The verifier to use. Default is ESBMC.",
-    )
-
-    enable_cache: bool = Field(
-        default=True,
-        description="Cache the results of verification in order to save time. "
-        "This is not supported by all verifiers.",
-    )
-
-    esbmc_path: FilePath | None = Field(
+class ESBMCConfig(BaseModel):
+    path: FilePath | None = Field(
         default=None,
-        validation_alias="esbmc.path",
         description="Path to the ESBMC binary.",
     )
 
-    esbmc_params: list[str] = Field(
-        validation_alias="esbmc.params",
+    @field_validator("path", mode="before")
+    @classmethod
+    def on_set_path(cls, value: FilePath | None) -> Path | None:
+        if value is None:
+            return None
+        return Path(value).expanduser()
+
+    params: list[str] = Field(
         default=[
             "--interval-analysis",
             "--goto-unwind",
@@ -241,10 +236,28 @@ class VerifierConfig(BaseModel):
         description="Parameters for ESBMC. Can accept as a list or a string.",
     )
 
-    esbmc_timeout: int | None = Field(
+    timeout: int | None = Field(
         default=None,
-        validation_alias="esbmc.timeout",
         description="The timeout set for ESBMC.",
+    )
+
+
+class VerifierConfig(BaseModel):
+    # The value is checked in AddonLoader.
+    name: str = Field(
+        default="esbmc",
+        description="The verifier to use. Default is ESBMC.",
+    )
+
+    enable_cache: bool = Field(
+        default=True,
+        description="Cache the results of verification in order to save time. "
+        "This is not supported by all verifiers.",
+    )
+
+    esbmc: ESBMCConfig = Field(
+        default_factory=ESBMCConfig,
+        description="ESBMC-specific configuration.",
     )
 
 
@@ -338,37 +351,42 @@ class Config(BaseSettings, metaclass=makecls(SingletonMeta)):
         cls, ai_config_list: dict[str, AICustomModelConfig]
     ) -> dict[str, AICustomModelConfig]:
         for name, ai_config in ai_config_list.items():
-            # Check the field is a dict not a list
-            if not isinstance(ai_config, dict):
-                raise ValueError(
-                    f"The value of each entry in ai_custom needs to be a dict: {ai_config}"
-                )
+            # If already an AICustomModelConfig instance, validate its fields
+            if isinstance(ai_config, AICustomModelConfig):
+                if ai_config.max_tokens <= 0:
+                    raise ValueError(
+                        f'max_tokens in ai_custom entry "{name}" needs to be greater than 0.'
+                    )
+            else:
+                # If it's a dict, validate the dict structure
+                if not isinstance(ai_config, dict):
+                    raise ValueError(
+                        f"The value of each entry in ai_custom needs to be a dict: {ai_config}"
+                    )
 
-            # Max tokens
-            if "max_tokens" not in ai_config:
-                raise KeyError(
-                    f'max_tokens field not found in "ai_custom" entry "{name}".'
-                )
-            elif not isinstance(ai_config["max_tokens"], int):
-                raise TypeError(
-                    f'custom_ai_max_tokens in ai_custom entry "{name}" needs to '
-                    "be an int and greater than 0."
-                )
-            elif ai_config["max_tokens"] <= 0:
-                raise ValueError(
-                    f'custom_ai_max_tokens in ai_custom entry "{name}" needs to '
-                    "be an int and greater than 0."
-                )
+                # Max tokens
+                if "max_tokens" not in ai_config:
+                    raise KeyError(
+                        f'max_tokens field not found in "ai_custom" entry "{name}".'
+                    )
+                elif not isinstance(ai_config["max_tokens"], int):
+                    raise TypeError(
+                        f'max_tokens in ai_custom entry "{name}" needs to be an int and greater than 0.'
+                    )
+                elif ai_config["max_tokens"] <= 0:
+                    raise ValueError(
+                        f'max_tokens in ai_custom entry "{name}" needs to be greater than 0.'
+                    )
 
-            # URL
-            if "url" not in ai_config:
-                raise KeyError(f'url field not found in "ai_custom" entry "{name}".')
+                # URL
+                if "url" not in ai_config:
+                    raise KeyError(f'url field not found in "ai_custom" entry "{name}".')
 
-            # Server type
-            if "server_type" not in ai_config:
-                raise KeyError(
-                    f"server_type for custom AI '{name}' is invalid, it needs to be a valid string"
-                )
+                # Server type
+                if "server_type" not in ai_config:
+                    raise KeyError(
+                        f"server_type for custom AI '{name}' is invalid, it needs to be a valid string"
+                    )
 
         return ai_config_list
 
@@ -376,6 +394,18 @@ class Config(BaseSettings, metaclass=makecls(SingletonMeta)):
         default_factory=AIModelConfig,
         description="AI Model configuration group.",
     )
+
+    @field_validator("ai_model", mode="before")
+    @classmethod
+    def _parse_ai_model(cls, value: str | dict | AIModelConfig) -> dict | AIModelConfig:
+        # If it's already an AIModelConfig, return as-is
+        if isinstance(value, AIModelConfig):
+            return value
+        # If it's a string, wrap it in a dict with 'id' key
+        if isinstance(value, str):
+            return {"id": value}
+        # If it's a dict, return as-is
+        return value
 
     temp_auto_clean: bool = Field(
         default=True,
@@ -445,6 +475,34 @@ class Config(BaseSettings, metaclass=makecls(SingletonMeta)):
         # mapped to the config directly
         extra="ignore",
     )
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type["BaseSettings"],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        # Manually load .env file to get ESBMCAI_CONFIG_FILE before creating sources
+        from dotenv import load_dotenv
+        load_dotenv(".env", override=False)
+
+        # Get config file path from environment variable
+        config_file_path = os.getenv("ESBMCAI_CONFIG_FILE")
+
+        sources = [init_settings]
+
+        # Add TOML config source if config file is specified
+        if config_file_path:
+            config_file = Path(config_file_path).expanduser()
+            if config_file.exists():
+                sources.append(TomlConfigSettingsSource(settings_cls, config_file))
+
+        # Priority order: init/CLI > TOML > env > dotenv > file_secret
+        sources.extend([env_settings, dotenv_settings, file_secret_settings])
+        return tuple(sources)
 
     def __init__(self, **kwargs) -> None:
         # Accept keyword arguments to support pydantic_settings CliApp.run()

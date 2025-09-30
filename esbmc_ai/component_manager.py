@@ -136,9 +136,7 @@ class ComponentManager(metaclass=SingletonMeta):
 
     @verifier.setter
     def verifier(self, value: BaseSourceVerifier) -> None:
-        assert (
-            value.name in self.verifiers
-        ), f"Unregistered verifier set: {value.name}"
+        assert value.name in self.verifiers, f"Unregistered verifier set: {value.name}"
         self._verifier = value
 
     def add_verifier(self, verifier: BaseSourceVerifier, builtin: bool = True) -> None:
@@ -191,9 +189,7 @@ class ComponentManager(metaclass=SingletonMeta):
     def addon_components(self) -> MappingProxyType[str, BaseComponent]:
         """Returns a read-only view of all addon components (commands + verifiers)."""
         if self._addon_components_cache is None:
-            self._addon_components_cache = (
-                self._addon_commands | self._addon_verifiers
-            )
+            self._addon_components_cache = self._addon_commands | self._addon_verifiers
         return MappingProxyType(self._addon_components_cache)
 
     @property
@@ -213,7 +209,11 @@ class ComponentManager(metaclass=SingletonMeta):
         return self.components.get(name)
 
     def load_component_config(self, component: BaseComponent) -> None:
-        """Load component-specific configuration."""
+        """Load component-specific configuration.
+
+        Component configs are loaded automatically via BaseComponentConfig.settings_customise_sources(),
+        which loads from TOML, env vars, and .env files.
+        """
         try:
             # Check if component has a config instance set
             if component.config is None:
@@ -222,6 +222,9 @@ class ComponentManager(metaclass=SingletonMeta):
 
             # Get the config class from the existing instance
             config_class: type[BaseComponentConfig] = type(component.config)
+
+            # Instantiate the config - settings_customise_sources will handle
+            # actual loading
             loaded_config = config_class()
 
             # Replace the component's config with the loaded one

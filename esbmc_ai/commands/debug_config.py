@@ -11,7 +11,7 @@ class DebugConfigViewCommand(ChatCommand):
 
     def __init__(self) -> None:
         super().__init__(
-            command_name="debug-config-view",
+            command_name="debug-view-config",
             authors="",
             help_message="Used for debug to view the current config state.",
         )
@@ -51,6 +51,7 @@ class DebugConfigViewCommand(ChatCommand):
         print("GLOBAL CONFIGURATION")
         print("=" * 80)
 
+        self._print_config_section({"Config File": self.global_config.config_file})
         self._print_config_section(self.global_config.model_dump())
 
         print("\n" + "=" * 80)

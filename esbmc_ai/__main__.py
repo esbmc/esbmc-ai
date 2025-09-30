@@ -10,14 +10,7 @@ from pathlib import Path
 import readline
 import argparse
 
-from pydantic_settings import (
-    CliApp,
-    CliSettingsSource,
-    EnvSettingsSource,
-    PydanticBaseSettingsSource,
-    TomlConfigSettingsSource,
-    DotEnvSettingsSource,
-)
+from pydantic_settings import CliApp, CliSettingsSource
 from structlog import get_logger
 from structlog.stdlib import BoundLogger
 
@@ -68,32 +61,14 @@ def _load_config(
     # Parse args to get verbose level before Pydantic CLI parsing
     args, _ = parser.parse_known_args()
     verbose_level: int = min(args.verbose, 3) if hasattr(args, "verbose") else 0
-    # Create CLI settings source
-    cli_settings: CliSettingsSource = CliSettingsSource(Config, root_parser=parser)
 
-    # Get config file path from environment variable
-    config_file_path: str | None = os.getenv("ESBMCAI_CONFIG_FILE")
+    # Create custom CLI settings source using our argparse parser
+    # This allows us to use custom arguments like -v/--verbose with action='count'
+    cli_settings = CliSettingsSource(Config, cli_parse_args=True, root_parser=parser)
 
-    # Create settings sources in the desired hierarchy:
-    # CLI args -> config file -> environment variables -> .env file -> defaults
-    settings_sources: list[PydanticBaseSettingsSource] = []
-
-    # Add config file source if specified
-    if config_file_path:
-        config_file: Path = Path(config_file_path).expanduser()
-        if config_file.exists():
-            settings_sources.append(TomlConfigSettingsSource(Config, config_file))
-
-    # Add environment variables source
-    settings_sources.append(EnvSettingsSource(Config))
-
-    # Add .env file source
-    settings_sources.append(DotEnvSettingsSource(Config, env_file=".env"))
-
-    # Use CliApp.run with custom settings sources
-    config = CliApp.run(
-        Config, cli_settings_source=cli_settings, settings_sources=settings_sources
-    )
+    # Use CliApp.run with custom CLI settings source
+    # settings_customise_sources will handle TOML/env/dotenv loading process
+    config = CliApp.run(Config, cli_settings_source=cli_settings)
 
     # Set argparse config values - These fields have exclude=True
     config.verbose_level = verbose_level
