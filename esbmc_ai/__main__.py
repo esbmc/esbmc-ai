@@ -111,7 +111,8 @@ def main() -> None:
         description="""Automated Program Repair platform. To view help on subcommands, run with the subcommand "help".
 
 Configuration Precedence (highest to lowest):
-  CLI args > Environment variables > .env file > TOML config > Defaults""",
+  * CLI args > Environment variables > .env file > TOML config > Defaults
+  * NOTE: Setting nested values through environment variables and files is currently not supported (https://github.com/esbmc/esbmc-ai/issues/229)""",
         epilog=f"Made by {__author__}",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
