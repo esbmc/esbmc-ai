@@ -130,6 +130,7 @@ class AddonLoader(metaclass=SingletonMeta):
 
         # Load component-specific configuration using ComponentManager
         from esbmc_ai.component_manager import ComponentManager
-        ComponentManager().load_component_config(addon)
+
+        ComponentManager().load_component_config(addon, builtin=False)
 
         return addon

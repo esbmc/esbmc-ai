@@ -20,7 +20,9 @@ class HelpConfigCommand(ChatCommand):
         )
 
     @staticmethod
-    def _print_config_field(field_name: str, field_info: FieldInfo, level: int = 0) -> None:
+    def _print_config_field(
+        field_name: str, field_info: FieldInfo, level: int = 0
+    ) -> None:
         """Print information about a single config field."""
         # Create indentation based on level
         indent = "\t" * (level + 1)
@@ -37,25 +39,32 @@ class HelpConfigCommand(ChatCommand):
 
         # Check if this field's annotation is a BaseModel type
         field_annotation = field_info.annotation
-        if field_annotation and hasattr(field_annotation, '__origin__'):
+        if field_annotation and hasattr(field_annotation, "__origin__"):
             # Handle generic types like list, dict, etc.
             field_annotation = field_annotation.__origin__
 
         # Check if the field type is a BaseModel subclass
-        if (field_annotation and
-            isinstance(field_annotation, type) and
-            issubclass(field_annotation, BaseModel)):
+        if (
+            field_annotation
+            and isinstance(field_annotation, type)
+            and issubclass(field_annotation, BaseModel)
+        ):
 
             print(f"{indent}  Nested fields:")
             # Recursively print fields of the BaseModel
-            for nested_field_name, nested_field_info in field_annotation.model_fields.items():
-                HelpConfigCommand._print_config_field(nested_field_name, nested_field_info, level + 1)
+            for (
+                nested_field_name,
+                nested_field_info,
+            ) in field_annotation.model_fields.items():
+                HelpConfigCommand._print_config_field(
+                    nested_field_name, nested_field_info, level + 1
+                )
         else:
             # Print default value for non-BaseModel fields
             if field_info.default is not None:
                 print(f"{indent}  Default: {default_value}")
 
-            if hasattr(field_info, 'alias') and field_info.alias:
+            if hasattr(field_info, "alias") and field_info.alias:
                 print(f"{indent}  Alias: {field_info.alias}")
 
         print()
@@ -72,14 +81,7 @@ class HelpConfigCommand(ChatCommand):
 
         for field_name, field_info in config_fields.items():
             # Skip excluded fields (like command_name and config_file)
-            if not getattr(field_info, 'exclude', False):
+            if not getattr(field_info, "exclude", False):
                 self._print_config_field(field_name, field_info)
-
-        print("Usage Notes:")
-        print("• Environment variables use ESBMCAI_ prefix (e.g., ESBMCAI_AI_MODEL)")
-        print("• CLI arguments use kebab-case (e.g., --ai-model)")
-        print("• Config file uses TOML format with nested sections")
-        print("• Set ESBMCAI_CONFIG_FILE environment variable to specify config file path")
-        print("• Hierarchy: CLI args → config file → env vars → .env file → defaults")
 
         return None

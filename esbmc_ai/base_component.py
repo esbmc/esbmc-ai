@@ -9,15 +9,43 @@ import os
 from pathlib import Path
 import re
 
+from typing import Any, cast, override
+from pydantic import FilePath
+from pydantic.fields import FieldInfo
 from pydantic_settings import (
     BaseSettings,
     PydanticBaseSettingsSource,
     SettingsConfigDict,
-    TomlConfigSettingsSource,
 )
+from pydantic_settings.sources import InitSettingsSource
 import structlog
+import tomllib
 
 from esbmc_ai.config import Config
+
+
+class DictConfigSettingsSource(PydanticBaseSettingsSource):
+    """Custom settings source that loads from a pre-loaded dictionary."""
+
+    def __init__(
+        self, settings_cls: type[BaseSettings], config_dict: dict[str, Any]
+    ) -> None:
+        super().__init__(settings_cls)
+        self.config_dict = config_dict
+
+    @override
+    def get_field_value(
+        self, field: FieldInfo, field_name: str
+    ) -> tuple[Any, str, bool]:
+        """Get field value from the config dictionary."""
+        _ = field
+        if field_name in self.config_dict:
+            return self.config_dict[field_name], field_name, False
+        return None, field_name, False
+
+    def __call__(self) -> dict[str, Any]:
+        """Return the config dictionary."""
+        return self.config_dict
 
 
 class BaseComponentConfig(BaseSettings):
@@ -25,6 +53,9 @@ class BaseComponentConfig(BaseSettings):
 
     Component configs are loaded from the TOML file under the 'addons.<component_name>'
     section by ComponentManager.
+
+    The component name is passed via _component_name kwarg to __init__ and is
+    extracted in settings_customise_sources to determine the TOML table header.
     """
 
     # Used to allow loading from cli and env.
@@ -38,6 +69,12 @@ class BaseComponentConfig(BaseSettings):
         extra="ignore",
     )
 
+    def __init__(self, **values: Any) -> None:
+        """Used to provide static analyzers type annotations so that we don't get
+        errors in ComponentManager."""
+        super().__init__(**values)
+
+    @override
     @classmethod
     def settings_customise_sources(
         cls,
@@ -47,24 +84,54 @@ class BaseComponentConfig(BaseSettings):
         dotenv_settings: PydanticBaseSettingsSource,
         file_secret_settings: PydanticBaseSettingsSource,
     ) -> tuple[PydanticBaseSettingsSource, ...]:
-        # Manually load .env file to get ESBMCAI_CONFIG_FILE before creating sources
-        from dotenv import load_dotenv
-        load_dotenv(".env", override=False)
+        # Get config file path from global Config
+        # Note: .env is already loaded by the global Config before component
+        # configs are loaded
+        config_file_path: FilePath | None = Config().config_file
 
-        # Get config file path from environment variable
-        config_file_path = os.getenv("ESBMCAI_CONFIG_FILE")
-
-        sources = [init_settings]
+        sources: list[PydanticBaseSettingsSource] = [
+            init_settings,
+            env_settings,
+            dotenv_settings,
+        ]
 
         # Add TOML config source if config file is specified
-        # Component configs will get their specific section via init_settings
         if config_file_path:
-            config_file = Path(config_file_path).expanduser()
+            config_file: Path = Path(config_file_path).expanduser()
             if config_file.exists():
-                sources.append(TomlConfigSettingsSource(settings_cls, config_file))
+                # Cast to InitSettingsSource to access init_kwargs
+                init_source: InitSettingsSource = cast(
+                    InitSettingsSource, init_settings
+                )
 
-        # Priority order: init > TOML > env > dotenv > file_secret
-        sources.extend([env_settings, dotenv_settings, file_secret_settings])
+                # Extract component name from init_settings if provided
+                component_name: str = cast(
+                    str, init_source.init_kwargs.get("_component_name")
+                )
+                builtin: bool = cast(bool, init_source.init_kwargs.get("_builtin"))
+                if component_name:
+                    # Load TOML file and extract addons.<component_name> section
+                    with open(config_file, "rb") as f:
+                        config_data: dict = tomllib.load(f)
+
+                    # Get the component-specific config from either <component_name>
+                    # or addons.<component_name>
+                    component_config: dict = config_data
+                    if builtin:
+                        component_config = config_data.get(component_name, {})
+                    else:
+                        component_config = config_data.get("addons", {}).get(
+                            component_name, {}
+                        )
+
+                    # Add custom dict source with component config
+                    if component_config:
+                        sources.append(
+                            DictConfigSettingsSource(settings_cls, component_config)
+                        )
+
+        # Priority order: init > env > dotenv > TOML > file_secret
+        sources.append(file_secret_settings)
         return tuple(sources)
 
 

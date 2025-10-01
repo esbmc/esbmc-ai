@@ -3,11 +3,8 @@
 # Author: Yiannis Charalambous 2023
 
 import logging
-import os
 import sys
-from pathlib import Path
 
-import readline
 import argparse
 
 from pydantic_settings import CliApp, CliSettingsSource
@@ -22,16 +19,6 @@ from esbmc_ai.verifiers.base_source_verifier import BaseSourceVerifier
 from esbmc_ai.verifiers.esbmc import ESBMC
 from esbmc_ai.component_manager import ComponentManager
 import esbmc_ai.commands
-
-# Enables arrow key functionality for input(). Do not remove import.
-_ = readline
-
-HELP_MESSAGE: str = (
-    "Automated Program Repair platform. To view help on subcommands, run with "
-    'the subcommand "help".'
-)
-
-_default_command_name: str = "help"
 
 
 def _init_args(parser: argparse.ArgumentParser) -> None:
@@ -64,11 +51,13 @@ def _load_config(
 
     # Create custom CLI settings source using our argparse parser
     # This allows us to use custom arguments like -v/--verbose with action='count'
-    cli_settings = CliSettingsSource(Config, cli_parse_args=True, root_parser=parser)
+    cli_settings: CliSettingsSource = CliSettingsSource(
+        Config, cli_parse_args=True, root_parser=parser
+    )
 
     # Use CliApp.run with custom CLI settings source
     # settings_customise_sources will handle TOML/env/dotenv loading process
-    config = CliApp.run(Config, cli_settings_source=cli_settings)
+    config: Config = CliApp.run(Config, cli_settings_source=cli_settings)
 
     # Set argparse config values - These fields have exclude=True
     config.verbose_level = verbose_level
@@ -85,7 +74,7 @@ def _init_builtin_components() -> None:
     assert isinstance(esbmc, BaseSourceVerifier)
     component_manager.add_verifier(esbmc)
     # Load component-specific configuration
-    component_manager.load_component_config(esbmc)
+    component_manager.load_component_config(esbmc, builtin=True)
 
     # Init built-in commands - Loads everything in the esbmc_ai.commands module.
     commands: list[ChatCommand] = []
@@ -96,7 +85,7 @@ def _init_builtin_components() -> None:
         assert isinstance(cmd, ChatCommand)
         cmd.global_config = Config()
         # Load component-specific configuration
-        component_manager.load_component_config(cmd)
+        component_manager.load_component_config(cmd, builtin=True)
         commands.append(cmd)
 
     component_manager.set_builtin_commands(commands)
@@ -119,8 +108,12 @@ def main() -> None:
     """Entry point function"""
     parser: argparse.ArgumentParser = argparse.ArgumentParser(
         prog="ESBMC-AI",
-        description=HELP_MESSAGE,
+        description="""Automated Program Repair platform. To view help on subcommands, run with the subcommand "help".
+
+Configuration Precedence (highest to lowest):
+  CLI args > Environment variables > .env file > TOML config > Defaults""",
         epilog=f"Made by {__author__}",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
     _init_args(parser=parser)

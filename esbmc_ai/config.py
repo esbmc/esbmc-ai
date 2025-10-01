@@ -11,19 +11,21 @@ from pathlib import Path
 from pydantic_settings import (
     BaseSettings,
     CliPositionalArg,
+    NoDecode,
     PydanticBaseSettingsSource,
     SettingsConfigDict,
     TomlConfigSettingsSource,
 )
+from typing import Annotated
 from pydantic import (
     AliasChoices,
     BaseModel,
+    BeforeValidator,
     DirectoryPath,
     Field,
     FilePath,
     field_validator,
 )
-from pydantic_settings.sources import CliSubCommand, DotenvType
 
 from esbmc_ai.singleton import SingletonMeta, makecls
 from esbmc_ai.log_handlers import (
@@ -32,10 +34,20 @@ from esbmc_ai.log_handlers import (
 )
 
 
+def _alias_choice(value: str) -> AliasChoices:
+    """Adds aliases to each option that requires a different alias that works
+    with all the config setting sources we are using."""
+    return AliasChoices(
+        value,  # exact field name for TOML and direct matching
+        value.replace("_", "-"),  # dashed alias for CLI or other uses
+        f"ESBMCAI_{value.replace('-', '_').upper()}",  # prefixed env var alias
+    )
+
+
 class AIModelConfig(BaseModel):
     id: str = Field(
-        default="openai:gpt-4.5-nano",
-        validation_alias=AliasChoices("ai_model", "ai-model"),
+        default="openai:gpt-5-nano",
+        validation_alias=_alias_choice("ai_model"),
         description="Which AI model to use. Prefix with openai, anthropic, or "
         "ollama then separate with : and enter the model name to use.",
     )
@@ -261,6 +273,18 @@ class VerifierConfig(BaseModel):
     )
 
 
+def _parse_ai_model(value: str | dict | AIModelConfig) -> AIModelConfig:
+    """Validator function to convert string/dict to AIModelConfig."""
+    # If it's already an AIModelConfig, return as-is
+    if isinstance(value, AIModelConfig):
+        return value
+    # If it's a string, create AIModelConfig with validation_alias key
+    if isinstance(value, str):
+        return AIModelConfig(**{"ai_model": value})
+    # If it's a dict, create AIModelConfig from it
+    return AIModelConfig(**value)
+
+
 class Config(BaseSettings, metaclass=makecls(SingletonMeta)):
     """Config loader for ESBMC-AI"""
 
@@ -307,7 +331,7 @@ class Config(BaseSettings, metaclass=makecls(SingletonMeta)):
 
     dev_mode: bool = Field(
         default=False,
-        validation_alias=AliasChoices("dev_mode", "dev-mode"),
+        validation_alias=_alias_choice("dev_mode"),
         description="Adds to the python system path the current "
         "directory so addons can be developed.",
     )
@@ -320,7 +344,7 @@ class Config(BaseSettings, metaclass=makecls(SingletonMeta)):
 
     show_horizontal_lines: bool = Field(
         default=True,
-        validation_alias=AliasChoices("show_horizontal_lines", "show-horizontal-lines"),
+        validation_alias=_alias_choice("show_horizontal_lines"),
         description="True to print horizontal lines to segment the output. "
         "Makes it easier to read.",
     )
@@ -380,7 +404,9 @@ class Config(BaseSettings, metaclass=makecls(SingletonMeta)):
 
                 # URL
                 if "url" not in ai_config:
-                    raise KeyError(f'url field not found in "ai_custom" entry "{name}".')
+                    raise KeyError(
+                        f'url field not found in "ai_custom" entry "{name}".'
+                    )
 
                 # Server type
                 if "server_type" not in ai_config:
@@ -390,46 +416,36 @@ class Config(BaseSettings, metaclass=makecls(SingletonMeta)):
 
         return ai_config_list
 
-    ai_model: AIModelConfig = Field(
-        default_factory=AIModelConfig,
-        description="AI Model configuration group.",
+    ai_model: Annotated[AIModelConfig, NoDecode, BeforeValidator(_parse_ai_model)] = (
+        Field(
+            default_factory=AIModelConfig,
+            description="AI Model configuration group. Can be a string like 'openai:gpt-4' or a config object.",
+        )
     )
-
-    @field_validator("ai_model", mode="before")
-    @classmethod
-    def _parse_ai_model(cls, value: str | dict | AIModelConfig) -> dict | AIModelConfig:
-        # If it's already an AIModelConfig, return as-is
-        if isinstance(value, AIModelConfig):
-            return value
-        # If it's a string, wrap it in a dict with 'id' key
-        if isinstance(value, str):
-            return {"id": value}
-        # If it's a dict, return as-is
-        return value
 
     temp_auto_clean: bool = Field(
         default=True,
-        validation_alias=AliasChoices("temp_auto_clean", "temp-auto-clean"),
+        validation_alias=_alias_choice("temp_auto_clean"),
         description="Should the temporary files created be cleared automatically?",
     )
 
     temp_file_dir: DirectoryPath = Field(
         default=Path("/tmp"),
-        validation_alias=AliasChoices("temp_file_dir", "temp-file-dir"),
+        validation_alias=_alias_choice("temp_file_dir"),
         description="Sets the directory to store temporary ESBMC-AI files. "
         "Don't supply a value to use the system default.",
     )
 
     loading_hints: bool = Field(
         default=False,
-        validation_alias=AliasChoices("loading_hints", "loading-hints"),
+        validation_alias=_alias_choice("loading_hints"),
         description="Show loading hints when running. Turn off if output "
         "is going to be logged to a file.",
     )
 
     generate_patches: bool = Field(
         default=False,
-        validation_alias=AliasChoices("generate_patches", "generate-patches"),
+        validation_alias=_alias_choice("generate_patches"),
         description="Should the repaired result be returned as a patch "
         "instead of a new file. Generate patch files and place them in "
         "the same folder as the source files.",
@@ -485,14 +501,14 @@ class Config(BaseSettings, metaclass=makecls(SingletonMeta)):
         dotenv_settings: PydanticBaseSettingsSource,
         file_secret_settings: PydanticBaseSettingsSource,
     ) -> tuple[PydanticBaseSettingsSource, ...]:
-        # Manually load .env file to get ESBMCAI_CONFIG_FILE before creating sources
-        from dotenv import load_dotenv
-        load_dotenv(".env", override=False)
-
         # Get config file path from environment variable
         config_file_path = os.getenv("ESBMCAI_CONFIG_FILE")
 
-        sources = [init_settings]
+        sources: list[PydanticBaseSettingsSource] = [
+            init_settings,
+            env_settings,
+            dotenv_settings,
+        ]
 
         # Add TOML config source if config file is specified
         if config_file_path:
@@ -500,8 +516,8 @@ class Config(BaseSettings, metaclass=makecls(SingletonMeta)):
             if config_file.exists():
                 sources.append(TomlConfigSettingsSource(settings_cls, config_file))
 
-        # Priority order: init/CLI > TOML > env > dotenv > file_secret
-        sources.extend([env_settings, dotenv_settings, file_secret_settings])
+        # Priority order: init/CLI > env > dotenv > TOML > file_secret
+        sources.append(file_secret_settings)
         return tuple(sources)
 
     def __init__(self, **kwargs) -> None:

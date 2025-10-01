@@ -4,6 +4,7 @@
 components."""
 
 from types import MappingProxyType
+from typing import cast
 
 import structlog
 
@@ -180,16 +181,20 @@ class ComponentManager(metaclass=SingletonMeta):
     def builtin_components(self) -> MappingProxyType[str, BaseComponent]:
         """Returns a read-only view of all builtin components (commands + verifiers)."""
         if self._builtin_components_cache is None:
-            self._builtin_components_cache = (
-                self._builtin_commands | self._builtin_verifiers
-            )
+            self._builtin_components_cache = cast(
+                dict[str, BaseComponent], self._builtin_commands
+            ) | cast(dict[str, BaseComponent], self._builtin_verifiers)
         return MappingProxyType(self._builtin_components_cache)
 
     @property
     def addon_components(self) -> MappingProxyType[str, BaseComponent]:
         """Returns a read-only view of all addon components (commands + verifiers)."""
         if self._addon_components_cache is None:
-            self._addon_components_cache = self._addon_commands | self._addon_verifiers
+            self._addon_components_cache = cast(
+                dict[str, BaseComponent], self._addon_commands
+            ) | cast(dict[str, BaseComponent], self._addon_verifiers)
+
+        assert self._addon_components_cache is not None
         return MappingProxyType(self._addon_components_cache)
 
     @property
@@ -197,10 +202,10 @@ class ComponentManager(metaclass=SingletonMeta):
         """Returns a read-only view of all components (builtin + addon commands + verifiers)."""
         if self._all_components_cache is None:
             self._all_components_cache = (
-                self._builtin_commands
-                | self._addon_commands
-                | self._builtin_verifiers
-                | self._addon_verifiers
+                cast(dict[str, BaseComponent], self._builtin_commands)
+                | cast(dict[str, BaseComponent], self._addon_commands)
+                | cast(dict[str, BaseComponent], self._builtin_verifiers)
+                | cast(dict[str, BaseComponent], self._addon_verifiers)
             )
         return MappingProxyType(self._all_components_cache)
 
@@ -208,7 +213,7 @@ class ComponentManager(metaclass=SingletonMeta):
         """Get a component by name (command or verifier)."""
         return self.components.get(name)
 
-    def load_component_config(self, component: BaseComponent) -> None:
+    def load_component_config(self, component: BaseComponent, builtin: bool) -> None:
         """Load component-specific configuration.
 
         Component configs are loaded automatically via BaseComponentConfig.settings_customise_sources(),
@@ -217,15 +222,19 @@ class ComponentManager(metaclass=SingletonMeta):
         try:
             # Check if component has a config instance set
             if component.config is None:
-                self._logger.debug(f"Component {component.name} has no custom config")
-                return
+                raise NotImplementedError()
 
             # Get the config class from the existing instance
             config_class: type[BaseComponentConfig] = type(component.config)
 
             # Instantiate the config - settings_customise_sources will handle
-            # actual loading
-            loaded_config = config_class()
+            # actual loading. Pass component_name via _component_name parameter
+            # and builtin via _builtin so BaseComponentConfig can use it for
+            # TOML table header. These are not defined fields but captured via
+            # extra="ignore" and used in settings_customise_sources.
+            loaded_config = config_class(  # type: ignore[call-arg]
+                _component_name=component.name, _builtin=builtin
+            )
 
             # Replace the component's config with the loaded one
             component.config = loaded_config
