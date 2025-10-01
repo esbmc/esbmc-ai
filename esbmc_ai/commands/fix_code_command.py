@@ -3,27 +3,24 @@
 import os
 from pathlib import Path
 import sys
-from typing import Any, Optional
-from langchain.schema import HumanMessage
-from pydantic import BaseModel, Field, field_validator
+from typing import Any
+from pydantic import Field, field_validator
 from typing_extensions import override
+
 from esbmc_ai.base_component import BaseComponentConfig
 from esbmc_ai.component_manager import ComponentManager
 from esbmc_ai.solution import Solution, SourceFile
 from esbmc_ai.ai_models import AIModel
 from esbmc_ai.chats.solution_generator import (
     SolutionGenerator,
-    LatestStateSolutionGenerator,
-    ReverseOrderSolutionGenerator,
     FixCodeScenario,
-    default_scenario,
 )
+from esbmc_ai.chats.template_key_provider import ESBMCTemplateKeyProvider
 from esbmc_ai.verifiers.base_source_verifier import VerifierTimedOutException
 from esbmc_ai.command_result import CommandResult
 from esbmc_ai.verifier_output import VerifierOutput
 from esbmc_ai.chat_command import ChatCommand
 from esbmc_ai.log_utils import get_log_level, print_horizontal_line
-from esbmc_ai.chat_response import list_to_base_messages
 from esbmc_ai.loading_widget import BaseLoadingWidget, LoadingWidget
 import esbmc_ai.prompt_utils as prompt_utils
 from esbmc_ai.verifiers.esbmc import ESBMC
@@ -36,12 +33,12 @@ class FixCodeCommandResult(CommandResult):
         self,
         successful: bool,
         attempts: int,
-        repaired_source: Optional[str] = None,
+        repaired_source: str | None = None,
     ) -> None:
         super().__init__()
         self._successful: bool = successful
         self.attempts: int = attempts
-        self.repaired_source: Optional[str] = repaired_source
+        self.repaired_source: str | None = repaired_source
 
     @property
     @override
@@ -72,42 +69,32 @@ class FixCodeCommandConfig(BaseComponentConfig):
         description="Fix code command max attempts.",
     )
 
-    message_history: str = Field(
-        default="normal",
-        description="The type of history to be shown in the fix code command.",
-    )
-
     raw_conversation: bool = Field(
         default=False,
         description="Print the raw conversation at different parts of execution.",
     )
 
-    source_code_format: str = Field(
-        default="full",
-        description="The source code format in the fix code prompt.",
-    )
-
-    prompt_templates: dict = Field(
+    prompt_templates: dict[str, FixCodeScenario] = Field(
         default={
-            "base": {
-                "initial": "The ESBMC output is:\n\n```\n$esbmc_output\n```\n\nThe source code is:\n\n```c\n$source_code\n```\n Using the ESBMC output, show the fixed text.",
-                "system": [
+            "base": FixCodeScenario(
+                initial="The ESBMC output is:\n\n```\n$esbmc_output\n```\n\nThe source code is:\n\n```c\n$source_code\n```\n Using the ESBMC output, show the fixed text.",
+                system=[
                     {
-                        "role": "System",
+                        "role": "system",
                         "content": "From now on, act as an Automated Code Repair Tool that repairs AI C code. You will be shown AI C code, along with ESBMC output. Pay close attention to the ESBMC output, which contains a stack trace along with the type of error that occurred and its location that you need to fix. Provide the repaired C code as output, as would an Automated Code Repair Tool. Aside from the corrected source code, do not output any other text.",
                     }
                 ],
-            },
-            "division by zero": {
-                "initial": "The ESBMC output is:\n\n```\n$esbmc_output\n```\n\nThe source code is:\n\n```c\n$source_code\n```\n Using the ESBMC output, show the fixed text.",
-                "system": [
+            ),
+            "division by zero": FixCodeScenario(
+                initial="The ESBMC output is:\n\n```\n$esbmc_output\n```\n\nThe source code is:\n\n```c\n$source_code\n```\n Using the ESBMC output, show the fixed text.",
+                system=[
                     {
-                        "role": "System",
+                        "role": "system",
                         "content": "Here's a C program with a vulnerability:\n```c\n$source_code\n```\nA Formal Verification tool identified a division by zero issue:\n$esbmc_output\nTask: Modify the C code to safely handle scenarios where division by zero might occur. The solution should prevent undefined behavior or crashes due to division by zero. \nGuidelines: Focus on making essential changes only. Avoid adding or modifying comments, and ensure the changes are precise and minimal.\nGuidelines: Ensure the revised code avoids undefined behavior and handles division by zero cases effectively.\nGuidelines: Implement safeguards (like comparison) to prevent division by zero instead of using literal divisions like 1.0/0.0.Output: Provide the corrected, complete C code. The solution should compile and run error-free, addressing the division by zero vulnerability.\nStart the code snippet with ```c and end with ```. Reply OK if you understand.",
                     },
-                    {"role": "AI", "content": "OK."},
+                    {"role": "ai", "content": "OK."},
                 ],
-            },
+            ),
         },
         description="Scenario prompt templates for different types of bugs for the fix code command.",
     )
@@ -117,22 +104,6 @@ class FixCodeCommandConfig(BaseComponentConfig):
     def validate_verifier_output_type(cls, v: str) -> str:
         if v not in ["full", "vp", "ce"]:
             raise ValueError("verifier_output_type must be 'full', 'vp', or 'ce'")
-        return v
-
-    @field_validator("message_history", mode="after")
-    @classmethod
-    def validate_message_history(cls, v: str) -> str:
-        if v not in ["normal", "latest_only", "reverse"]:
-            raise ValueError(
-                'message_history can only be "normal", "latest_only", "reverse"'
-            )
-        return v
-
-    @field_validator("source_code_format", mode="after")
-    @classmethod
-    def validate_source_code_format(cls, v: str) -> str:
-        if not isinstance(v, str) or v not in ["full", "single"]:
-            raise ValueError("source_code_format can only be 'full' or 'single'")
         return v
 
 
@@ -168,35 +139,12 @@ class FixCodeCommand(ChatCommand):
         """Debug prints the raw conversation"""
         print_horizontal_line(get_log_level())
         self.logger.info("ESBMC-AI Notice: Printing raw conversation...")
-        all_messages = solution_generator._system_messages + solution_generator.messages
-        messages: list[str] = [f"{msg.type}: {msg.content}" for msg in all_messages]
+        messages: list[str] = [
+            f"{msg.type}: {msg.content}" for msg in solution_generator.messages
+        ]
         self.logger.info("\n" + "\n\n".join(messages))
         self.logger.info("ESBMC-AI Notice: End of raw conversation")
         print_horizontal_line(get_log_level())
-
-    def get_processed_prompt_templates(self) -> dict[str, FixCodeScenario]:
-        """Process the prompt templates from config into FixCodeScenario objects."""
-        raw_templates = self._config.prompt_templates
-
-        # Validate that default scenario exists
-        if default_scenario not in raw_templates:
-            raise ValueError(
-                f"Default scenario '{default_scenario}' not found in prompt_templates"
-            )
-
-        # Validate all templates
-        for template in raw_templates.values():
-            if not prompt_utils.validate_prompt_template(template):
-                raise ValueError("Invalid prompt template found")
-
-        # Convert to FixCodeScenario objects
-        return {
-            scenario: FixCodeScenario(
-                initial=HumanMessage(content=conv["initial"]),
-                system=list_to_base_messages(conv["system"]),
-            )
-            for scenario, conv in raw_templates.items()
-        }
 
     @override
     def execute(self, **kwargs: Any) -> FixCodeCommandResult:
@@ -211,23 +159,15 @@ class FixCodeCommand(ChatCommand):
         self.anim = (
             LoadingWidget() if self.global_config.loading_hints else BaseLoadingWidget()
         )
-        generate_patches: bool = self.global_config.generate_patches
-        message_history: str = self._config.message_history
-        temperature: float = self._config.temperature
-        source_code_format: str = self._config.source_code_format
-        esbmc_output_format: str = self._config.verifier_output_type
-        scenarios: dict[str, FixCodeScenario] = self.get_processed_prompt_templates()
-        max_attempts: int = self._config.max_attempts
-        raw_conversation: bool = self._config.raw_conversation
-        entry_function: str = self.global_config.solution.entry_function
-        output_dir: Path | None = self.global_config.solution.output_dir
         # End of handle kwargs
 
         solution: Solution = Solution([])
         solution.add_source_file(source_file)
 
-        self._logger.info(f"Temperature: {temperature}")
-        self._logger.info(f"Verifying function: {entry_function}")
+        self._logger.info(f"Temperature: {self._config.temperature}")
+        self._logger.info(
+            f"Verifying function: {self.global_config.solution.entry_function}"
+        )
 
         verifier: Any = ComponentManager().get_verifier("esbmc")
         assert isinstance(verifier, ESBMC)
@@ -240,7 +180,7 @@ class FixCodeCommand(ChatCommand):
         if verifier_result.successful():
             self.logger.info("File verified successfully")
             returned_source: str
-            if generate_patches:
+            if self.global_config.generate_patches:
                 returned_source = source_file.get_diff(source_file)
             else:
                 returned_source = source_file.content
@@ -249,36 +189,15 @@ class FixCodeCommand(ChatCommand):
         # Create the AI model with the specified parameters
         ai_model = AIModel.get_model(
             model=self.global_config.ai_model.id,
-            temperature=temperature,
+            temperature=self._config.temperature,
             url=self.global_config.ai_model.base_url,
         )
 
-        match message_history:
-            case "normal":
-                solution_generator = SolutionGenerator(
-                    ai_model=ai_model,
-                    scenarios=scenarios,
-                    source_code_format=source_code_format,
-                    esbmc_output_type=esbmc_output_format,
-                )
-            case "latest_only":
-                solution_generator = LatestStateSolutionGenerator(
-                    ai_model=ai_model,
-                    scenarios=scenarios,
-                    source_code_format=source_code_format,
-                    esbmc_output_type=esbmc_output_format,
-                )
-            case "reverse":
-                solution_generator = ReverseOrderSolutionGenerator(
-                    ai_model=ai_model,
-                    scenarios=scenarios,
-                    source_code_format=source_code_format,
-                    esbmc_output_type=esbmc_output_format,
-                )
-            case _:
-                raise NotImplementedError(
-                    f"error: {message_history} has not been implemented in the Fix Code Command"
-                )
+        solution_generator: SolutionGenerator = SolutionGenerator(
+            ai_model=ai_model,
+            scenarios=self._config.prompt_templates,
+            esbmc_output_type=self._config.verifier_output_type,
+        )
 
         try:
             solution_generator.update_state(
@@ -291,40 +210,34 @@ class FixCodeCommand(ChatCommand):
 
         print()
 
-        for attempt in range(1, max_attempts + 1):
-            result: Optional[FixCodeCommandResult] = self._attempt_repair(
+        for attempt in range(1, self._config.max_attempts + 1):
+            result: FixCodeCommandResult | None = self._attempt_repair(
                 attempt=attempt,
                 solution_generator=solution_generator,
                 verifier=verifier,
-                max_attempts=max_attempts,
-                output_dir=output_dir,
                 solution=solution,
-                raw_conversation=raw_conversation,
             )
             if result:
-                if raw_conversation:
+                if self._config.raw_conversation:
                     self.print_raw_conversation(solution_generator)
 
-                if generate_patches:
+                if self.global_config.generate_patches:
                     result.repaired_source = source_file.get_diff(original_source_file)
 
                 return result
 
-        if raw_conversation:
+        if self._config.raw_conversation:
             self.print_raw_conversation(solution_generator)
 
-        return FixCodeCommandResult(False, max_attempts, None)
+        return FixCodeCommandResult(False, self._config.max_attempts, None)
 
     def _attempt_repair(
         self,
         attempt: int,
-        max_attempts: int,
         solution_generator: SolutionGenerator,
         solution: Solution,
         verifier: ESBMC,
-        output_dir: Optional[Path],
-        raw_conversation: bool,
-    ) -> Optional[FixCodeCommandResult]:
+    ) -> FixCodeCommandResult | None:
         source_file: SourceFile = solution.files[0]
 
         # Get a response. Use while loop to account for if the message stack
@@ -362,17 +275,16 @@ class FixCodeCommand(ChatCommand):
 
         # Solution found
         if verifier_result.return_code == 0:
-            if raw_conversation:
+            if self._config.raw_conversation:
                 self.print_raw_conversation(solution_generator)
 
             self.logger.info("Successfully verified code")
 
             # Check if an output directory is specified and save to it
-            if output_dir:
-                assert (
-                    output_dir.is_dir()
-                ), "FixCodeCommand: Output directory needs to be valid"
-                source_file.save_file(output_dir / source_file.file_path.name)
+            if self.global_config.solution.output_dir:
+                source_file.save_file(
+                    self.global_config.solution.output_dir / source_file.file_path.name
+                )
             return FixCodeCommandResult(True, attempt, source_file.content)
 
         try:
@@ -382,13 +294,17 @@ class FixCodeCommand(ChatCommand):
                 source_file.verifier_output,
             )
         except VerifierTimedOutException:
-            if raw_conversation:
+            if self._config.raw_conversation:
                 self.print_raw_conversation(solution_generator)
             self.logger.error("ESBMC has timed out...")
             sys.exit(1)
 
         # Failure case
-        if attempt != max_attempts:
-            self.logger.info(f"Failure {attempt}/{max_attempts}: Retrying...")
+        if attempt != self._config.max_attempts:
+            self.logger.info(
+                f"Failure {attempt}/{self._config.max_attempts}: Retrying..."
+            )
         else:
-            self.logger.info(f"Failure {attempt}/{max_attempts}: Exiting...")
+            self.logger.info(
+                f"Failure {attempt}/{self._config.max_attempts}: Exiting..."
+            )
