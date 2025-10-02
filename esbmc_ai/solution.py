@@ -1,6 +1,6 @@
 # Author: Yiannis Charalambous
 
-"""Keeps track of all the source files that ESBMC-AI is targeting. """
+"""Keeps track of all the source files that ESBMC-AI is targeting."""
 
 from dataclasses import dataclass
 from os import getcwd, walk
@@ -10,9 +10,9 @@ from tempfile import NamedTemporaryFile, TemporaryDirectory
 from shutil import copytree
 from typing import override
 
+from langchain_core.language_models import BaseChatModel
 import lizard
 
-from esbmc_ai.ai_models import AIModel
 from esbmc_ai.log_utils import get_log_level, print_horizontal_line
 from esbmc_ai.verifier_output import VerifierOutput
 
@@ -102,7 +102,7 @@ class SourceFile:
 
     def get_num_tokens(
         self,
-        ai_model: AIModel,
+        ai_model: BaseChatModel,
         lower_idx: int | None = None,
         upper_idx: int | None = None,
     ) -> int:
