@@ -3,10 +3,9 @@
 """Contains code for automatically repairing code using ESBMC."""
 
 from dataclasses import replace
-from typing import Annotated
 from langchain_core.prompts.chat import MessageLikeRepresentation
 from pydantic import BaseModel, Field, SkipValidation
-from langchain.schema import BaseMessage, HumanMessage
+from langchain.schema import BaseMessage
 from langchain_core.language_models import BaseChatModel
 from pydantic_settings import NoDecode
 
@@ -164,7 +163,10 @@ class SolutionGenerator:
             and self.scenario is not None
         ), "Call update_state before calling generate_solution."
 
-        scenario: FixCodeScenario = self.scenarios[override_scenario or self.scenario]
+        scenario_name: str = override_scenario or self.scenario
+        scenario: FixCodeScenario = self.scenarios[
+            scenario_name if scenario_name in self.scenarios else "base"
+        ]
         new_templates: list[MessageLikeRepresentation] = []
 
         # Apply system message if first cycle
@@ -172,10 +174,11 @@ class SolutionGenerator:
             new_templates.extend(scenario.system)
 
         # Get scenario initial message and push it to message stack
-        new_templates.append(HumanMessage(content=scenario.initial))
+        new_templates.append(("human", scenario.initial))
         # Prepare template values
         key_template_renderer: KeyTemplateRenderer = KeyTemplateRenderer(
-            new_templates, self.template_key_provider
+            messages=new_templates,
+            key_provider=self.template_key_provider,
         )
         error_type: str | None = self.esbmc_output.get_error_type()
         self.messages.extend(
