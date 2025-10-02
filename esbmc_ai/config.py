@@ -501,6 +501,10 @@ class Config(BaseSettings, metaclass=makecls(SingletonMeta)):
         dotenv_settings: PydanticBaseSettingsSource,
         file_secret_settings: PydanticBaseSettingsSource,
     ) -> tuple[PydanticBaseSettingsSource, ...]:
+        # Manually load .env file to get ESBMCAI_CONFIG_FILE before creating sources
+        from dotenv import load_dotenv
+        load_dotenv(".env", override=False)
+
         # Get config file path from environment variable
         config_file_path = os.getenv("ESBMCAI_CONFIG_FILE")
 
