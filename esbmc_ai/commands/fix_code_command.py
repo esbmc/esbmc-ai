@@ -50,7 +50,7 @@ class FixCodeCommandResult(CommandResult):
         if self._successful and self.repaired_source is not None:
             return self.repaired_source
 
-        return "ESBMC-AI Notice: Failed all attempts..."
+        return "Failed all attempts..."
 
 
 class FixCodeCommandConfig(BaseComponentConfig):
@@ -69,15 +69,10 @@ class FixCodeCommandConfig(BaseComponentConfig):
         description="Fix code command max attempts.",
     )
 
-    raw_conversation: bool = Field(
-        default=False,
-        description="Print the raw conversation at different parts of execution.",
-    )
-
     prompt_templates: dict[str, FixCodeScenario] = Field(
         default={
             "base": FixCodeScenario(
-                initial="The ESBMC output is:\n\n```\n$esbmc_output\n```\n\nThe source code is:\n\n```c\n$source_code\n```\n Using the ESBMC output, show the fixed text.",
+                initial="The ESBMC output is:\n\n```\n{esbmc_output}\n```\n\nThe source code is:\n\n```c\n{source_code}\n```\n Using the ESBMC output, show the fixed text.",
                 system=[
                     {
                         "role": "system",
@@ -86,11 +81,11 @@ class FixCodeCommandConfig(BaseComponentConfig):
                 ],
             ),
             "division by zero": FixCodeScenario(
-                initial="The ESBMC output is:\n\n```\n$esbmc_output\n```\n\nThe source code is:\n\n```c\n$source_code\n```\n Using the ESBMC output, show the fixed text.",
+                initial="The ESBMC output is:\n\n```\n{esbmc_output}\n```\n\nThe source code is:\n\n```c\n{source_code}\n```\n Using the ESBMC output, show the fixed text.",
                 system=[
                     {
                         "role": "system",
-                        "content": "Here's a C program with a vulnerability:\n```c\n$source_code\n```\nA Formal Verification tool identified a division by zero issue:\n$esbmc_output\nTask: Modify the C code to safely handle scenarios where division by zero might occur. The solution should prevent undefined behavior or crashes due to division by zero. \nGuidelines: Focus on making essential changes only. Avoid adding or modifying comments, and ensure the changes are precise and minimal.\nGuidelines: Ensure the revised code avoids undefined behavior and handles division by zero cases effectively.\nGuidelines: Implement safeguards (like comparison) to prevent division by zero instead of using literal divisions like 1.0/0.0.Output: Provide the corrected, complete C code. The solution should compile and run error-free, addressing the division by zero vulnerability.\nStart the code snippet with ```c and end with ```. Reply OK if you understand.",
+                        "content": "Here's a C program with a vulnerability:\n```c\n{source_code}\n```\nA Formal Verification tool identified a division by zero issue:\n{esbmc_output}\nTask: Modify the C code to safely handle scenarios where division by zero might occur. The solution should prevent undefined behavior or crashes due to division by zero. \nGuidelines: Focus on making essential changes only. Avoid adding or modifying comments, and ensure the changes are precise and minimal.\nGuidelines: Ensure the revised code avoids undefined behavior and handles division by zero cases effectively.\nGuidelines: Implement safeguards (like comparison) to prevent division by zero instead of using literal divisions like 1.0/0.0.Output: Provide the corrected, complete C code. The solution should compile and run error-free, addressing the division by zero vulnerability.\nStart the code snippet with ```c and end with ```. Reply OK if you understand.",
                     },
                     {"role": "ai", "content": "OK."},
                 ],
@@ -135,17 +130,6 @@ class FixCodeCommand(ChatCommand):
         assert isinstance(value, FixCodeCommandConfig)
         self._config = value
 
-    def print_raw_conversation(self, solution_generator: SolutionGenerator) -> None:
-        """Debug prints the raw conversation"""
-        print_horizontal_line(get_log_level())
-        self.logger.info("ESBMC-AI Notice: Printing raw conversation...")
-        messages: list[str] = [
-            f"{msg.type}: {msg.content}" for msg in solution_generator.messages
-        ]
-        self.logger.info("\n" + "\n\n".join(messages))
-        self.logger.info("ESBMC-AI Notice: End of raw conversation")
-        print_horizontal_line(get_log_level())
-
     @override
     def execute(self, **kwargs: Any) -> FixCodeCommandResult:
         # Handle kwargs
@@ -164,14 +148,10 @@ class FixCodeCommand(ChatCommand):
         solution: Solution = Solution([])
         solution.add_source_file(source_file)
 
-        self._logger.info(f"Temperature: {self._config.temperature}")
-        self._logger.info(
-            f"Verifying function: {self.global_config.solution.entry_function}"
-        )
+        self._logger.info(f"FixCodeConfig: {self._config}")
 
         verifier: Any = ComponentManager().get_verifier("esbmc")
         assert isinstance(verifier, ESBMC)
-        self._logger.info(f"Running verifier: {verifier.verifier_name}")
         verifier_result: VerifierOutput = verifier.verify_source(
             solution=solution, **kwargs
         )
@@ -218,16 +198,10 @@ class FixCodeCommand(ChatCommand):
                 solution=solution,
             )
             if result:
-                if self._config.raw_conversation:
-                    self.print_raw_conversation(solution_generator)
-
                 if self.global_config.generate_patches:
                     result.repaired_source = source_file.get_diff(original_source_file)
 
                 return result
-
-        if self._config.raw_conversation:
-            self.print_raw_conversation(solution_generator)
 
         return FixCodeCommandResult(False, self._config.max_attempts, None)
 
@@ -240,23 +214,18 @@ class FixCodeCommand(ChatCommand):
     ) -> FixCodeCommandResult | None:
         source_file: SourceFile = solution.files[0]
 
-        # Get a response. Use while loop to account for if the message stack
-        # gets full, then need to compress and retry.
-        while True:
-            # Generate AI solution
-            with self.anim("Generating Solution... Please Wait"):
-                llm_solution = solution_generator.generate_solution()
+        # Generate AI solution
+        with self.anim("Generating Solution... Please Wait"):
+            llm_solution = solution_generator.generate_solution()
 
-                # Update the source file state
-                source_file.content = llm_solution
-                break
+            # Update the source file state
+            source_file.content = llm_solution
 
         # Print verbose lvl 2
-        self._logger.debug("\nESBMC-AI Notice: Source Code Generation:")
         print_horizontal_line(get_log_level(3))
+        self._logger.debug("\nSource Code Generation:")
         self._logger.debug(source_file.content)
         print_horizontal_line(get_log_level(3))
-        self._logger.debug("")
 
         solution = solution.save_temp()
 
@@ -267,16 +236,8 @@ class FixCodeCommand(ChatCommand):
 
         source_file.verifier_output = verifier_result
 
-        # Print verbose lvl 2
-        self._logger.debug("\nESBMC-AI Notice: ESBMC Output:")
-        print_horizontal_line(get_log_level(3))
-        self._logger.debug(source_file.verifier_output.output)
-        print_horizontal_line(get_log_level(3))
-
         # Solution found
         if verifier_result.return_code == 0:
-            if self._config.raw_conversation:
-                self.print_raw_conversation(solution_generator)
 
             self.logger.info("Successfully verified code")
 
@@ -294,8 +255,6 @@ class FixCodeCommand(ChatCommand):
                 source_file.verifier_output,
             )
         except VerifierTimedOutException:
-            if self._config.raw_conversation:
-                self.print_raw_conversation(solution_generator)
             self.logger.error("ESBMC has timed out...")
             sys.exit(1)
 
