@@ -21,6 +21,7 @@ dependencies = [
   "structlog",
   "platformdirs",
   "python-dotenv",
+  "pydantic",
   "regex",
   "torch",               # Needed by transformers
   "transformers",        # Needed by langchain-core to calculate get_token_ids
