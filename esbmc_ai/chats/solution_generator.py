@@ -7,7 +7,6 @@ from langchain_core.prompts.chat import MessageLikeRepresentation
 from pydantic import BaseModel, Field, SkipValidation
 from langchain.schema import BaseMessage
 from langchain_core.language_models import BaseChatModel
-from pydantic_settings import NoDecode
 
 from esbmc_ai.solution import SourceFile
 from esbmc_ai.verifiers.base_source_verifier import (

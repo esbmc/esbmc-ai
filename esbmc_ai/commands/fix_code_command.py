@@ -1,5 +1,6 @@
 # Author: Yiannis Charalambous
 
+from enum import Enum
 import os
 from pathlib import Path
 import sys
@@ -54,13 +55,18 @@ class FixCodeCommandResult(CommandResult):
 
 
 class FixCodeCommandConfig(BaseComponentConfig):
+    class VerifierOutputType(str, Enum):
+        full = "full"
+        ce = "ce"
+        vp = "vp"
+
     verifier_output_type: str = Field(
-        default="full",
+        default=VerifierOutputType.full,
         description="The type of output from ESBMC in the fix code command.",
     )
 
     temperature: float = Field(
-        default=1.0,
+        default=0,
         description="The temperature of the LLM for the fix code command.",
     )
 
