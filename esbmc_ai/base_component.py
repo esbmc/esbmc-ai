@@ -154,8 +154,8 @@ class BaseComponent(ABC):
         """Factory method to instantiate a default version of this class. Used
         by AddonLoader."""
         # Check if __init__ takes only self (no required args)
-        sig = inspect.signature(cls.__init__)
-        params = list(sig.parameters.values())
+        sig: inspect.Signature = inspect.signature(cls.__init__)
+        params: list[inspect.Parameter] = list(sig.parameters.values())
         # params[0] is always 'self'
         if len(params) > 1 and any(p.default is p.empty for p in params[1:]):
             raise TypeError(
