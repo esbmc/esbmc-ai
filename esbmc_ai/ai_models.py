@@ -1,514 +1,150 @@
 # Author: Yiannis Charalambous
 
-from abc import ABC, abstractmethod
-from dataclasses import dataclass, field, replace
-from datetime import time, timedelta, datetime
-from pathlib import Path
-from typing import Any, Iterable
-from platformdirs import user_cache_dir
-from pydantic.types import SecretStr
+from typing import Any
+from uuid import UUID
+from langchain.schema import BaseMessage, LLMResult
 from typing_extensions import override
-import tiktoken
 import structlog
 
-from anthropic import Anthropic as AnthropicClient
-from openai import Client as OpenAIClient
+from langchain.chat_models import init_chat_model
+from langchain_core.language_models import BaseChatModel
+from langchain_core.rate_limiters import InMemoryRateLimiter
+from langchain_core.callbacks import CallbackManager, BaseCallbackHandler
 
-from langchain.prompts.chat import ChatPromptValue
-from langchain_core.language_models import BaseChatModel, LanguageModelInput
-from langchain_core.messages import get_buffer_string
-from langchain_openai import ChatOpenAI
-from langchain_ollama import ChatOllama
-from langchain_anthropic import ChatAnthropic
-from langchain.schema import (
-    BaseMessage,
-    PromptValue,
-)
 
+from esbmc_ai.config import Config
 from esbmc_ai.log_utils import LogCategories
-from esbmc_ai.singleton import SingletonMeta
 
 
-@dataclass(frozen=True, kw_only=True)
-class AIModel(ABC):
-    """This base class represents an abstract AI model. Each AIModel has the
-    required properties to invoke the underlying langchain implementation
-    BaseChatModel. To configure the properties, call the bind method and set
-    them."""
+class LoggingCallbackHandler(BaseCallbackHandler):
+    """Invoke callback handler is used to print debug messages to the LLM."""
 
-    name: str
-    tokens: int
-    temperature: float = 1.0
-    requests_max_tries: int = 5
-    requests_timeout: float = 60
-    _llm: BaseChatModel | None = field(default=None)
-
-    def __post_init__(self):
-        object.__setattr__(self, "_llm", self.create_llm())
-
-    @abstractmethod
-    def create_llm(self) -> BaseChatModel:
-        """Initializes a langchain BaseChatModel with the provided parameters.
-        Used internally by low-level functions. Bind should be used for
-        AIModels."""
-        raise NotImplementedError()
-
-    def bind(self, **kwargs: Any) -> "AIModel":
-        """Returns a new model with new parameters."""
-        new_ai_model: AIModel = replace(self, **kwargs)
-        llm: BaseChatModel = new_ai_model.create_llm()
-        return replace(new_ai_model, _llm=llm)
-
-    def invoke(self, input: LanguageModelInput, **kwargs: Any) -> BaseMessage:
-        """Invokes the underlying BaseChatModel implementation and returns the
-        message."""
-        if not self._llm:
-            raise ValueError("LLM is not initialized, call bind.")
-        return self._llm.invoke(input, **kwargs)
-
-    def get_num_tokens(self, content: str) -> int:
-        """Gets the number of tokens for this AI model."""
-        if not self._llm:
-            raise ValueError("LLM is not initialized, call bind.")
-        return self._llm.get_num_tokens(content)
-
-    def get_num_tokens_from_messages(self, messages: list[BaseMessage]) -> int:
-        """Gets the number of tokens for this AI model for a list of messages."""
-        if not self._llm:
-            raise ValueError("LLM is not initialized, call bind.")
-        return self._llm.get_num_tokens_from_messages(messages)
-
-    @classmethod
-    def convert_messages_to_tuples(
-        cls, messages: Iterable[BaseMessage]
-    ) -> list[tuple[str, str]]:
-        """Converts messages into a format understood by the ChatPromptTemplate,
-        since it won't format BaseMessage derived classes for some reason, but
-        will for tuples, because they get converted into Templates in function
-        `_convert_to_message`."""
-        return [(message.type, str(message.content)) for message in messages]
-
-    @classmethod
-    def safe_substitute(cls, content: str, **values: Any) -> str:
-        """Safe template substitution. Replaces $var with provided values,
-        leaves undefined $vars unchanged."""
-        from string import Template
-
-        template = Template(content)
-        return template.safe_substitute(**values)
-
-    def apply_chat_template(
-        self,
-        messages: Iterable[BaseMessage],
-        **format_values: Any,
-    ) -> PromptValue:
-        """Applies the formatted values onto the message chat template. For example,
-        if the message contains the token $source, then format_values contains a
-        value for source then it will be substituted."""
-        result_messages = []
-        for msg in messages:
-            content = AIModel.safe_substitute(str(msg.content), **format_values)
-            new_msg = msg.model_copy()
-            new_msg.content = content
-            result_messages.append(new_msg)
-        return ChatPromptValue(messages=result_messages)
-
-    def apply_str_template(
-        self,
-        text: str,
-        **format_values: Any,
-    ) -> str:
-        """Applies the formatted values onto a string template. For example,
-        if the message contains the token $source, then format_values contains a
-        value for source then it will be substituted."""
-        return AIModel.safe_substitute(text, **format_values)
-
-
-@dataclass(frozen=True, kw_only=True)
-class AIModelService(AIModel):
-    """Represents an AI model from a service."""
-
-    api_key: str = ""
-
-    @staticmethod
-    def _get_max_tokens(name: str, token_groups: dict[str, int]) -> int:
-        """Dynamically resolves the max tokens from a base model."""
-
-        # Split into - segments and remove each section from the end to find out
-        # which one matches the most.
-
-        # Base Case
-        if name in token_groups:
-            return token_groups[name]
-
-        # Step Case
-        name_split: list[str] = name.split("-")
-        for i in range(1, name.count("-")):
-            subname: str = "-".join(name_split[:-i])
-            if subname in token_groups:
-                return token_groups[subname]
-
-        raise ValueError(f"Could not figure out max tokens for model: {name}")
-
-    @classmethod
-    @abstractmethod
-    def get_models_list(cls, api_key: str) -> list[str]:
-        """Get available models from the API service."""
-        raise NotImplementedError()
-
-    @classmethod
-    @abstractmethod
-    def create_model(cls, name: str) -> "AIModel":
-        """Create an AI model instance from model name."""
-        raise NotImplementedError()
-
-    @classmethod
-    @abstractmethod
-    def get_cache_filename(cls) -> str:
-        """Get the cache filename for this service."""
-        raise NotImplementedError()
-
-    @classmethod
-    @abstractmethod
-    def get_canonical_name(cls) -> str:
-        """Get the canonical name of this service for dictionary access (lowercase)."""
-        raise NotImplementedError()
-
-
-@dataclass(frozen=True, kw_only=True)
-class AIModelOpenAI(AIModelService):
-    """OpenAI model."""
-
-    requests_max_tries: int = 5
-    requests_timeout: float = 60
-
-    @property
-    def _reason_model(self) -> bool:
-        if "o3-mini" in self.name:
-            return True
-        return False
-
-    @override
-    def create_llm(self) -> BaseChatModel:
-        kwargs = {}
-        if self.api_key:
-            kwargs["api_key"] = (SecretStr(self.api_key) or None,)
-
-        return ChatOpenAI(
-            model=self.name,
-            temperature=None if self._reason_model else self.temperature,
-            reasoning_effort="high" if self._reason_model else None,
-            max_retries=self.requests_max_tries,
-            timeout=self.requests_timeout,
-            model_kwargs={},
-            **kwargs,
-        )
-
-    @override
-    def get_num_tokens(self, content: str) -> int:
-        encoding: tiktoken.Encoding = tiktoken.encoding_for_model(self.name)
-        return len(encoding.encode(content))
-
-    @override
-    def get_num_tokens_from_messages(self, messages: list[BaseMessage]) -> int:
-        encoding: tiktoken.Encoding
-        try:
-            encoding: tiktoken.Encoding = tiktoken.encoding_for_model(self.name)
-        except KeyError:
-            logger: structlog.stdlib.BoundLogger = structlog.get_logger().bind(
-                category=LogCategories.SYSTEM,
-            )
-            logger.error(
-                f"TikToken error: failed to map model {self.name} to an "
-                "encoder. This could possibly be because the model is new and "
-                "has not been added yet. Make sure you update TikToken."
-            )
-            raise
-        return sum(len(encoding.encode(get_buffer_string([m]))) for m in messages)
-
-    @classmethod
-    def get_max_tokens(cls, name: str) -> int:
-        """Dynamically resolves the max tokens from a base model."""
-        # https://platform.openai.com/docs/models
-        tokens: dict[str, int] = {
-            "gpt-3.5": 16385,
-            "gpt-4": 8192,
-            "gpt-4-turbo": 128000,
-            "gpt-4.1": 1047576,
-            "gpt-4.5": 128000,
-            "gpt-4o": 128000,
-            "o1": 200000,
-            "o3": 200000,
-            "o4-mini": 200000,
-        }
-        return cls._get_max_tokens(name, tokens)
-
-    @classmethod
-    def get_models_list(cls, api_key: str) -> list[str]:
-        """Get available models from the OpenAI API service."""
-        if not api_key:
-            return []
-        try:
-            return [
-                str(model.id)
-                for model in OpenAIClient(api_key=api_key).models.list().data
-            ]
-        except ImportError:
-            return []
-
-    @classmethod
-    def create_model(cls, name: str) -> "AIModel":
-        """Create an OpenAI AI model instance from model name."""
-        return cls(
-            name=name.strip(),
-            tokens=cls.get_max_tokens(name),
-        )
-
-    @classmethod
-    def get_cache_filename(cls) -> str:
-        """Get the cache filename for OpenAI service."""
-        return "openai_models.txt"
-
-    @classmethod
-    def get_canonical_name(cls) -> str:
-        """Get the canonical name of the OpenAI service."""
-        return "openai"
-
-
-@dataclass(frozen=True, kw_only=True)
-class OllamaAIModel(AIModel):
-    """A model that is running on the Ollama service."""
-
-    url: str
-
-    @override
-    def create_llm(self) -> BaseChatModel:
-        return ChatOllama(
-            base_url=self.url,
-            model=self.name,
-            temperature=self.temperature,
-            client_kwargs={
-                "timeout": self.requests_timeout,
-            },
-        )
-
-
-class AIModelAnthropic(AIModelService):
-    """An AI model that uses the Anthropic service."""
-
-    @override
-    def create_llm(self) -> BaseChatModel:
-        kwargs = {}
-        if self.api_key:
-            kwargs["api_key"] = SecretStr(self.api_key) or None
-        return ChatAnthropic(  # pyright: ignore [reportCallIssue]
-            model_name=self.name,
-            temperature=self.temperature,
-            timeout=self.requests_timeout,
-            max_retries=self.requests_max_tries,
-            **kwargs,
-        )
-
-    @classmethod
-    def get_max_tokens(cls, name: str) -> int:
-        # docs.anthropic.com/en/docs/about-claude/models/overview#model-names
-        tokens = {
-            "claude-3": 200000,
-            "claude-sonnet-4": 200000,
-            "claude-opus-4": 200000,
-        }
-
-        return cls._get_max_tokens(name, tokens)
-
-    @override
-    def get_num_tokens(self, content: str) -> int:
-        # Delete trailing whitespace from last message because of (this might
-        # change in the future because of their API):
-        # anthropic.BadRequestError: Error code: 400
-        # final assistant content cannot end with trailing whitespace.
-        return super().get_num_tokens(content.strip())
-
-    @override
-    def get_num_tokens_from_messages(self, messages: list[BaseMessage]) -> int:
-        # Delete trailing whitespace from last message because of (this might
-        # change in the future because of their API):
-        # anthropic.BadRequestError: Error code: 400
-        # final assistant content cannot end with trailing whitespace.
-        if messages:
-            messages[-1].content = str(messages[-1].content).strip()
-        return super().get_num_tokens_from_messages(messages)
-
-    @classmethod
-    def get_models_list(cls, api_key: str) -> list[str]:
-        """Get available models from the Anthropic API service."""
-        if not api_key:
-            return []
-        client = AnthropicClient(api_key=api_key)
-        return [str(i.id) for i in client.models.list()] + [
-            # Include also latest models ID not returned by the API but can be
-            # used to use the latest version of a model.
-            # docs.anthropic.com/en/docs/about-claude/models/overview#model-aliases
-            "claude-opus-4-0",
-            "claude-sonnet-4-0",
-            "claude-3-7-sonnet-latest",
-            "claude-3-5-sonnet-latest",
-            "claude-3-5-haiku-latest",
-            "claude-3-opus-latest",
-        ]
-
-    @classmethod
-    def create_model(cls, name: str) -> "AIModel":
-        """Create an Anthropic AI model instance from model name."""
-        return cls(
-            name=name.strip(),
-            tokens=cls.get_max_tokens(name),
-        )
-
-    @classmethod
-    def get_cache_filename(cls) -> str:
-        """Get the cache filename for Anthropic service."""
-        return "anthropic_models.txt"
-
-    @classmethod
-    def get_canonical_name(cls) -> str:
-        """Get the canonical name of the Anthropic service."""
-        return "anthropic"
-
-
-class AIModels(metaclass=SingletonMeta):
-    """Manages the loading of AI Models from different sources."""
-
-    def __init__(self) -> None:
+    def __init__(self, ai_model: str) -> None:
         super().__init__()
-
-        self._logger: structlog.stdlib.BoundLogger = structlog.get_logger().bind(
-            category=LogCategories.SYSTEM,
+        self.logger: structlog.stdlib.BoundLogger = structlog.get_logger().bind(
+            category=LogCategories.CHAT,
+            prefix_name=ai_model,
         )
-        self._api_keys: dict[str, str] = {}
-        self._ai_models: dict[str, AIModel] = {}
-        self._cache_dir.mkdir(parents=True, exist_ok=True)
 
-    def load_default_models(
+    @override
+    def on_llm_start(
         self,
-        api_keys: dict[str, str],
-        refresh_duration_seconds: int = 86400,
-    ) -> None:
-        """Loads the default AI models from OpenAI and Anthropic services.
+        serialized: dict[str, Any],
+        prompts: list[str],
+        *,
+        run_id: UUID,
+        parent_run_id: UUID | None = None,
+        tags: list[str] | None = None,
+        metadata: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> Any:
+        """Run when LLM starts running.
+
+        .. ATTENTION::
+            This method is called for non-chat models (regular LLMs). If you're
+            implementing a handler for a chat model, you should use
+            ``on_chat_model_start`` instead.
 
         Args:
-            api_keys - Dictionary with the canonical names of the models as keys
-                for API access. If a model does not come with a valid API key,
-                then it will not load the models.
-            refresh_duration_seconds - If the refresh duration has passed since
-                the last update, then the models will be loaded from the API
-                rather from cache."""
+            serialized (dict[str, Any]): The serialized LLM.
+            prompts (list[str]): The prompts.
+            run_id (UUID): The run ID. This is the ID of the current run.
+            parent_run_id (UUID): The parent run ID. This is the ID of the parent run.
+            tags (Optional[list[str]]): The tags.
+            metadata (Optional[dict[str, Any]]): The metadata.
+            kwargs (Any): Additional keyword arguments.
+        """
+        _ = run_id, parent_run_id, tags, metadata, kwargs
+        self.logger.debug("Invoke LLM")
 
-        self._api_keys = api_keys
-
-        # Load models from each service
-        services = [AIModelOpenAI, AIModelAnthropic]
-        for service in services:
-            api_key = api_keys.get(service.get_canonical_name(), "")
-            self._load_service_ai_models_list(
-                service=service,
-                api_key=api_key,
-                refresh_duration_seconds=refresh_duration_seconds,
-            )
-
-    @property
-    def model_names(self) -> list[str]:
-        return list(self._ai_models.keys())
-
-    @property
-    def _cache_dir(self) -> Path:
-        cache: Path = Path(user_cache_dir("esbmc-ai", "Yiannis Charalambous"))
-        return cache
-
-    def is_valid_ai_model(self, ai_model: str | AIModel) -> bool:
-        """Returns true if the model exists."""
-
-        # Get the name of the model
-        name: str = ai_model.name if isinstance(ai_model, AIModel) else ai_model
-
-        # Use the predefined list of models.
-        return name in self._ai_models
-
-    @property
-    def ai_models(self) -> dict[str, AIModel]:
-        """Gets all loaded AI models"""
-        return self._ai_models
-
-    def get_ai_model(self, name: str) -> AIModel:
-        """Checks for built-in and custom_ai models"""
-        if name in self._ai_models:
-            return self._ai_models[name]
-
-        raise KeyError(f'The AI "{name}" was not found...')
-
-    def add_ai_model(self, ai_model: AIModel, replace: bool = False) -> None:
-        """Registers a custom AI model."""
-        # Check if AI already already exists.
-        if ai_model.name in self._ai_models and not replace:
-            raise KeyError(f'AI Model "{ai_model.name}" already exists...')
-
-        self._ai_models[ai_model.name] = ai_model
-
-    def _load_service_ai_models_list(
+    @override
+    def on_llm_end(
         self,
-        service: type[AIModelService],
-        api_key: str,
-        refresh_duration_seconds: int,
-    ) -> None:
-        """Loads the service model names from cache or refreshes them from the internet."""
+        response: LLMResult,
+        *,
+        run_id: UUID,
+        parent_run_id: UUID | None = None,
+        **kwargs: Any,
+    ) -> Any:
+        _ = run_id, parent_run_id, kwargs
+        self.logger.debug("LLM End")
 
-        duration: timedelta = timedelta(seconds=refresh_duration_seconds)
-        service_name: str = service.get_canonical_name().title()
-        cache_name: str = service.get_cache_filename()
-        self._logger.info(f"Loading {service_name} models list")
-        models_list: list[str] = []
+    @override
+    def on_llm_error(
+        self,
+        error: BaseException,
+        *,
+        run_id: UUID,
+        parent_run_id: UUID | None = None,
+        **kwargs: Any,
+    ) -> Any:
+        _ = run_id, parent_run_id, kwargs
+        self.logger.debug("LLM Error")
 
-        # Read the last updated date to determine if a new update is required
-        try:
-            last_update, models_list = self._load_cache(cache_name)
-            # Write new & updated cache file
-            if datetime.now() >= last_update + duration:
-                self._logger.info("\tModels list outdated, refreshing...")
-                models_list = service.get_models_list(api_key)
-                self._write_cache(cache_name, models_list)
-        except ValueError as e:
-            self._logger.error(f"Loading {service_name} models list failed:", e)
-            self._logger.info("\tCreating new models list.")
-            models_list = service.get_models_list(api_key)
-            self._write_cache(cache_name, models_list)
-        except FileNotFoundError:
-            self._logger.info("\tModels list not found, creating new...")
-            models_list = service.get_models_list(api_key)
-            self._write_cache(cache_name, models_list)
+    @override
+    def on_chat_model_start(
+        self,
+        serialized: dict[str, Any],
+        messages: list[list[BaseMessage]],
+        *,
+        run_id: UUID,
+        parent_run_id: UUID | None = None,
+        tags: list[str] | None = None,
+        metadata: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> Any:
+        """Run when a chat model starts running.
 
-        # Add models that have been loaded.
-        for model_name in models_list:
-            try:
-                self.add_ai_model(service.create_model(model_name), replace=True)
-            except ValueError as e:
-                # Ignore models that don't count, like image only models.
-                self._logger.debug(f"Could not add model: {e}")
-                pass
+        **ATTENTION**: This method is called for chat models. If you're implementing
+        a handler for a non-chat model, you should use ``on_llm_start`` instead.
 
-    def _write_cache(self, name: str, models_list: list[str]):
-        with open(self._cache_dir / name, "w") as file:
-            file.seek(0)
-            file.write(datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "\n")
-            file.writelines(model_name + "\n" for model_name in models_list)
-        return models_list
+        Args:
+            serialized (dict[str, Any]): The serialized chat model.
+            messages (list[list[BaseMessage]]): The messages.
+            run_id (UUID): The run ID. This is the ID of the current run.
+            parent_run_id (UUID): The parent run ID. This is the ID of the parent run.
+            tags (Optional[list[str]]): The tags.
+            metadata (Optional[dict[str, Any]]): The metadata.
+            kwargs (Any): Additional keyword arguments.
+        """
+        _ = run_id, parent_run_id, tags, metadata, kwargs
+        self.logger.debug("Invoke Chat Model LLM")
 
-    def _load_cache(self, path: str) -> tuple[datetime, list[str]]:
-        cache: Path = Path(user_cache_dir("esbmc-ai", "Yiannis Charalambous"))
-        cache.mkdir(parents=True, exist_ok=True)
-        with open(self._cache_dir / path, "r") as file:
-            last_update: datetime = datetime.strptime(
-                file.readline().strip(), "%Y-%m-%d %H:%M:%S"
-            )
-            model_names: list[str] = []
-            for line in file.readlines():
-                model_names.append(line.strip())
-            return last_update, model_names
+
+class AIModel:
+    """Loading utils for models."""
+
+    @classmethod
+    def get_model(
+        cls,
+        *,
+        model: str,
+        provider: str | None = None,
+        temperature: float | None = None,
+        url: str | None = None,
+    ) -> BaseChatModel:
+        chat_model: BaseChatModel = init_chat_model(
+            model=model,
+            model_provider=provider,
+            temperature=temperature,
+            max_tokens=None,  # Use all remaining tokens
+            base_url=url,
+            timeout=Config().llm_requests_timeout,
+            max_retries=Config().llm_requests_max_retries,
+            rate_limiter=InMemoryRateLimiter(
+                requests_per_second=10,
+                check_every_n_seconds=0.1,
+                max_bucket_size=100,
+            ),
+        )
+
+        handler: BaseCallbackHandler = LoggingCallbackHandler(
+            ai_model=f"{provider}:{model}"
+        )
+        # Add the logging handler.
+        if chat_model.callback_manager:
+            chat_model.callback_manager.add_handler(handler)
+        else:
+            chat_model.callback_manager = CallbackManager([handler])
+
+        return chat_model

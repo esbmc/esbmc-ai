@@ -1,20 +1,23 @@
-# ESBMC-AI Default Config File.
-# The ESBMC-AI config is loaded in the following order:
-# 1. CLI
-# 2. env
-# 3. dotenv
-# 4. TOML
-# 5. file_secret
-# This file is provided as an example, however it should be customized to your
-# needs as it probably contains values that are wrong for your system.
-# To view all the possible config options and their description, run the 
-# subcommand "list-config".
 ai_model = "openai:gpt-5-nano"
 temp_auto_clean = true
 #temp_file_dir = "temp"
 allow_successful = false
-loading_hints = true
+loading_hints = false
 source_code_format = "full"
+dev_mode = true
+
+[ai_custom."llama3.2:3b"]
+server_type = "ollama"
+url = "localhost:11434"
+max_tokens = 100000
+
+[ai_custom."llama3.3:latest"]
+server_type = "ollama"
+url = "localhost:11435"
+max_tokens = 100000
+
+[solution]
+filenames = ["samples/threading.c"]
 
 [verifier]
 name = "esbmc"
