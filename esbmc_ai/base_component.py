@@ -104,11 +104,16 @@ class BaseComponentConfig(BaseSettings):
                     InitSettingsSource, init_settings
                 )
 
-                # Extract component name from init_settings if provided
+                # Extract component name and builtin flag from init_settings if
+                # provided
                 component_name: str = cast(
                     str, init_source.init_kwargs.get("_component_name")
                 )
                 builtin: bool = cast(bool, init_source.init_kwargs.get("_builtin"))
+
+                # If a component name is actually given, then the config will be
+                # loaded from the file. If none, then nothjing is loaded from the
+                # config file, instead the other sources are used only.
                 if component_name:
                     # Load TOML file and extract addons.<component_name> section
                     with open(config_file, "rb") as f:
