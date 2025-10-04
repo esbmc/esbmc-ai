@@ -3,16 +3,14 @@ NOTE: Do not add any that are not builtin and will be exposed to the main progra
 
 from .exit_command import ExitCommand
 from .help_command import HelpCommand
-from .list_models_command import ListModelsCommand
 from .help_config import HelpConfigCommand
 from .fix_code_command import FixCodeCommand
-from .reload_models_command import ReloadAIModelsCommand
+from .debug_config import DebugConfigViewCommand
 
 __all__ = [
     "ExitCommand",
     "HelpCommand",
     "HelpConfigCommand",
-    "ListModelsCommand",
     "FixCodeCommand",
-    "ReloadAIModelsCommand",
+    "DebugConfigViewCommand",
 ]

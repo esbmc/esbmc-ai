@@ -5,6 +5,21 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "Run on Open File",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "esbmc_ai",
+      "justMyCode": true,
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "ESBMCAI_CONFIG_FILE": "${workspaceFolder}/.vscode/debug/config.toml"
+      },
+      "args": [
+        "-vvv",
+        "debug-view-config"
+      ]
+    },
+    {
       "name": "Fix Code on Open File",
       "type": "debugpy",
       "request": "launch",
@@ -16,7 +31,6 @@
       },
       "args": [
         "-v",
-        "-r",
         "fix-code",
         "${file}"
       ]

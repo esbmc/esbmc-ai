@@ -300,7 +300,9 @@ class ESBMC(BaseSourceVerifier):
     @property
     def esbmc_path(self) -> Path:
         """Returns the ESBMC path from config."""
-        return self.get_config_value("verifier.esbmc.path").absolute()
+        if not self.global_config.verifier.esbmc.path:
+            raise ValueError("No esbmc path set.")
+        return self.global_config.verifier.esbmc.path.absolute()
 
     @override
     def verify_source(
@@ -315,7 +317,7 @@ class ESBMC(BaseSourceVerifier):
         _ = kwargs
 
         esbmc_params: list[str] = (
-            params if params else self.get_config_value("verifier.esbmc.params")
+            params if params else self.global_config.verifier.esbmc.params
         )
 
         if "--multi-property" in esbmc_params:
@@ -343,7 +345,7 @@ class ESBMC(BaseSourceVerifier):
             raise SolutionIntegrityError(solution.files)
 
         # Check if cached version exists.
-        enable_cache: bool = self.get_config_value("verifier.enable_cache")
+        enable_cache: bool = self.global_config.verifier.enable_cache
         cache_properties: Any = [solution, entry_function, timeout, params, kwargs]
         if enable_cache:
             cached_result: Any = self._load_cached(cache_properties)

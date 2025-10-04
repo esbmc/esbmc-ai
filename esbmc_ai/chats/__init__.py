@@ -3,8 +3,14 @@
 """This module contains different chat interfaces. Along with `BaseChatInterface`
 that provides necessary boilet-plate for implementing an LLM based chat."""
 
-from .base_chat_interface import BaseChatInterface
+from .template_key_provider import (
+    TemplateKeyProvider,
+    GenericTemplateKeyProvider,
+    ESBMCTemplateKeyProvider,
+)
 
 __all__ = [
-    "BaseChatInterface",
+    "TemplateKeyProvider",
+    "GenericTemplateKeyProvider",
+    "ESBMCTemplateKeyProvider",
 ]

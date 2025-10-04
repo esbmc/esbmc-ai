@@ -2,31 +2,33 @@
 
 """Contains code for automatically repairing code using ESBMC."""
 
-from dataclasses import dataclass, replace
-from typing_extensions import override
+from dataclasses import replace
+from langchain_core.prompts.chat import MessageLikeRepresentation
+from pydantic import BaseModel, Field, SkipValidation
 from langchain.schema import BaseMessage
+from langchain_core.language_models import BaseChatModel
 
-from esbmc_ai.chat_response import ChatResponse, FinishReason
 from esbmc_ai.solution import SourceFile
-
-from esbmc_ai.ai_models import AIModel
 from esbmc_ai.verifiers.base_source_verifier import (
     SourceCodeParseError,
     VerifierTimedOutException,
 )
-from esbmc_ai.chats.base_chat_interface import BaseChatInterface
-from esbmc_ai.chats.template_key_provider import ESBMCTemplateKeyProvider
+from esbmc_ai.chats.template_key_provider import (
+    ESBMCTemplateKeyProvider,
+    TemplateKeyProvider,
+)
 from esbmc_ai.verifiers.esbmc import ESBMCOutput
+from esbmc_ai.chats.template_renderer import KeyTemplateRenderer
 
 default_scenario: str = "base"
 
 
-@dataclass
-class FixCodeScenario:
-    """Type for scenarios. A single scenario contains initial and system components."""
-
-    initial: BaseMessage
-    system: tuple[BaseMessage, ...]
+class FixCodeScenario(BaseModel):
+    initial: str = Field(default="")
+    # Going to be manually instantiated by FixCodeCommandConfig
+    system: list[SkipValidation[MessageLikeRepresentation]] = Field(
+        default_factory=list,
+    )
 
 
 def apply_formatting(esbmc_output: ESBMCOutput, format: str) -> str:
@@ -57,32 +59,7 @@ def apply_formatting(esbmc_output: ESBMCOutput, format: str) -> str:
             raise ValueError(f"Not a valid ESBMC output type: {format}")
 
 
-def get_source_code_formatted(
-    source_code_format: str,
-    source_code: str,
-    esbmc_output: ESBMCOutput,
-) -> str:
-    """Gets the formatted output source code, based on the source_code_format
-    passed."""
-    match source_code_format:
-        case "single":
-            # Get source code error line from esbmc output
-            line: int | None = esbmc_output.get_error_line_idx()
-            if line:
-                return source_code.splitlines(True)[line]
-
-            raise AssertionError(
-                f"error line not found in esbmc output:\n{esbmc_output}"
-            )
-        case "full":
-            return source_code
-        case _:
-            raise ValueError(
-                f"Not a valid format for source code: {source_code_format}"
-            )
-
-
-class SolutionGenerator(BaseChatInterface):
+class SolutionGenerator:
     """SolutionGenerator is a simple conversation-based automated program repair
     class. The class works in a cycle, by first calling update_state with the
     new source_code and esbmc_output, then by calling generate_solution. The
@@ -92,36 +69,24 @@ class SolutionGenerator(BaseChatInterface):
     def __init__(
         self,
         scenarios: dict[str, FixCodeScenario],
-        ai_model: AIModel,
-        source_code_format: str = "full",
+        ai_model: BaseChatModel,
         esbmc_output_type: str = "full",
     ) -> None:
         """Initializes the solution generator."""
+        super().__init__()
 
-        super().__init__(
-            ai_model=ai_model,
-            system_messages=[],  # Empty as it will be updated in the update method.
-            template_key_provider=ESBMCTemplateKeyProvider(),
-        )
+        self.ai_model: BaseChatModel = ai_model
+        self.template_key_provider: TemplateKeyProvider = ESBMCTemplateKeyProvider()
+        self.messages: list[BaseMessage] = []
 
         self.scenarios: dict[str, FixCodeScenario] = scenarios
         self.scenario: str = ""
 
         self.esbmc_output_type: str = esbmc_output_type
-        self.source_code_format: str = source_code_format
 
         self.source_code: SourceFile | None = None
-        self.source_code_formatted: str | None = None
         self.esbmc_output: ESBMCOutput | None = None
         self.invokations: int = 0
-
-    @override
-    def compress_message_stack(self) -> None:
-        # Resets the conversation - cannot summarize code
-        # If generate_solution is called after this point, it will start new
-        # with the currently set state.
-        self.messages: list[BaseMessage] = []
-        self.invokations = 0
 
     @staticmethod
     def extract_code_from_solution(solution: str) -> str:
@@ -176,48 +141,10 @@ class SolutionGenerator(BaseChatInterface):
             # big.
             self.esbmc_output = verifier_output
 
-        # Format source code
-        self.source_code_formatted = get_source_code_formatted(
-            source_code_format=self.source_code_format,
-            source_code=source_file.content,
-            esbmc_output=verifier_output,
-        )
-
-    def _get_system_messages(
-        self, override_scenario: str | None = None
-    ) -> tuple[BaseMessage, ...]:
-        if override_scenario:
-            system_messages = self.scenarios[override_scenario].system
-        else:
-            assert self.scenario, "Call update or set the scenario"
-            if self.scenario in self.scenarios:
-                system_messages = self.scenarios[self.scenario].system
-            else:
-                system_messages = self.scenarios[default_scenario].system
-
-        assert isinstance(system_messages, tuple)
-        assert all(isinstance(msg, BaseMessage) for msg in system_messages)
-        return system_messages
-
-    def _get_initial_message(self, override_scenario: str | None = None) -> BaseMessage:
-        if override_scenario:
-            return self.scenarios[override_scenario].initial
-        else:
-            assert self.scenario, "Call update or set the scenario"
-            if self.scenario in self.scenarios:
-                return self.scenarios[self.scenario].initial
-            else:
-                return self.scenarios[default_scenario].initial
-
-    def generate_solution(
-        self,
-        override_scenario: str | None = None,
-        ignore_system_message: bool = False,
-    ) -> tuple[str, FinishReason]:
+    def generate_solution(self, override_scenario: str | None = None) -> str:
         """Prompts the LLM to repair the source code using the verifier output.
         If this is the first time the method is called, the system message will
-        be sent to the LLM, unless ignore_system_message is True. Then the
-        initial prompt will be sent.
+        be sent to the LLM. Then the initial prompt will be sent.
 
         In subsequent invokations of generate_solution, the initial prompt will
         be used only.
@@ -231,106 +158,41 @@ class SolutionGenerator(BaseChatInterface):
 
         assert (
             self.source_code_raw is not None
-            and self.source_code_formatted is not None
             and self.esbmc_output is not None
             and self.scenario is not None
         ), "Call update_state before calling generate_solution."
 
-        # Show system message
-        if not ignore_system_message and self.invokations <= 0:
-            # Get scenario system messages and push it to message stack. Don't
-            # push to system message stack because we want to regenerate from
-            # the beginning at every reset.
-            system_messages: tuple[BaseMessage, ...] = self._get_system_messages(
-                override_scenario=override_scenario
-            )
-            if len(system_messages) > 0:
-                self.push_to_message_stack(system_messages)
+        scenario_name: str = override_scenario or self.scenario
+        scenario: FixCodeScenario = self.scenarios[
+            scenario_name if scenario_name in self.scenarios else "base"
+        ]
+        new_templates: list[MessageLikeRepresentation] = []
+
+        # Apply system message if first cycle
+        if self.invokations == 0:
+            new_templates.extend(scenario.system)
 
         # Get scenario initial message and push it to message stack
-        self.push_to_message_stack(
-            self._get_initial_message(override_scenario=override_scenario)
+        new_templates.append(("human", scenario.initial))
+        # Prepare template values
+        key_template_renderer: KeyTemplateRenderer = KeyTemplateRenderer(
+            messages=new_templates,
+            key_provider=self.template_key_provider,
         )
-
-        self.invokations += 1
-
         error_type: str | None = self.esbmc_output.get_error_type()
-
-        # Apply template substitution to message stack
-        self.apply_template_value(
-            **self.get_template_keys(
-                source_code=self.source_code_formatted,
+        self.messages.extend(
+            key_template_renderer.format_messages(
+                source_code=self.source_code,
                 esbmc_output=self.esbmc_output.output,
                 error_line=str(self.esbmc_output.get_error_line()),
                 error_type=error_type if error_type else "unknown error",
             )
         )
 
+        self.invokations += 1
+
         # Generate the solution
-        response: ChatResponse = self.send_message()
-        solution: str = str(response.message.content)
+        response: BaseMessage = self.ai_model.invoke(self.messages)
+        solution = SolutionGenerator.extract_code_from_solution(str(response.content))
 
-        solution = SolutionGenerator.extract_code_from_solution(solution)
-
-        # Post process source code
-        # If source code passed to LLM is formatted then we need to recombine to
-        # full source code before giving to ESBMC
-        match self.source_code_format:
-            case "single":
-                # Get source code error line from esbmc output
-                line: int | None = self.esbmc_output.get_error_line_idx()
-                assert line, (
-                    "fix code command: error line could not be found to apply "
-                    "brutal patch replacement"
-                )
-                solution = SourceFile.apply_line_patch(
-                    self.source_code_raw, solution, line, line
-                )
-
-        return solution, response.finish_reason
-
-
-class ReverseOrderSolutionGenerator(SolutionGenerator):
-    """SolutionGenerator that shows the source code and verifier output state in
-    reverse order."""
-
-    @override
-    def send_message(self, message: str | None = None) -> ChatResponse:
-        # Reverse the messages
-        messages: list[BaseMessage] = self.messages.copy()
-        self.messages.reverse()
-
-        response: ChatResponse = super().send_message(message)
-
-        # Add to the reversed message the new message received by the LLM.
-        messages.append(self.messages[-1])
-        # Restore
-        self.messages = messages
-
-        return response
-
-
-class LatestStateSolutionGenerator(SolutionGenerator):
-    """SolutionGenerator that only shows the latest source code and verifier
-    output state."""
-
-    @override
-    def generate_solution(
-        self,
-        override_scenario: str | None = None,
-        ignore_system_message: bool = False,
-    ) -> tuple[str, FinishReason]:
-        # Backup message stack and clear before sending base message. We want
-        # to keep the message stack intact because we will print it with
-        # print_raw_conversation.
-        messages: list[BaseMessage] = self.messages
-        self.messages: list[BaseMessage] = []
-        solution, finish_reason = super().generate_solution(
-            override_scenario=override_scenario,
-            ignore_system_message=ignore_system_message,
-        )
-        # Append last messages to the messages stack
-        messages.extend(self.messages)
-        # Restore
-        self.messages = messages
-        return solution, finish_reason
+        return solution

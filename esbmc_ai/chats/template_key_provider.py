@@ -29,7 +29,7 @@ class ESBMCTemplateKeyProvider(TemplateKeyProvider):
         **kwargs: Any,
     ) -> dict[str, Any]:
         """Get canonical template keys for ESBMC code repair workflows."""
-        keys = {
+        keys: dict["str", Any] = {
             "source_code": source_code,
             "esbmc_output": esbmc_output,
             "error_line": error_line,

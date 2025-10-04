@@ -2,21 +2,22 @@
 
 # Author: Yiannis Charalambous 2023
 
+import logging
 import sys
 
 import argparse
-from typing import Any
 
+from pydantic_settings import CliApp, CliSettingsSource
 from structlog import get_logger
 from structlog.stdlib import BoundLogger
 
 from esbmc_ai import Config, ChatCommand, __author__, __version__
 from esbmc_ai.addon_loader import AddonLoader
 from esbmc_ai.command_result import CommandResult
-from esbmc_ai.log_utils import LogCategories
+from esbmc_ai.log_utils import LogCategories, get_log_level, init_logging
 from esbmc_ai.verifiers.base_source_verifier import BaseSourceVerifier
 from esbmc_ai.verifiers.esbmc import ESBMC
-from esbmc_ai.component_loader import ComponentLoader
+from esbmc_ai.component_manager import ComponentManager
 import esbmc_ai.commands
 
 HELP_MESSAGE: str = (
@@ -92,6 +93,7 @@ def _init_args(
         help="The filename(s) to pass to the verifier.",
     )
 
+def _init_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--version",
         action="version",
@@ -111,143 +113,138 @@ def _init_args(
         ),
     )
 
-    # Init arg groups
-    arg_groups: dict[str, argparse._ArgumentGroup] = {}
-    for f in Config().get_config_fields():
-        name_split: list[str] = f.name.split(".")
-        if len(name_split) == 1:
-            continue  # No group
-        arg_groups[name_split[0]] = parser.add_argument_group(
-            title=name_split[0],
-        )
 
-    for f in Config().get_config_fields():
-        if f.name in ignore_fields:
-            continue
+def _load_config(
+    parser: argparse.ArgumentParser,
+) -> Config:
+    # Parse args to get verbose level before Pydantic CLI parsing
+    args, _ = parser.parse_known_args()
+    verbose_level: int = min(args.verbose, 3) if hasattr(args, "verbose") else 0
 
-        # Get either the general parser or a group parser
-        arg_parser: argparse._ArgumentGroup | argparse.ArgumentParser = parser
-        name_split: list[str] = f.name.split(".")
-        if len(name_split) > 1:
-            arg_parser = arg_groups[name_split[0]]
+    # Create custom CLI settings source using our argparse parser
+    # This allows us to use custom arguments like -v/--verbose with action='count'
+    cli_settings: CliSettingsSource = CliSettingsSource(
+        Config, cli_parse_args=True, root_parser=parser
+    )
 
-        # Get the name that will be shown.
-        mappings: list[str] = (
-            map_field_names[f.name] if f.name in map_field_names else [f.name]
-        )
-        # Add single or double dash. Change _ into -, argparse will automatically
-        # convert into _ anyway.
-        mappings = [
-            f"-{m}" if len(m) == 1 else f"--{m.replace("_", "-")}" for m in mappings
-        ]
+    # Use CliApp.run with custom CLI settings source
+    # settings_customise_sources will handle TOML/env/dotenv loading process
+    config: Config = CliApp.run(Config, cli_settings_source=cli_settings)
 
-        action: Any
-        match f.default_value:
-            case bool():
-                action = "store_true"
-            case _:
-                action = "store"
+    # Set argparse config values - These fields have exclude=True
+    config.verbose_level = verbose_level
 
-        # Set type
-        try:
-            # Type is only accepted when the action is not some specific values.
-            kwargs = {}
-            if action not in (
-                "store_true",
-                "store_false",
-                "append_const",
-                "count",
-                "help",
-                "version",
-            ):
-                # If None then it will only accept None values so basically useless
-                kwargs["type"] = (
-                    str if f.default_value is None else type(f.default_value)
-                )
+    return config
 
-            # Create the argument.
-            arg_parser.add_argument(
-                *mappings,
-                action=action,
-                required=False,
-                # Will not show up in the Namespace
-                default=argparse.SUPPRESS,
-                help=f.help_message,
-                **kwargs,
-            )
-        except TypeError as e:
-            get_logger().critical(f"Failed to encode config into args: {f.name}")
-            raise e
+
+def _init_builtin_components() -> None:
+    """Initializes the builtin verifiers and commands."""
+    component_manager = ComponentManager()
+
+    # Built-in verifiers
+    esbmc = ESBMC.create()
+    assert isinstance(esbmc, BaseSourceVerifier)
+    component_manager.add_verifier(esbmc)
+    # Load component-specific configuration
+    component_manager.load_component_config(esbmc, builtin=True)
+
+    # Init built-in commands - Loads everything in the esbmc_ai.commands module.
+    commands: list[ChatCommand] = []
+    for cmd_classname in getattr(esbmc_ai.commands, "__all__"):
+        cmd_type: type = getattr(esbmc_ai.commands, cmd_classname)
+        assert issubclass(cmd_type, ChatCommand), f"{cmd_type} is not a ChatCommand"
+        cmd: object = cmd_type.create()
+        assert isinstance(cmd, ChatCommand)
+        cmd.global_config = Config()
+        # Load component-specific configuration
+        component_manager.load_component_config(cmd, builtin=True)
+        commands.append(cmd)
+
+    component_manager.set_builtin_commands(commands)
+
+
+def _init_logging() -> None:
+    # Add logging handlers with config options
+    config = Config()
+    logging_handlers: list[logging.Handler] = config.log.logging_handlers
+
+    # Reinit logging
+    init_logging(
+        level=get_log_level(config.verbose_level),
+        file_handlers=logging_handlers,
+        init_basic=config.log.basic,
+    )
 
 
 def main() -> None:
     """Entry point function"""
     parser: argparse.ArgumentParser = argparse.ArgumentParser(
         prog="ESBMC-AI",
-        description=HELP_MESSAGE,
+        description="""Automated Program Repair platform. To view help on subcommands, run with the subcommand "help".
+
+Configuration Precedence (highest to lowest):
+  * CLI args > Environment variables > .env file > TOML config > Defaults
+  * NOTE: Setting nested values through environment variables and files is currently not supported (https://github.com/esbmc/esbmc-ai/issues/229)""",
         epilog=f"Made by {__author__}",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
-    # Will rename these config fields
-    arg_mappings: dict[str, list[str]] = {
-        "solution.entry_function": ["entry-function"],
-        "ai_model": ["m", "ai-model"],
-        "solution.output_dir": ["o", "output-dir"],
-        "log.output": ["log-output"],
-        "log.by_cat": ["log-by-cat"],
-        "log.by_name": ["log-by-name"],
-    }
+    _init_args(parser=parser)
 
-    # Will not expose these to the arguments.
-    manual_mappings: dict[str, list[str]] = {
-        "solution.filenames": ["filenames"],
-        "ai_custom": ["ai_custom"],  # Block
-    }
-
-    _init_args(
-        parser=parser,
-        map_field_names=arg_mappings,
-        ignore_fields=manual_mappings,
-    )
-
-    args: argparse.Namespace = parser.parse_args()
+    config: Config
+    config = _load_config(parser=parser)
+    # Set the config singleton
+    Config.set_singleton(config)
+    config: Config = Config()
 
     print(f"ESBMC-AI {__version__}")
     print(f"Made by {__author__}")
     print()
 
-    Config().load(
-        args=args,
-        arg_mapping_overrides=arg_mappings | manual_mappings,
-        compound_load_args=[v for values in manual_mappings.values() for v in values],
-    )
-    logger: BoundLogger = get_logger().bind(category=LogCategories.SYSTEM)
+    _init_logging()
 
-    logger.info(f"Config File: {Config().get_value("ESBMCAI_CONFIG_FILE")}")
+    logger: BoundLogger = get_logger().bind(category=LogCategories.SYSTEM)
+    logger.debug("Global config loaded successfully")
+    logger.debug("Initialized logging")
 
     _init_builtin_components()
+    logger.debug("Builtin components loaded successfully")
 
-    if Config().get_value("dev_mode"):
+    if config.dev_mode:
         logger.warn("Development Mode Activated")
 
     # Load addons
-    AddonLoader(Config())
+    addon_loader: AddonLoader = AddonLoader(config)
+    logger.debug("Addon components loaded successfully")
+    logger.info("Configuration loaded successfully")
 
     # Bind addons to component loader.
-    ComponentLoader().addon_commands.update(AddonLoader().chat_command_addons)
-    ComponentLoader().verifiers.update(AddonLoader().verifier_addons)
-    ComponentLoader().set_verifier_by_name(Config().get_value("verifier.name"))
+    cm = ComponentManager()
+    for command in addon_loader.chat_command_addons.values():
+        cm.add_command(command, builtin=False)
+
+    for verifier in addon_loader.verifier_addons.values():
+        cm.add_verifier(verifier, builtin=False)
+
+    cm.set_verifier_by_name(config.verifier.name)
 
     # Run the command
-    command = args.command
-    command_names: list[str] = ComponentLoader().command_names
-    if command in command_names:
-        logger.info(f"Running Command: {command}\n")
-        _run_command_mode(command=ComponentLoader().commands[command], args=args)
+    command_name = config.command_name
+    command_names: list[str] = cm.command_names
+    if command_name in command_names:
+        logger.info(f"Running Command: {command_name}\n")
+        command: ChatCommand = cm.commands[command_name]
+        result: CommandResult | None = command.execute(kwargs=vars(config))
+        if result:
+            if config.use_json:
+                print(vars(result))
+            else:
+                print(result)
+
         sys.exit(0)
     else:
         logger.error(
-            f"Error: Unknown command: {command}. Choose from: "
+            f"Error: Unknown command: {command_name}. Choose from: "
             + ", ".join(command_names)
         )
         sys.exit(1)
