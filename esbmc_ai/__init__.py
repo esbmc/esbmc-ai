@@ -10,6 +10,12 @@ from esbmc_ai.base_component import BaseComponent, BaseComponentConfig
 from esbmc_ai.verifiers import BaseSourceVerifier
 from esbmc_ai.ai_models import AIModel
 from esbmc_ai.log_categories import LogCategories
+from esbmc_ai.chats.key_template_renderer import KeyTemplateRenderer
+from esbmc_ai.chats.template_key_provider import (
+    TemplateKeyProvider,
+    GenericTemplateKeyProvider,
+    ESBMCTemplateKeyProvider,
+)
 
 __all__ = [
     "Config",
@@ -19,4 +25,8 @@ __all__ = [
     "BaseSourceVerifier",
     "AIModel",
     "LogCategories",
+    "KeyTemplateRenderer",
+    "TemplateKeyProvider",
+    "GenericTemplateKeyProvider",
+    "ESBMCTemplateKeyProvider",
 ]

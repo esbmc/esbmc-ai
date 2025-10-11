@@ -18,7 +18,7 @@ from esbmc_ai.chats.template_key_provider import (
     TemplateKeyProvider,
 )
 from esbmc_ai.verifiers.esbmc import ESBMCOutput
-from esbmc_ai.chats.template_renderer import KeyTemplateRenderer
+from esbmc_ai.chats import KeyTemplateRenderer
 
 default_scenario: str = "base"
 
