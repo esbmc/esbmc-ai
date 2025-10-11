@@ -69,7 +69,7 @@ def _load_config(
     # Create custom CLI settings source using our argparse parser
     # This allows us to use custom arguments like -v/--verbose with action='count'
     cli_settings: CliSettingsSource = CliSettingsSource(
-        Config, cli_parse_args=True, root_parser=parser
+        Config, cli_parse_args=True, root_parser=parser, cli_implicit_flags=True
     )
 
     # If help is requested and validation fails, catch error and show help anyway
