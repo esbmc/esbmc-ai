@@ -1,7 +1,6 @@
 # Author: Yiannis Charalambous
 
-from esbmc_ai.chats.template_renderer import KeyTemplateRenderer
-from esbmc_ai.chats.template_key_provider import ESBMCTemplateKeyProvider
+from esbmc_ai.chats import KeyTemplateRenderer, ESBMCTemplateKeyProvider
 
 
 def test_template_substitution():
