@@ -7,7 +7,9 @@ import sys
 
 import argparse
 
+from pydantic_core import ErrorDetails
 from pydantic_settings import CliApp, CliSettingsSource
+from pydantic_core._pydantic_core import ValidationError
 from structlog import get_logger
 from structlog.stdlib import BoundLogger
 
@@ -22,6 +24,13 @@ import esbmc_ai.commands
 
 
 def _init_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "-h",
+        "--help",
+        action="store_true",
+        help="Show this help message and exit.",
+    )
+
     parser.add_argument(
         "--version",
         action="version",
@@ -45,9 +54,17 @@ def _init_args(parser: argparse.ArgumentParser) -> None:
 def _load_config(
     parser: argparse.ArgumentParser,
 ) -> Config:
-    # Parse args to get verbose level before Pydantic CLI parsing
-    args, _ = parser.parse_known_args()
-    verbose_level: int = min(args.verbose, 3) if hasattr(args, "verbose") else 0
+    # Check if help is requested - if so, skip verbose level extraction
+    # and let CliApp.run handle the full help display with all Pydantic fields
+    help_requested = "--help" in sys.argv or "-h" in sys.argv
+
+    if not help_requested:
+        # Parse args to get verbose level before Pydantic CLI parsing
+        args, _ = parser.parse_known_args()
+        verbose_level: int = min(args.verbose, 3) if hasattr(args, "verbose") else 0
+    else:
+        # No need to parse verbosity.
+        verbose_level: int = 0
 
     # Create custom CLI settings source using our argparse parser
     # This allows us to use custom arguments like -v/--verbose with action='count'
@@ -55,9 +72,40 @@ def _load_config(
         Config, cli_parse_args=True, root_parser=parser
     )
 
-    # Use CliApp.run with custom CLI settings source
-    # settings_customise_sources will handle TOML/env/dotenv loading process
-    config: Config = CliApp.run(Config, cli_settings_source=cli_settings)
+    # If help is requested and validation fails, catch error and show help anyway
+    try:
+        # Use CliApp.run with custom CLI settings source
+        # settings_customise_sources will handle TOML/env/dotenv loading process
+        config: Config = CliApp.run(Config, cli_settings_source=cli_settings)
+    except ValidationError as e:
+        if help_requested:
+            # When help is requested, show help even if config validation fails
+            # CliSettingsSource has already added all Pydantic fields to the parser
+            parser.print_help()
+            sys.exit(0)
+        else:
+            # Re-raise the exception if help was not requested
+            print(f"ESBMC-AI: validation error while loading {e.title}\n")
+            errs: list[ErrorDetails] = e.errors(
+                include_context=True,
+                include_input=True,
+            )
+            for idx, err in enumerate(errs):
+                print(
+                    f"* Error {idx}: "
+                    f'{err["type"]}: {err["loc"]} cannot accept '
+                    f'"{err["input"]}" (type {type(err["input"]).__name__}) '
+                    f'because: {err["msg"]}'
+                )
+            print("\nShowing traceback...")
+            print("=" * 80)
+            raise
+
+    # If help was requested and config loaded successfully, show help and exit
+    # This handles the case where --help is passed but config validation succeeds
+    if help_requested:
+        parser.print_help()
+        sys.exit(0)
 
     # Set argparse config values - These fields have exclude=True
     config.verbose_level = verbose_level
@@ -115,6 +163,8 @@ Configuration Precedence (highest to lowest):
   * NOTE: Setting nested values through environment variables and files is currently not supported (https://github.com/esbmc/esbmc-ai/issues/229)""",
         epilog=f"Made by {__author__}",
         formatter_class=argparse.RawDescriptionHelpFormatter,
+        # Disable argparse help to let Pydantic handle full help display
+        add_help=False,
     )
 
     _init_args(parser=parser)
