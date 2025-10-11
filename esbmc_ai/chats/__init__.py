@@ -9,8 +9,11 @@ from .template_key_provider import (
     ESBMCTemplateKeyProvider,
 )
 
+from .key_template_renderer import KeyTemplateRenderer
+
 __all__ = [
     "TemplateKeyProvider",
     "GenericTemplateKeyProvider",
     "ESBMCTemplateKeyProvider",
+    "KeyTemplateRenderer",
 ]
