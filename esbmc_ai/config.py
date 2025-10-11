@@ -249,7 +249,7 @@ class ESBMCConfig(BaseModel):
     )
 
     timeout: int | None = Field(
-        default=None,
+        default=20,
         description="The timeout set for ESBMC.",
     )
 
@@ -503,6 +503,7 @@ class Config(BaseSettings, metaclass=makecls(SingletonMeta)):
     ) -> tuple[PydanticBaseSettingsSource, ...]:
         # Manually load .env file to get ESBMCAI_CONFIG_FILE before creating sources
         from dotenv import load_dotenv
+
         load_dotenv(".env", override=False)
 
         # Get config file path from environment variable
