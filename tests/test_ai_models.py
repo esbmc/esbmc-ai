@@ -1,7 +1,7 @@
 # Author: Yiannis Charalambous
 
 from dataclasses import dataclass, field
-from langchain.schema import BaseMessage
+from langchain_core.messages import BaseMessage
 from langchain_core.language_models import BaseChatModel, FakeListChatModel
 
 
