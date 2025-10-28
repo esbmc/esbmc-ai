@@ -160,7 +160,8 @@ def main() -> None:
 
 Configuration Precedence (highest to lowest):
   * CLI args > Environment variables > .env file > TOML config > Defaults
-  * NOTE: Setting nested values through environment variables and files is currently not supported (https://github.com/esbmc/esbmc-ai/issues/229)""",
+  * NOTE: Nested config values can be set via environment variables using double underscores
+    (e.g., ESBMCAI_VERIFIER__ESBMC__PATH for verifier.esbmc.path)""",
         epilog=f"Made by {__author__}",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         # Disable argparse help to let Pydantic handle full help display
