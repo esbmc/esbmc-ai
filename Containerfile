@@ -1,4 +1,48 @@
-FROM docker.io/library/ubuntu:25.10
+# Multi-stage container build for ESBMC-AI on Ubuntu 24.04 LTS
+# Builder stage: Compiles ESBMC-AI wheel using hatch
+# Main stage: Installs ESBMC, Python 3.12, dependencies (Clang 14, Boost, Z3), and ESBMC-AI via pipx
+#
+# Build args: ESBMC_VERSION (default: "latest"), EXTRA_PIP_PACKAGES (optional build-time packages)
+# Runtime: Mount config.toml via ESBMCAI_CONFIG_FILE to auto-inject [extras.packages]; set API keys as env vars
+# Default CMD: esbmc-ai (override with custom commands)
+
+# Builder stage to run hatch build and produce the wheel
+FROM docker.io/library/ubuntu:24.04 AS builder
+
+# Label this as an intermediate build stage
+LABEL stage="builder" \
+      description="ESBMC-AI intermediate build stage - contains hatch and build artifacts" \
+      maintainer="ESBMC-AI Team" \
+      safe-to-remove="true"
+
+# Prevent interactive prompts during package installation
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install Python and pipx for isolated tool installation
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        python3.12 pipx \
+    && rm -rf /var/lib/apt/lists/*
+
+# Add pipx binaries to PATH
+ENV PATH="/root/.local/bin:$PATH"
+
+# Copy the project source code into the builder
+COPY . /src
+
+# Set working directory to source
+WORKDIR /src
+
+# Install Hatch via pipx and build the project (produces dist/ with wheel)
+RUN pipx install hatch && hatch build
+
+# Main stage for the runtime image
+FROM docker.io/library/ubuntu:24.04
+
+# Label this as the runtime image
+LABEL stage="runtime" \
+      description="ESBMC-AI runtime image - includes ESBMC, Python, and esbmc-ai tool" \
+      maintainer="ESBMC-AI Team"
 
 # Prevent interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
@@ -6,7 +50,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Install core system utilities and development libraries
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        python3.12 python3.12-venv python3.12-distutils python3-pip \
+        python3.12 python3.12-venv python3-pip \
         pipx \
         git \
         ccache \
@@ -49,23 +93,26 @@ RUN if [ "$ESBMC_VERSION" = "latest" ]; then \
     && chmod +x /bin/esbmc
 
 # Add pipx binaries to PATH
-RUN pipx ensurepath
+ENV PATH="/root/.local/bin:$PATH"
 
-# Install ESBMC-AI
-ARG ESBMCAI_WHEEL
-COPY ${ESBMCAI_WHEEL} /tmp/
+# Copy the built wheel from the builder stage
+COPY --from=builder /src/dist/*.whl /tmp/
 
 # Install ESBMC-AI using pipx from the copied wheel
-RUN pipx install /tmp/$(basename "$ESBMCAI_WHEEL") \
-    && rm /tmp/$(basename "$ESBMCAI_WHEEL")
+RUN WHEEL=$(ls /tmp/*.whl) \
+    && pipx install "$WHEEL" \
+    && rm "$WHEEL"
 
 # Accept build-time extra pip packages (pass --build-arg EXTRA_PIP_PACKAGES="pkg1 pkg2" if needed)
 ARG EXTRA_PIP_PACKAGES=""
 # Inject any additional pip packages into the esbmc-ai environment
 RUN if [ -n "$EXTRA_PIP_PACKAGES" ]; then pipx inject esbmc-ai $EXTRA_PIP_PACKAGES; fi
 
+# Copy entrypoint script
+COPY scripts/container/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
 # Declare environment variables to be set at runtime
-ENV ESBMCAI_CONFIG_FILE=""
 ENV OPENAI_API_KEY=""
 ENV ANTHROPIC_API_KEY=""
 ENV GOOGLE_API_KEY=""
@@ -73,5 +120,8 @@ ENV GOOGLE_API_KEY=""
 # Set working directory inside the container
 WORKDIR /workspace
 
-# Launch into bash by default
-CMD ["bash"]
+# Set entrypoint for runtime configuration
+ENTRYPOINT ["/entrypoint.sh"]
+
+# Launch into esbmc-ai by default
+CMD ["esbmc-ai"]
