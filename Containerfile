@@ -6,7 +6,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Install core system utilities and development libraries
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        python-is-python3 \
+        python3.12 python3.12-venv python3.12-distutils python3-pip \
         pipx \
         git \
         ccache \
