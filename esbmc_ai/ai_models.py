@@ -2,14 +2,15 @@
 
 from typing import Any
 from uuid import UUID
-from langchain.schema import BaseMessage, LLMResult
+from langchain_core.messages import BaseMessage
+from langchain_core.outputs import LLMResult
 from typing_extensions import override
 import structlog
 
 from langchain.chat_models import init_chat_model
 from langchain_core.language_models import BaseChatModel
 from langchain_core.rate_limiters import InMemoryRateLimiter
-from langchain_core.callbacks import CallbackManager, BaseCallbackHandler
+from langchain_core.callbacks import BaseCallbackHandler
 
 
 from esbmc_ai.config import Config
@@ -123,6 +124,10 @@ class AIModel:
         temperature: float | None = None,
         url: str | None = None,
     ) -> BaseChatModel:
+        handler: BaseCallbackHandler = LoggingCallbackHandler(
+            ai_model=f"{provider}:{model}"
+        )
+
         chat_model: BaseChatModel = init_chat_model(
             model=model,
             model_provider=provider,
@@ -136,15 +141,7 @@ class AIModel:
                 check_every_n_seconds=0.1,
                 max_bucket_size=100,
             ),
+            callbacks=[handler],
         )
-
-        handler: BaseCallbackHandler = LoggingCallbackHandler(
-            ai_model=f"{provider}:{model}"
-        )
-        # Add the logging handler.
-        if chat_model.callback_manager:
-            chat_model.callback_manager.add_handler(handler)
-        else:
-            chat_model.callback_manager = CallbackManager([handler])
 
         return chat_model

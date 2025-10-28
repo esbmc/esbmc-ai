@@ -75,12 +75,21 @@ class SourceFile:
             return SourceFile(file_path, base_path, file.read())
 
     def __init__(self, file_path: Path, base_path: Path, content: str) -> None:
+        if file_path.is_absolute():
+            raise ValueError(
+                f"SourceFile requires a relative file path, got absolute: {file_path}. "
+                f"Use SourceFile.load() to create from absolute paths."
+            )
         self.file_path: Path = file_path
         """Relative file path"""
         self.base_path: Path = base_path
         self.content: str = content
         self.verifier_output: VerifierOutput | None = None
-        assert self.verify_file_integrity()
+        if not self.verify_file_integrity():
+            raise ValueError(
+                f"File integrity check failed for {self.abs_path}. "
+                f"The file content does not match the provided content or the file does not exist."
+            )
 
     @override
     def __repr__(self) -> str:
@@ -231,12 +240,14 @@ class Solution:
         # If files are loaded
         if files:
             for file_path in files:
-                assert file_path.is_file(), f"Path is not a file: {file_path}"
+                if not file_path.is_file():
+                    raise ValueError(f"Path is not a file: {file_path}")
                 self.load_source_file(file_path)
 
         if include_dirs:
             for d in include_dirs:
-                assert d.is_dir(), f"Path is not a directory: {d}"
+                if not d.is_dir():
+                    raise ValueError(f"Path is not a directory: {d}")
                 include_files: list[Path] = [p for p in d.rglob("*") if p.is_file()]
                 self._include_dirs[d] = [
                     SourceFile.load(file_path=p, base_path=self.base_dir)
@@ -279,8 +290,14 @@ class Solution:
         # Copy individual source files.
         new_file_paths: list[Path] = []
         for source_file in self.files:
-            new_file_paths.append(source_file.file_path)
-            new_path: Path = base_dir_path / source_file.file_path
+            # Handle absolute paths by flattening to just the filename
+            if source_file.file_path.is_absolute():
+                relative_path = Path(source_file.file_path.name)
+            else:
+                relative_path = source_file.file_path
+
+            new_file_paths.append(relative_path)
+            new_path: Path = base_dir_path / relative_path
             # Write new file
             new_path.parent.mkdir(parents=True, exist_ok=True)
             source_file.save_file(new_path)
@@ -330,7 +347,12 @@ class Solution:
         """Add a source file to the solution. If content is provided then it will
         not be loaded."""
         # Get the relative path to the base dir.
-        assert not file_path.is_absolute()
+        if file_path.is_absolute():
+            raise ValueError(
+                f"Cannot load absolute path '{file_path}' into Solution. "
+                f"All file paths must be relative to the base directory '{self.base_dir}'. "
+                f"This is an internal error - paths should be normalized before reaching this point."
+            )
         with open(self.base_dir / file_path, "r") as file:
             self._files.append(
                 SourceFile(
@@ -374,9 +396,8 @@ class Solution:
 
     def patch_solution(self, patch: str) -> None:
         """Patches the solution using the patch command."""
-        assert (
-            self.verify_solution_integrity()
-        ), "Cannot patch, solution integrity invalid."
+        if not self.verify_solution_integrity():
+            raise SolutionIntegrityError(self.files)
 
         # Save as temp files
         with NamedTemporaryFile(mode="w", delete=False) as patch_file:

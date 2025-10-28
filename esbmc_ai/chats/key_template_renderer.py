@@ -3,7 +3,7 @@
 """Template renderer that integrates TemplateKeyProvider with ChatPromptTemplate."""
 
 from typing import Any, Sequence, override
-from langchain.schema import BaseMessage
+from langchain_core.messages import BaseMessage
 from langchain_core.prompt_values import ChatPromptValue
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.prompts.chat import MessageLikeRepresentation

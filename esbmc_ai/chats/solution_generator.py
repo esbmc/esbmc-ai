@@ -5,7 +5,7 @@
 from dataclasses import replace
 from langchain_core.prompts.chat import MessageLikeRepresentation
 from pydantic import BaseModel, Field, SkipValidation
-from langchain.schema import BaseMessage
+from langchain_core.messages import BaseMessage
 from langchain_core.language_models import BaseChatModel
 
 from esbmc_ai.solution import SourceFile
