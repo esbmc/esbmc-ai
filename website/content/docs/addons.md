@@ -1,6 +1,9 @@
 ---
 title: Addons
+type: docs
 weight: 5
+prev: /docs/commands
+next: /docs/contributing
 ---
 
 The following is a list of addon modules developed to extend ESBMC-AI:

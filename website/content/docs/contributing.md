@@ -1,6 +1,9 @@
 ---
 title: "Contributing"
-weight: 3
+type: docs
+weight: 6
+prev: /docs/addons
+next: /docs/build
 ---
 
 It is recommended to contribute to ESBMC-AI directly, especially if the feature would improve ESBMC-AI directly. When contributing you can create a pull request, and after all the issues are resolved, and it passes the code-review, it will be merged.

@@ -1,6 +1,9 @@
 ---
 title: Built-in Commands
-prev: /docs
+type: docs
+weight: 4
+prev: /docs/configuring-esbmc-ai
+next: /docs/addons
 ---
 
 The following commands are built-in to ESBMC-AI.
