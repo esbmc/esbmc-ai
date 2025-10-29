@@ -96,7 +96,7 @@ The Containerfile uses a two-stage build process (Containerfile:1-118):
 
 - `ESBMC_VERSION`: ESBMC version to install (default: "latest")
 - `EXTRA_PIP_PACKAGES`: Space-separated list of additional pip packages
-- `quay_expiration`: Image expiration for Quay.io (default: "4w")
+- `quay_expiration`: Image expiration for Quay.io (default: "1m")
 
 ## Container Entrypoint
 

@@ -40,7 +40,7 @@ RUN pipx install hatch && hatch build
 FROM docker.io/library/ubuntu:24.04
 
 # Quay.io expiration configuration
-ARG quay_expiration=4w
+ARG quay_expiration=1m
 
 # Label this as the runtime image
 LABEL stage="runtime" \
