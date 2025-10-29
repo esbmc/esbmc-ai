@@ -55,84 +55,19 @@ dependencies = [
   "pydeps",
 ]
 
+pre-install-commands = [
+  # Preinstall hook for PyTorch - installs CPU-only version if CPU_ONLY=true
+  '[ -n "$CPU_ONLY" ] && pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu',
+]
+
 [tool.hatch.envs.default.scripts]
-podman-build = """
-# Check if Podman is installed
-if [ -z $(command -v podman) ]; then
-  echo "Error: Podman not installed."
-  exit 1
-fi
-
-echo "Building project artifacts..."
-# Run hatch build to generate dist/ contents (including the wheel)
-hatch build
-# Check if build was successful
-if [ $? -ne 0 ]; then
-  echo "Error: Hatch build failed."
-  exit 1
-fi
-
-echo "Finding wheel file in dist/..."
-# Find the latest generated wheel file in the dist/ directory.
-# We assume only one .whl file is relevant after a build.
-# Use 'ls -t' to sort by modification time, newest first.
-WHEEL_FILE=$(ls -t dist/*.whl 2>/dev/null | head -n 1)
-
-# Check if a wheel file was found
-if [ -z "$WHEEL_FILE" ]; then
-  echo "Error: No wheel file found in dist/ after build."
-  exit 1
-fi
-
-echo "Found wheel: $WHEEL_FILE"
-
-echo "Building Podman image..."
-# Build the Podman image, passing the wheel file path and extra pip packages as build arguments
-podman build \\
-  --tag esbmc-ai \\
-  --build-arg ESBMCAI_WHEEL="$WHEEL_FILE" \\
-  --build-arg EXTRA_PIP_PACKAGES="{args}" \\
-  .
-"""
-
-docker-build = """
-# Check if Docker is installed
-if [ -z $(command -v docker) ]; then
-  echo "Error: Docker not installed."
-  exit 1
-fi
-
-echo "Building project artifacts..."
-# Run hatch build to generate dist/ contents (including the wheel)
-hatch build
-# Check if build was successful
-if [ $? -ne 0 ]; then
-  echo "Error: Hatch build failed."
-  exit 1
-fi
-
-echo "Finding wheel file in dist/..."
-# Find the latest generated wheel file in the dist/ directory.
-# We assume only one .whl file is relevant after a build.
-# Use 'ls -t' to sort by modification time, newest first.
-WHEEL_FILE=$(ls -t dist/*.whl 2>/dev/null | head -n 1)
-
-# Check if a wheel file was found
-if [ -z "$WHEEL_FILE" ]; then
-  echo "Error: No wheel file found in dist/ after build."
-  exit 1
-fi
-
-echo "Found wheel: $WHEEL_FILE"
-
-echo "Building Docker image..."
-# Build the Docker image, passing the wheel file path and extra pip packages as build arguments
-docker build \\
-  --tag esbmc-ai \\
-  --build-arg ESBMCAI_WHEEL="$WHEEL_FILE" \\
-  --build-arg EXTRA_PIP_PACKAGES="{args}" \\
-  .
-"""
+# Container build - tags image with ESBMC-AI version (from __about__.py), git commit, and 'latest'
+# Usage: hatch run {docker|podman}-build [extra_packages] [esbmc_tool_version]
+# extra_packages: optional pip packages to inject (e.g., "langchain-google-genai")
+# esbmc_tool_version: ESBMC verifier version to install (default: "latest")
+# Example: hatch run docker-build "langchain-google-genai" "v7.4"
+podman-build = "bash scripts/container/build.sh podman {args}"
+docker-build = "bash scripts/container/build.sh docker {args}"
 
 find-cycles = "pydeps esbmc_ai --show-cycles --no-show -o esbmc_ai.svg"
 

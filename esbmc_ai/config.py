@@ -36,7 +36,11 @@ from esbmc_ai.log_handlers import (
 
 def _alias_choice(value: str) -> AliasChoices:
     """Adds aliases to each option that requires a different alias that works
-    with all the config setting sources we are using."""
+    with all the config setting sources we are using.
+
+    For nested fields, the double underscore notation (e.g., ESBMCAI_VERIFIER__ESBMC__PATH)
+    is handled automatically by pydantic_settings via env_nested_delimiter='__'.
+    """
     return AliasChoices(
         value,  # exact field name for TOML and direct matching
         value.replace("_", "-"),  # dashed alias for CLI or other uses
@@ -215,8 +219,26 @@ class SolutionConfig(BaseModel):
             return None
         return Path(value).expanduser()
 
+    @field_validator("output_dir", mode="after")
+    @classmethod
+    def on_after_set_output_dir(
+        cls, value: DirectoryPath | None
+    ) -> DirectoryPath | None:
+        """Creates the directory if it is missing."""
+        if value is None:
+            return None
+
+        value.mkdir(mode=750, parents=True, exist_ok=True)
+        return value
+
 
 class ESBMCConfig(BaseModel):
+    """ESBMC-specific configuration.
+
+    Environment variables use double underscore notation for nesting:
+    - ESBMCAI_VERIFIER__ESBMC__PATH (handled automatically via env_nested_delimiter)
+    """
+
     path: FilePath | None = Field(
         default=None,
         description="Path to the ESBMC binary.",
@@ -484,6 +506,9 @@ class Config(BaseSettings, metaclass=makecls(SingletonMeta)):
         env_prefix="ESBMCAI_",
         env_file=".env",
         env_file_encoding="utf-8",
+        # Use double underscores for nested config fields in env vars
+        # e.g., ESBMCAI_VERIFIER__ESBMC__PATH
+        env_nested_delimiter="__",
         # Enables CLI parse support out-of-the-box for CliApp.run integration
         cli_parse_args=True,
         # Allow extra fields for compatibility with pydantic_settings, since

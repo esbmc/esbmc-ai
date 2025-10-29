@@ -1,7 +1,9 @@
 ---
 title: Configuring ESBMC-AI
 type: docs
-weight: 2
+weight: 3
+prev: /docs/usage
+next: /docs/commands
 ---
 
 >[!INFO]
@@ -12,46 +14,67 @@ The command `esbmc-ai help-config` will list all of the config fields along with
 >[!NOTICE]
 >The `help-config` command does not list the help message of addons currently, this is a limitation.
 
-## Configuring AI
+## Configuration Sources and Precedence
 
-Various different LLMs are supported by ESBMC-AI. The built-in models consist of ~~all~~ most of the OpenAI models and some Anthropic models. Additionally, Ollama models can be added through the config.
+ESBMC-AI accepts configuration from multiple sources with the following precedence (highest to lowest):
+
+**CLI arguments > Environment variables > .env file > TOML config file > Defaults**
+
+This means CLI arguments will override environment variables, which override values in the `.env` file, and so on.
+
+### Setting Nested Configuration Values
+
+Nested configuration fields can be set via environment variables using double underscores (`__`):
+
+```sh
+# Set verifier.esbmc.path
+export ESBMCAI_VERIFIER__ESBMC__PATH=/usr/bin/esbmc
+
+# Set verifier.esbmc.timeout
+export ESBMCAI_VERIFIER__ESBMC__TIMEOUT=30
+```
+
+All environment variables must use the `ESBMCAI_` prefix.
+
+## Configuring AI Models
+
+ESBMC-AI supports all LangChain-compatible LLM providers through the universal `init_chat_model` interface. Built-in support includes OpenAI, Anthropic, Ollama, and any provider supported by `langchain-community`.
 
 >[!NOTICE]
->Setting a model can be done by entering its name in the following config field:
->```toml {filename="esbmc_ai.toml"}
->ai_model = "gpt-3.5-turbo"
+>Set a model by specifying its name in the config:
+>```toml {filename="config.toml"}
+>ai_model = "gpt-4"
 >```
 
-### OpenAI
+### Supported Providers
 
-The OpenAI models are dynamically resolved from a few base models that are specified. Along with their context lengths. You can use any LLM specified in the [OpenAI models list](https://platform.openai.com/docs/models) by entering its name.
+**Built-in (no extra packages needed):**
+- OpenAI: `gpt-4`, `gpt-3.5-turbo`, etc.
+- Anthropic: `claude-3-5-sonnet-20241022`, `claude-3-opus-20240229`, etc.
+- Ollama: Custom models via `ai_custom` (see below)
 
->[!WARNING]
->If a model is not supported and an error is given, please file an issue on GitHub.
+**Additional providers** (require extra packages):
+- Google: Install `langchain-google-genai` for Gemini models
+- Others: Any LangChain-supported provider with the appropriate package
 
-In order to use an OpenAI model, make sure the following variable is set in the environment:
+### API Keys
+
+Set the appropriate environment variable for your provider:
 
 ```sh
+# OpenAI
 export OPENAI_API_KEY="..."
-```
 
-### Anthropic
-
-In order to use an Anthropic model, make sure the following variable is set in the environment:
-
-```sh
+# Anthropic
 export ANTHROPIC_API_KEY="..."
+
+# Google Gemini
+export GOOGLE_API_KEY="..."
 ```
 
-### Custom AI
+### Custom/Self-Hosted Models (Ollama)
 
-The config supports adding custom AI models that are self-hosted or from a custom source. These are specified in the config using the `ai_custom` field. The `ai_model` field selects which AI model to use. If the AI model chosen does not exist in the built in list of models, then the list inside `ai_custom` will be checked. This means that when adding a `custom_ai` entry, all the entries inside `ai_custom` must be unique and not match any of the built-in first class AI. **The name of the AI will be the entry name**. The entry takes the following fields:
-
-* The `server_type`, currently only `ollama` is supported so every entry should have this key/value pair. However, in the future, as more server types are added, this field will be used to determine what server to use.
-* The `max_tokens` are the acceptable max tokens that the AI can accept.
-* The `url` is the server URL and port where the LLM server is hosted in.
-
-{{% details title="Example" closed="true" %}}
+For self-hosted models like Ollama, define them in `ai_custom`:
 
 ```toml
 [ai_custom."llama3.1:70b"]
@@ -60,10 +83,21 @@ url = "localhost:11434"
 max_tokens = 128000
 ```
 
-Then to use this model:
+Then use it:
 
 ```toml
 ai_model = "llama3.1:70b"
 ```
 
-{{% /details %}}
+### Installing Extra Provider Packages
+
+```sh
+# Local installation
+pip install langchain-google-genai
+
+# With pipx
+pipx inject esbmc-ai langchain-google-genai
+
+# In containers (at build time)
+hatch run podman-build "langchain-google-genai"
+```
