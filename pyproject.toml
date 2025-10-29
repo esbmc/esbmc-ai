@@ -55,6 +55,11 @@ dependencies = [
   "pydeps",
 ]
 
+pre-install-commands = [
+  # Preinstall hook for PyTorch - installs CPU-only version if CPU_ONLY=true
+  '[ -n "$CPU_ONLY" ] && pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu',
+]
+
 [tool.hatch.envs.default.scripts]
 # Container build - tags image with ESBMC-AI version (from __about__.py), git commit, and 'latest'
 # Usage: hatch run {docker|podman}-build [extra_packages] [esbmc_tool_version]
