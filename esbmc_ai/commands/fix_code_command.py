@@ -118,7 +118,7 @@ class FixCodeCommand(ChatCommand):
         )
         # Set default config instance
         self._config: FixCodeCommandConfig = FixCodeCommandConfig()
-
+        self.original_source_file: SourceFile
         self.anim: BaseLoadingWidget
 
     @classmethod
@@ -143,7 +143,7 @@ class FixCodeCommand(ChatCommand):
             self.global_config.solution.filenames[0],
             Path(os.getcwd()),
         )
-        original_source_file: SourceFile = SourceFile(
+        self.original_source_file = SourceFile(
             source_file.file_path, source_file.base_path, source_file.content
         )
         self.anim = (
@@ -158,12 +158,10 @@ class FixCodeCommand(ChatCommand):
 
         verifier: Any = ComponentManager().get_verifier("esbmc")
         assert isinstance(verifier, ESBMC)
-        verifier_result: VerifierOutput = verifier.verify_source(
-            solution=solution, **kwargs
-        )
+        verifier_result: VerifierOutput = verifier.verify_source(solution=solution)
         source_file.verifier_output = verifier_result
 
-        if verifier_result.successful():
+        if verifier_result.successful:
             self.logger.info("File verified successfully")
             returned_source: str
             if self.global_config.generate_patches:
@@ -205,7 +203,9 @@ class FixCodeCommand(ChatCommand):
             )
             if result:
                 if self.global_config.generate_patches:
-                    result.repaired_source = source_file.get_diff(original_source_file)
+                    result.repaired_source = source_file.get_diff(
+                        self.original_source_file
+                    )
 
                 return result
 
@@ -249,9 +249,14 @@ class FixCodeCommand(ChatCommand):
 
             # Check if an output directory is specified and save to it
             if self.global_config.solution.output_dir:
-                source_file.save_file(
+                output_path: Path = (
                     self.global_config.solution.output_dir / source_file.file_path.name
                 )
+                if self.global_config.generate_patches:
+                    output_path = output_path.parent / (output_path.name + ".patch")
+                    source_file.save_diff(output_path, self.original_source_file)
+                else:
+                    source_file.save_file(output_path)
             return FixCodeCommandResult(True, attempt, source_file.content)
 
         try:
