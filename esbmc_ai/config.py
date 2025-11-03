@@ -205,7 +205,7 @@ class SolutionConfig(BaseModel):
         description="The name of the entry function to repair, defaults to main.",
     )
 
-    output_dir: DirectoryPath | None = Field(
+    output_dir: Path | None = Field(
         default=None,
         description="Set the output directory to save successfully repaired "
         "files in. Leave empty to not use. Specifying the same directory will "
@@ -214,21 +214,19 @@ class SolutionConfig(BaseModel):
 
     @field_validator("output_dir", mode="before")
     @classmethod
-    def on_set_output_dir(cls, value: DirectoryPath | None) -> DirectoryPath | None:
+    def on_set_output_dir(cls, value: Path | None) -> Path | None:
         if value is None:
             return None
         return Path(value).expanduser()
 
     @field_validator("output_dir", mode="after")
     @classmethod
-    def on_after_set_output_dir(
-        cls, value: DirectoryPath | None
-    ) -> DirectoryPath | None:
+    def on_after_set_output_dir(cls, value: Path | None) -> Path | None:
         """Creates the directory if it is missing."""
         if value is None:
             return None
 
-        value.mkdir(mode=750, parents=True, exist_ok=True)
+        value.mkdir(mode=0o750, parents=True, exist_ok=True)
         return value
 
 
