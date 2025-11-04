@@ -2,8 +2,8 @@
 
 """Contains code for automatically repairing code using ESBMC."""
 
+from langchain_core.prompts import PromptTemplate
 from langchain_core.prompts.chat import MessageLikeRepresentation
-from pydantic import BaseModel, Field, SkipValidation
 from langchain_core.messages import BaseMessage
 from langchain_core.language_models import BaseChatModel
 
@@ -18,16 +18,6 @@ from esbmc_ai.chats.template_key_provider import (
 )
 from esbmc_ai.verifiers.esbmc import ESBMCOutput
 from esbmc_ai.chats import KeyTemplateRenderer
-
-default_scenario: str = "base"
-
-
-class FixCodeScenario(BaseModel):
-    initial: str = Field(default="")
-    # Going to be manually instantiated by FixCodeCommandConfig
-    system: list[SkipValidation[MessageLikeRepresentation]] = Field(
-        default_factory=list,
-    )
 
 
 def apply_formatting(esbmc_output: ESBMCOutput, format: str) -> str:
@@ -60,26 +50,22 @@ def apply_formatting(esbmc_output: ESBMCOutput, format: str) -> str:
 
 class SolutionGenerator:
     """SolutionGenerator is a simple conversation-based automated program repair
-    class. The class works in a cycle, by first calling update_state with the
-    new source_code and esbmc_output, then by calling generate_solution. The
-    class supports scenarios to customize the system message and initial prompt
-    based on the"""
+    class. It maintains a conversation with the LLM, starting with a system message
+    (provided at initialization) and then adding repair attempt messages via
+    generate_solution calls."""
 
     def __init__(
         self,
-        scenarios: dict[str, FixCodeScenario],
         ai_model: BaseChatModel,
         esbmc_output_type: str = "full",
+        system_message: list[BaseMessage] | None = None,
     ) -> None:
         """Initializes the solution generator."""
         super().__init__()
 
         self.ai_model: BaseChatModel = ai_model
         self.template_key_provider: TemplateKeyProvider = ESBMCTemplateKeyProvider()
-        self.messages: list[BaseMessage] = []
-
-        self.scenarios: dict[str, FixCodeScenario] = scenarios
-        self.scenario: str = ""
+        self.messages: list[BaseMessage] = system_message or []
 
         self.esbmc_output_type: str = esbmc_output_type
 
@@ -113,18 +99,16 @@ class SolutionGenerator:
             pass
         return solution
 
-    def update_state(
-        self, source_file: SourceFile, verifier_output: ESBMCOutput
-    ) -> None:
-        """Updates the latest state of the code and ESBMC output. It also updates
-        the scenario, which is the type of error that ESBMC has shown. This should be
-        called before generate_solution."""
+    def generate_solution(
+        self,
+        initial_message_prompt: PromptTemplate,
+        source_file: SourceFile,
+        verifier_output: ESBMCOutput,
+    ) -> str:
+        """Prompts the LLM to repair the source code using the verifier output.
+        Returns the extracted code from the LLM's response."""
 
-        self.scenario = verifier_output.error_type
-        if not self.scenario:
-            self.scenario = default_scenario
-
-        self.source_code_raw = source_file.content
+        self.source_code = source_file
 
         # Format ESBMC output
         try:
@@ -141,53 +125,19 @@ class SolutionGenerator:
             # big.
             self.esbmc_output = verifier_output
 
-    def generate_solution(self, override_scenario: str | None = None) -> str:
-        """Prompts the LLM to repair the source code using the verifier output.
-        If this is the first time the method is called, the system message will
-        be sent to the LLM. Then the initial prompt will be sent.
-
-        In subsequent invokations of generate_solution, the initial prompt will
-        be used only.
-
-        So the system messages and initial message should each include at least
-        {source_code} and {esbmc_output} so that they are substituted into the
-        message.
-
-        Queries the AI model to get a solution. Accepts an override scenario
-        parameter, in which case the scenario won't be resolved automatically."""
-
-        assert (
-            self.source_code_raw is not None
-            and self.esbmc_output is not None
-            and self.scenario is not None
-        ), "Call update_state before calling generate_solution."
-
-        scenario_name: str = override_scenario or self.scenario
-        scenario: FixCodeScenario = self.scenarios[
-            scenario_name if scenario_name in self.scenarios else "base"
-        ]
-        new_templates: list[MessageLikeRepresentation] = []
-
-        # Apply system message if first cycle
-        if self.invokations == 0:
-            new_templates.extend(scenario.system)
-
-        # Get scenario initial message and push it to message stack
-        new_templates.append(("human", scenario.initial))
-        # Prepare template values
+        # Add the initial message for this repair attempt
+        # Pass the template string to KeyTemplateRenderer which will handle formatting
         key_template_renderer: KeyTemplateRenderer = KeyTemplateRenderer(
-            messages=new_templates,
+            messages=[("human", initial_message_prompt.template)],
             key_provider=self.template_key_provider,
         )
-        error_type: str | None = self.esbmc_output.error_type
-        self.messages.extend(
-            key_template_renderer.format_messages(
-                source_code=self.source_code,
-                esbmc_output=self.esbmc_output.output,
-                error_line=str(self.esbmc_output.error_line),
-                error_type=error_type if error_type else "unknown error",
-            )
+
+        # Format with the current source code and ESBMC output
+        formatted_messages = key_template_renderer.format_messages(
+            source_code=source_file.content,
+            esbmc_output=self.esbmc_output,
         )
+        self.messages.extend(formatted_messages)
 
         self.invokations += 1
 

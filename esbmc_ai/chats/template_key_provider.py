@@ -24,16 +24,12 @@ class ESBMCTemplateKeyProvider(TemplateKeyProvider):
         *,
         source_code: str,
         esbmc_output: str,
-        error_line: str,
-        error_type: str,
         **kwargs: Any,
     ) -> dict[str, Any]:
         """Get canonical template keys for ESBMC code repair workflows."""
         keys: dict["str", Any] = {
             "source_code": source_code,
             "esbmc_output": esbmc_output,
-            "error_line": error_line,
-            "error_type": error_type,
         }
         # Include any additional keys passed in
         keys.update(kwargs)

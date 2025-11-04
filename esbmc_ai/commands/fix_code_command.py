@@ -3,28 +3,22 @@
 from enum import Enum
 import os
 from pathlib import Path
-import sys
 from typing import Any
 from pydantic import Field, field_validator
 from typing_extensions import override
+from langchain_core.prompts import PromptTemplate
+from langchain_core.messages import BaseMessage, SystemMessage, HumanMessage, AIMessage
 
 from esbmc_ai.base_component import BaseComponentConfig
 from esbmc_ai.component_manager import ComponentManager
 from esbmc_ai.solution import Solution, SourceFile
 from esbmc_ai.ai_models import AIModel
-from esbmc_ai.chats.solution_generator import (
-    SolutionGenerator,
-    FixCodeScenario,
-)
-from esbmc_ai.chats.template_key_provider import ESBMCTemplateKeyProvider
-from esbmc_ai.verifiers.base_source_verifier import VerifierTimedOutException
+from esbmc_ai.chats.solution_generator import SolutionGenerator
 from esbmc_ai.command_result import CommandResult
 from esbmc_ai.verifier_output import VerifierOutput
 from esbmc_ai.chat_command import ChatCommand
-from esbmc_ai.log_utils import get_log_level, print_horizontal_line
 from esbmc_ai.loading_widget import BaseLoadingWidget, LoadingWidget
-import esbmc_ai.prompt_utils as prompt_utils
-from esbmc_ai.verifiers.esbmc import ESBMC
+from esbmc_ai.verifiers.esbmc import ESBMC, ESBMCOutput
 
 
 class FixCodeCommandResult(CommandResult):
@@ -75,30 +69,15 @@ class FixCodeCommandConfig(BaseComponentConfig):
         description="Fix code command max attempts.",
     )
 
-    prompt_templates: dict[str, FixCodeScenario] = Field(
-        default={
-            "base": FixCodeScenario(
-                initial="The ESBMC output is:\n\n```\n{esbmc_output}\n```\n\nThe source code is:\n\n```c\n{source_code}\n```\n Using the ESBMC output, show the fixed text.",
-                system=[
-                    {
-                        "role": "system",
-                        "content": "From now on, act as an Automated Code Repair Tool that repairs AI C code. You will be shown AI C code, along with ESBMC output. Pay close attention to the ESBMC output, which contains a stack trace along with the type of error that occurred and its location that you need to fix. Provide the repaired C code as output, as would an Automated Code Repair Tool. Aside from the corrected source code, do not output any other text.",
-                    }
-                ],
-            ),
-            "division by zero": FixCodeScenario(
-                initial="The ESBMC output is:\n\n```\n{esbmc_output}\n```\n\nThe source code is:\n\n```c\n{source_code}\n```\n Using the ESBMC output, show the fixed text.",
-                system=[
-                    {
-                        "role": "system",
-                        "content": "Here's a C program with a vulnerability:\n```c\n{source_code}\n```\nA Formal Verification tool identified a division by zero issue:\n{esbmc_output}\nTask: Modify the C code to safely handle scenarios where division by zero might occur. The solution should prevent undefined behavior or crashes due to division by zero. \nGuidelines: Focus on making essential changes only. Avoid adding or modifying comments, and ensure the changes are precise and minimal.\nGuidelines: Ensure the revised code avoids undefined behavior and handles division by zero cases effectively.\nGuidelines: Implement safeguards (like comparison) to prevent division by zero instead of using literal divisions like 1.0/0.0.Output: Provide the corrected, complete C code. The solution should compile and run error-free, addressing the division by zero vulnerability.\nStart the code snippet with ```c and end with ```. Reply OK if you understand.",
-                    },
-                    {"role": "ai", "content": "OK."},
-                ],
-            ),
-        },
-        description="Scenario prompt templates for different types of bugs for the fix code command.",
+    initial: str = Field(
+        default="The ESBMC output is:\n\n```\n{esbmc_output.output}\n```\n\nThe source code is:\n\n```c\n{source_code}\n```\n Using the ESBMC output, show the fixed text."
     )
+    system: list[dict[str, str]] = [
+        {
+            "role": "system",
+            "content": "From now on, act as an Automated Code Repair Tool that repairs AI C code. You will be shown AI C code, along with ESBMC output. Pay close attention to the ESBMC output, which contains a stack trace along with the type of error that occurred and its location that you need to fix. Provide the repaired C code as output, as would an Automated Code Repair Tool. Aside from the corrected source code, do not output any other text.",
+        }
+    ]
 
     @field_validator("verifier_output_type", mode="after")
     @classmethod
@@ -159,6 +138,7 @@ class FixCodeCommand(ChatCommand):
         verifier: Any = ComponentManager().get_verifier("esbmc")
         assert isinstance(verifier, ESBMC)
         verifier_result: VerifierOutput = verifier.verify_source(solution=solution)
+        assert isinstance(verifier_result, ESBMCOutput)
         source_file.verifier_output = verifier_result
 
         if verifier_result.successful:
@@ -177,20 +157,26 @@ class FixCodeCommand(ChatCommand):
             url=self.global_config.ai_model.base_url,
         )
 
+        # Convert system messages from dict format to BaseMessage objects
+        system_messages: list[BaseMessage] = []
+        for msg in self._config.system:
+            role = msg.get("role", "system")
+            content = msg.get("content", "")
+            if role == "system":
+                system_messages.append(SystemMessage(content=content))
+            elif role == "human":
+                system_messages.append(HumanMessage(content=content))
+            elif role == "assistant" or role == "ai":
+                system_messages.append(AIMessage(content=content))
+
+        # Create the initial message template
+        initial_prompt = PromptTemplate.from_template(self._config.initial)
+
         solution_generator: SolutionGenerator = SolutionGenerator(
             ai_model=ai_model,
-            scenarios=self._config.prompt_templates,
+            system_message=system_messages,
             esbmc_output_type=self._config.verifier_output_type,
         )
-
-        try:
-            solution_generator.update_state(
-                source_file=source_file,
-                verifier_output=source_file.verifier_output,
-            )
-        except VerifierTimedOutException:
-            self.logger.error("ESBMC has timed out...")
-            sys.exit(1)
 
         print()
 
@@ -198,6 +184,7 @@ class FixCodeCommand(ChatCommand):
             result: FixCodeCommandResult | None = self._attempt_repair(
                 attempt=attempt,
                 solution_generator=solution_generator,
+                initial_prompt=initial_prompt,
                 verifier=verifier,
                 solution=solution,
             )
@@ -215,6 +202,7 @@ class FixCodeCommand(ChatCommand):
         self,
         attempt: int,
         solution_generator: SolutionGenerator,
+        initial_prompt: PromptTemplate,
         solution: Solution,
         verifier: ESBMC,
     ) -> FixCodeCommandResult | None:
@@ -222,16 +210,15 @@ class FixCodeCommand(ChatCommand):
 
         # Generate AI solution
         with self.anim("Generating Solution... Please Wait"):
-            llm_solution = solution_generator.generate_solution()
+            assert isinstance(source_file.verifier_output, ESBMCOutput)
+            llm_solution = solution_generator.generate_solution(
+                initial_message_prompt=initial_prompt,
+                source_file=source_file,
+                verifier_output=source_file.verifier_output,
+            )
 
             # Update the source file state
             source_file.content = llm_solution
-
-        # Print verbose lvl 2
-        print_horizontal_line(get_log_level(3))
-        self._logger.debug("\nSource Code Generation:")
-        self._logger.debug(source_file.content)
-        print_horizontal_line(get_log_level(3))
 
         solution = solution.save_temp()
 
@@ -239,6 +226,7 @@ class FixCodeCommand(ChatCommand):
         # to a temporary location since ESBMC needs it in file format.
         with self.anim("Verifying with ESBMC... Please Wait"):
             verifier_result: VerifierOutput = verifier.verify_source(solution=solution)
+            assert isinstance(verifier_result, ESBMCOutput)
 
         source_file.verifier_output = verifier_result
 
@@ -258,16 +246,6 @@ class FixCodeCommand(ChatCommand):
                 else:
                     source_file.save_file(output_path)
             return FixCodeCommandResult(True, attempt, source_file.content)
-
-        try:
-            # Update state
-            solution_generator.update_state(
-                source_file,
-                source_file.verifier_output,
-            )
-        except VerifierTimedOutException:
-            self.logger.error("ESBMC has timed out...")
-            sys.exit(1)
 
         # Failure case
         if attempt != self._config.max_attempts:
