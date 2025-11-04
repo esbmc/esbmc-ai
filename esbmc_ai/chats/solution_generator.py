@@ -2,7 +2,6 @@
 
 """Contains code for automatically repairing code using ESBMC."""
 
-from dataclasses import replace
 from langchain_core.prompts.chat import MessageLikeRepresentation
 from pydantic import BaseModel, Field, SkipValidation
 from langchain_core.messages import BaseMessage
@@ -44,12 +43,12 @@ def apply_formatting(esbmc_output: ESBMCOutput, format: str) -> str:
 
     match format:
         case "vp":
-            value: str | None = esbmc_output.get_violated_property()
+            value: str | None = esbmc_output.sections.violated_property
             if not value:
                 raise ValueError("Not found violated property." + esbmc_output.output)
             return value
         case "ce":
-            value: str | None = esbmc_output._esbmc_get_counter_example()
+            value: str | None = esbmc_output.sections.counterexample
             if not value:
                 raise ValueError("Not found counterexample.")
             return value
@@ -121,7 +120,7 @@ class SolutionGenerator:
         the scenario, which is the type of error that ESBMC has shown. This should be
         called before generate_solution."""
 
-        self.scenario = verifier_output.get_error_type()
+        self.scenario = verifier_output.error_type
         if not self.scenario:
             self.scenario = default_scenario
 
@@ -129,12 +128,13 @@ class SolutionGenerator:
 
         # Format ESBMC output
         try:
-            self.esbmc_output = replace(
-                verifier_output,
-                output=apply_formatting(
-                    esbmc_output=verifier_output,
-                    format=self.esbmc_output_type,
-                ),
+            self.esbmc_output = verifier_output.model_copy(
+                update={
+                    "output": apply_formatting(
+                        esbmc_output=verifier_output,
+                        format=self.esbmc_output_type,
+                    )
+                }
             )
         except SourceCodeParseError:
             # When clang output is displayed, show it entirely as it doesn't get very
@@ -179,12 +179,12 @@ class SolutionGenerator:
             messages=new_templates,
             key_provider=self.template_key_provider,
         )
-        error_type: str | None = self.esbmc_output.get_error_type()
+        error_type: str | None = self.esbmc_output.error_type
         self.messages.extend(
             key_template_renderer.format_messages(
                 source_code=self.source_code,
                 esbmc_output=self.esbmc_output.output,
-                error_line=str(self.esbmc_output.get_error_line()),
+                error_line=str(self.esbmc_output.error_line),
                 error_type=error_type if error_type else "unknown error",
             )
         )

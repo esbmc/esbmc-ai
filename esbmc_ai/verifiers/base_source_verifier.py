@@ -101,10 +101,7 @@ class BaseSourceVerifier(BaseComponent):
         self,
         *,
         solution: Solution,
-        **kwargs: Any,
     ) -> VerifierOutput:
-        """Verifies source_file, the kwargs are optional arguments that are
-        implementation dependent."""
+        """Verifies source_file."""
         _ = solution
-        _ = kwargs
         raise NotImplementedError()
