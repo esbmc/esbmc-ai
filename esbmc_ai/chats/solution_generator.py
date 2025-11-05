@@ -3,49 +3,16 @@
 """Contains code for automatically repairing code using ESBMC."""
 
 from langchain_core.prompts import PromptTemplate
-from langchain_core.prompts.chat import MessageLikeRepresentation
 from langchain_core.messages import BaseMessage
 from langchain_core.language_models import BaseChatModel
 
 from esbmc_ai.solution import SourceFile
-from esbmc_ai.verifiers.base_source_verifier import (
-    SourceCodeParseError,
-    VerifierTimedOutException,
-)
 from esbmc_ai.chats.template_key_provider import (
     ESBMCTemplateKeyProvider,
     TemplateKeyProvider,
 )
 from esbmc_ai.verifiers.esbmc import ESBMCOutput
 from esbmc_ai.chats import KeyTemplateRenderer
-
-
-def apply_formatting(esbmc_output: ESBMCOutput, format: str) -> str:
-    """Gets the formatted output ESBMC output, based on the esbmc_output_type
-    passed."""
-    # Check for parsing error
-    if "ERROR: PARSING ERROR" in esbmc_output.output:
-        # Parsing errors are usually small in nature.
-        raise SourceCodeParseError()
-
-    if "ERROR: Timed out" in esbmc_output.output:
-        raise VerifierTimedOutException()
-
-    match format:
-        case "vp":
-            value: str | None = esbmc_output.sections.violated_property
-            if not value:
-                raise ValueError("Not found violated property." + esbmc_output.output)
-            return value
-        case "ce":
-            value: str | None = esbmc_output.sections.counterexample
-            if not value:
-                raise ValueError("Not found counterexample.")
-            return value
-        case "full":
-            return esbmc_output.output
-        case _:
-            raise ValueError(f"Not a valid ESBMC output type: {format}")
 
 
 class SolutionGenerator:
@@ -109,21 +76,7 @@ class SolutionGenerator:
         Returns the extracted code from the LLM's response."""
 
         self.source_code = source_file
-
-        # Format ESBMC output
-        try:
-            self.esbmc_output = verifier_output.model_copy(
-                update={
-                    "output": apply_formatting(
-                        esbmc_output=verifier_output,
-                        format=self.esbmc_output_type,
-                    )
-                }
-            )
-        except SourceCodeParseError:
-            # When clang output is displayed, show it entirely as it doesn't get very
-            # big.
-            self.esbmc_output = verifier_output
+        self.esbmc_output = verifier_output
 
         # Add the initial message for this repair attempt
         # Pass the template string to KeyTemplateRenderer which will handle formatting
@@ -143,6 +96,10 @@ class SolutionGenerator:
 
         # Generate the solution
         response: BaseMessage = self.ai_model.invoke(self.messages)
+
+        # Add AI response to message history for conversation context
+        self.messages.append(response)
+
         solution = SolutionGenerator.extract_code_from_solution(str(response.content))
 
         return solution
