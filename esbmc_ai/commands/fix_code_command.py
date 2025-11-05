@@ -72,6 +72,12 @@ class FixCodeCommandConfig(BaseComponentConfig):
     initial: str = Field(
         default="The ESBMC output is:\n\n```\n{esbmc_output.output}\n```\n\nThe source code is:\n\n```c\n{source_code}\n```\n Using the ESBMC output, show the fixed text."
     )
+
+    retry_prompt: str = Field(
+        default="The previous attempt failed. The ESBMC output is:\n\n```\n{esbmc_output.output}\n```\n\nThe source code is:\n\n```c\n{source_code}\n```\n\nPlease review the conversation history to see what was tried before. Using the ESBMC output and learning from previous failed attempts, show the fixed text.",
+        description="Prompt used for retry attempts after the initial attempt fails. Can reference conversation history.",
+    )
+
     system: list[dict[str, str]] = [
         {
             "role": "system",
@@ -169,8 +175,9 @@ class FixCodeCommand(ChatCommand):
             elif role == "assistant" or role == "ai":
                 system_messages.append(AIMessage(content=content))
 
-        # Create the initial message template
+        # Create the initial and retry message templates
         initial_prompt = PromptTemplate.from_template(self._config.initial)
+        retry_prompt = PromptTemplate.from_template(self._config.retry_prompt)
 
         solution_generator: SolutionGenerator = SolutionGenerator(
             ai_model=ai_model,
@@ -181,10 +188,13 @@ class FixCodeCommand(ChatCommand):
         print()
 
         for attempt in range(1, self._config.max_attempts + 1):
+            # Use initial prompt for first attempt, retry prompt for subsequent attempts
+            prompt = initial_prompt if attempt == 1 else retry_prompt
+
             result: FixCodeCommandResult | None = self._attempt_repair(
                 attempt=attempt,
                 solution_generator=solution_generator,
-                initial_prompt=initial_prompt,
+                prompt=prompt,
                 verifier=verifier,
                 solution=solution,
             )
@@ -202,7 +212,7 @@ class FixCodeCommand(ChatCommand):
         self,
         attempt: int,
         solution_generator: SolutionGenerator,
-        initial_prompt: PromptTemplate,
+        prompt: PromptTemplate,
         solution: Solution,
         verifier: ESBMC,
     ) -> FixCodeCommandResult | None:
@@ -212,7 +222,7 @@ class FixCodeCommand(ChatCommand):
         with self.anim("Generating Solution... Please Wait"):
             assert isinstance(source_file.verifier_output, ESBMCOutput)
             llm_solution = solution_generator.generate_solution(
-                initial_message_prompt=initial_prompt,
+                initial_message_prompt=prompt,
                 source_file=source_file,
                 verifier_output=source_file.verifier_output,
             )
