@@ -22,7 +22,7 @@ $variable_name
 ```python
 # System message with template variables
 SystemMessage(content="Analyze this code: $source_code")
-SystemMessage(content="ESBMC found: $esbmc_output")
+SystemMessage(content="Oracle found: $oracle_output")
 SystemMessage(content="Error on line $error_line: $error_type")
 ```
 
@@ -30,7 +30,7 @@ When `apply_template_value()` is called with values:
 ```python
 chat.apply_template_value(
     source_code="int main() { return 0; }",
-    esbmc_output="No errors found",
+    oracle_output="No errors found",
     error_line="15",
     error_type="null pointer dereference"
 )
@@ -39,7 +39,7 @@ chat.apply_template_value(
 The templates become:
 ```
 Analyze this code: int main() { return 0; }
-ESBMC found: No errors found
+Oracle found: No errors found
 Error on line 15: null pointer dereference
 ```
 
@@ -63,7 +63,7 @@ ESBMC-AI defines standard template variables through the `get_canonical_template
 | Variable | Description |
 |----------|-------------|
 | `$source_code` | The source code being analyzed |
-| `$esbmc_output` | Output from the ESBMC verifier |
+| `$oracle_output` | Output from the verifier oracle |
 | `$error_line` | Line number where error occurred |
 | `$error_type` | Type of error detected |
 
@@ -73,7 +73,7 @@ ESBMC-AI defines standard template variables through the `get_canonical_template
 # Get canonical template variables
 template_vars = chat.get_canonical_template_keys(
     source_code="int main() { int *p = NULL; *p = 5; }",
-    esbmc_output="Dereference failure: pointer invalid",
+    oracle_output="Dereference failure: pointer invalid",
     error_line="1",
     error_type="null pointer dereference"
 )
@@ -118,17 +118,17 @@ Commands typically use the canonical template system:
 
 ```python
 class FixCodeCommand(ChatCommand):
-    def execute(self, source_code: str, esbmc_output: str) -> None:
+    def execute(self, source_code: str, oracle_output: str) -> None:
         # Apply template values using canonical keys
         template_values = self.chat.get_canonical_template_keys(
             source_code=source_code,
-            esbmc_output=esbmc_output,
+            oracle_output=oracle_output,
             error_line=self.get_error_line(),
             error_type=self.get_error_type()
         )
-        
+
         self.chat.apply_template_value(**template_values)
-        
+
         # Send message to AI model
         response = self.chat.send_message("Please fix the code.")
 ```

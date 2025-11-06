@@ -18,32 +18,32 @@ class TemplateKeyProvider(ABC):
         raise NotImplementedError()
 
 
-class ESBMCTemplateKeyProvider(TemplateKeyProvider):
-    """Template key provider for ESBMC-specific template variables."""
+class OracleTemplateKeyProvider(TemplateKeyProvider):
+    """Template key provider for oracle-specific template variables."""
 
     @override
     def get_template_keys(
         self,
         *,
         source_code: str,
-        esbmc_output: VerifierOutput,
+        oracle_output: VerifierOutput,
         **kwargs: Any,
     ) -> dict[str, Any]:
-        """Get canonical template keys for ESBMC code repair workflows.
+        """Get canonical template keys for oracle-based code repair workflows.
 
         Args:
             source_code: The source code being repaired
-            esbmc_output: ESBMCOutput object with structured verification data
+            oracle_output: VerifierOutput object with structured verification data
             **kwargs: Additional keys to include
 
         Returns:
-            Dictionary of template keys including the esbmc_output object
+            Dictionary of template keys including the oracle_output object
             which provides access to all structured fields like error_type,
             error_message, stack_trace, etc.
         """
         keys: dict["str", Any] = {
             "source_code": source_code,
-            "esbmc_output": esbmc_output,
+            "oracle_output": oracle_output,
         }
         # Include any additional keys passed in
         keys.update(kwargs)

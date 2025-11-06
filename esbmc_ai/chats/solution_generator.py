@@ -8,7 +8,7 @@ from langchain_core.language_models import BaseChatModel
 
 from esbmc_ai.solution import SourceFile
 from esbmc_ai.chats.template_key_provider import (
-    ESBMCTemplateKeyProvider,
+    OracleTemplateKeyProvider,
     TemplateKeyProvider,
 )
 from esbmc_ai.verifiers.esbmc import ESBMCOutput
@@ -31,7 +31,7 @@ class SolutionGenerator:
         super().__init__()
 
         self.ai_model: BaseChatModel = ai_model
-        self.template_key_provider: TemplateKeyProvider = ESBMCTemplateKeyProvider()
+        self.template_key_provider: TemplateKeyProvider = OracleTemplateKeyProvider()
         self.messages: list[BaseMessage] = system_message or []
 
         self.esbmc_output_type: str = esbmc_output_type
@@ -85,10 +85,10 @@ class SolutionGenerator:
             key_provider=self.template_key_provider,
         )
 
-        # Format with the current source code and ESBMC output
+        # Format with the current source code and oracle output
         formatted_messages = key_template_renderer.format_messages(
             source_code=source_file.content,
-            esbmc_output=self.esbmc_output,
+            oracle_output=self.esbmc_output,
         )
         self.messages.extend(formatted_messages)
 

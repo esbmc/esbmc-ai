@@ -14,7 +14,7 @@ from esbmc_ai.chats.key_template_renderer import KeyTemplateRenderer
 from esbmc_ai.chats.template_key_provider import (
     TemplateKeyProvider,
     GenericTemplateKeyProvider,
-    ESBMCTemplateKeyProvider,
+    OracleTemplateKeyProvider,
 )
 
 __all__ = [
@@ -28,5 +28,5 @@ __all__ = [
     "KeyTemplateRenderer",
     "TemplateKeyProvider",
     "GenericTemplateKeyProvider",
-    "ESBMCTemplateKeyProvider",
+    "OracleTemplateKeyProvider",
 ]

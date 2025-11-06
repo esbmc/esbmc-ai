@@ -1,21 +1,21 @@
 # Author: Yiannis Charalambous
 
-from esbmc_ai.chats import KeyTemplateRenderer, ESBMCTemplateKeyProvider
+from esbmc_ai.chats import KeyTemplateRenderer, OracleTemplateKeyProvider
 
 
 def test_template_substitution():
     """Test that template variables are correctly substituted."""
-    template_str = "The ESBMC output is:\n\n```\n{esbmc_output}\n```\n\nThe source code is:\n\n```c\n{source_code}\n```"
+    template_str = "The oracle output is:\n\n```\n{oracle_output}\n```\n\nThe source code is:\n\n```c\n{source_code}\n```"
     messages = [("human", template_str)]
 
     renderer = KeyTemplateRenderer(
         messages=messages,
-        key_provider=ESBMCTemplateKeyProvider(),
+        key_provider=OracleTemplateKeyProvider(),
     )
 
     formatted = renderer.format_messages(
         source_code="int main() { return 0; }",
-        esbmc_output="VERIFICATION SUCCESSFUL",
+        oracle_output="VERIFICATION SUCCESSFUL",
         error_line="0",
         error_type="none",
     )
@@ -24,7 +24,7 @@ def test_template_substitution():
     assert "int main() { return 0; }" in formatted[0].content
     assert "VERIFICATION SUCCESSFUL" in formatted[0].content
     assert "{source_code}" not in formatted[0].content
-    assert "{esbmc_output}" not in formatted[0].content
+    assert "{oracle_output}" not in formatted[0].content
 
 
 def test_template_substitution_with_multiline_code():
@@ -34,7 +34,7 @@ def test_template_substitution_with_multiline_code():
 
     renderer = KeyTemplateRenderer(
         messages=messages,
-        key_provider=ESBMCTemplateKeyProvider(),
+        key_provider=OracleTemplateKeyProvider(),
     )
 
     source = """int main() {
@@ -44,7 +44,7 @@ def test_template_substitution_with_multiline_code():
 
     formatted = renderer.format_messages(
         source_code=source,
-        esbmc_output="Division by zero",
+        oracle_output="Division by zero",
         error_line="3",
         error_type="division by zero",
     )

@@ -70,13 +70,13 @@ class FixCodeCommandConfig(BaseComponentConfig):
     )
 
     initial: str = Field(
-        default="ESBMC found an error in the code:\n\nError Type: {esbmc_output.error_type}\nError Message: {esbmc_output.error_message}\nError Location: {esbmc_output.error_file}:{esbmc_output.error_line}\n\nStack Trace:\n{esbmc_output.primary_issue.stack_trace_formatted}\n\nThe source code is:\n\n```c\n{source_code}\n```\n\nUsing the error information above, show the fixed text.",
-        description="Initial prompt for the first repair attempt. Uses structured ESBMC output fields.",
+        default="ESBMC found an error in the code:\n\nError Type: {oracle_output.error_type}\nError Message: {oracle_output.error_message}\nError Location: {oracle_output.error_file}:{oracle_output.error_line}\n\nStack Trace:\n{oracle_output.primary_issue.stack_trace_formatted}\n\nThe source code is:\n\n```c\n{source_code}\n```\n\nUsing the error information above, show the fixed text.",
+        description="Initial prompt for the first repair attempt. Uses structured oracle output fields.",
     )
 
     retry_prompt: str = Field(
-        default="The previous attempt failed. ESBMC found an error:\n\nError Type: {esbmc_output.error_type}\nError Message: {esbmc_output.error_message}\nError Location: {esbmc_output.error_file}:{esbmc_output.error_line}\n\nStack Trace:\n{esbmc_output.primary_issue.stack_trace_formatted}\n\nThe source code is:\n\n```c\n{source_code}\n```\n\nPlease review the conversation history to see what was tried before. Using the error information above and learning from previous failed attempts, show the fixed text.",
-        description="Prompt used for retry attempts after the initial attempt fails. Uses structured ESBMC output fields and can reference conversation history.",
+        default="The previous attempt failed. ESBMC found an error:\n\nError Type: {oracle_output.error_type}\nError Message: {oracle_output.error_message}\nError Location: {oracle_output.error_file}:{oracle_output.error_line}\n\nStack Trace:\n{oracle_output.primary_issue.stack_trace_formatted}\n\nThe source code is:\n\n```c\n{source_code}\n```\n\nPlease review the conversation history to see what was tried before. Using the error information above and learning from previous failed attempts, show the fixed text.",
+        description="Prompt used for retry attempts after the initial attempt fails. Uses structured oracle output fields and can reference conversation history.",
     )
 
     system: list[dict[str, str]] = [
