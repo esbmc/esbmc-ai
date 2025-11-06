@@ -123,6 +123,10 @@ class FixCodeCommand(ChatCommand):
 
     @override
     def execute(self) -> FixCodeCommandResult:
+        self.logger.warn(
+            "Fix Code Command is a demonstration of the ESBMC-AI "
+            + "API capabilities. Do not use for advanced repair tasks.\n"
+        )
         # Handle kwargs
         source_file: SourceFile = SourceFile.load(
             self.global_config.solution.filenames[0],
