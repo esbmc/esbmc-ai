@@ -75,6 +75,22 @@ class Issue(Serializable):
         """Function name where error occurred (derived from last trace point)."""
         return self.stack_trace[-1].name
 
+    @property
+    def stack_trace_formatted(self) -> str:
+        """Returns a formatted string representation of the stack trace.
+
+        Format: Each trace on a new line showing function name and location.
+        Example:
+            at main in file.c:15
+            at helper in file.c:42
+        """
+        lines = []
+        for trace in self.stack_trace:
+            func_name = trace.name if trace.name else "<unknown>"
+            line_num = trace.line_idx + 1  # Convert to 1-based
+            lines.append(f"  at {func_name} in {trace.path}:{line_num}")
+        return "\n".join(lines)
+
 
 class VerifierIssue(Issue):
     """Verifier-specific issue with additional verification data.
@@ -95,3 +111,21 @@ class VerifierIssue(Issue):
         description="Counterexample demonstrating bug."
     )
     """Counterexample demonstrating bug."""
+
+    @property
+    def counterexample_formatted(self) -> str:
+        """Returns a formatted string representation of the counterexample trace.
+
+        Format: Each trace on a new line showing function name and location.
+        Example:
+            State 0: at main in file.c:15
+            State 1: at helper in file.c:42
+        """
+        lines = []
+        for trace in self.counterexample:
+            func_name = trace.name if trace.name else "<unknown>"
+            line_num = trace.line_idx + 1  # Convert to 1-based
+            lines.append(
+                f"  State {trace.trace_index}: at {func_name} in {trace.path}:{line_num}"
+            )
+        return "\n".join(lines)

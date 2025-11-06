@@ -70,18 +70,19 @@ class FixCodeCommandConfig(BaseComponentConfig):
     )
 
     initial: str = Field(
-        default="The ESBMC output is:\n\n```\n{esbmc_output.output}\n```\n\nThe source code is:\n\n```c\n{source_code}\n```\n Using the ESBMC output, show the fixed text."
+        default="ESBMC found an error in the code:\n\nError Type: {esbmc_output.error_type}\nError Message: {esbmc_output.error_message}\nError Location: {esbmc_output.error_file}:{esbmc_output.error_line}\n\nStack Trace:\n{esbmc_output.primary_issue.stack_trace_formatted}\n\nThe source code is:\n\n```c\n{source_code}\n```\n\nUsing the error information above, show the fixed text.",
+        description="Initial prompt for the first repair attempt. Uses structured ESBMC output fields.",
     )
 
     retry_prompt: str = Field(
-        default="The previous attempt failed. The ESBMC output is:\n\n```\n{esbmc_output.output}\n```\n\nThe source code is:\n\n```c\n{source_code}\n```\n\nPlease review the conversation history to see what was tried before. Using the ESBMC output and learning from previous failed attempts, show the fixed text.",
-        description="Prompt used for retry attempts after the initial attempt fails. Can reference conversation history.",
+        default="The previous attempt failed. ESBMC found an error:\n\nError Type: {esbmc_output.error_type}\nError Message: {esbmc_output.error_message}\nError Location: {esbmc_output.error_file}:{esbmc_output.error_line}\n\nStack Trace:\n{esbmc_output.primary_issue.stack_trace_formatted}\n\nThe source code is:\n\n```c\n{source_code}\n```\n\nPlease review the conversation history to see what was tried before. Using the error information above and learning from previous failed attempts, show the fixed text.",
+        description="Prompt used for retry attempts after the initial attempt fails. Uses structured ESBMC output fields and can reference conversation history.",
     )
 
     system: list[dict[str, str]] = [
         {
             "role": "system",
-            "content": "From now on, act as an Automated Code Repair Tool that repairs AI C code. You will be shown AI C code, along with ESBMC output. Pay close attention to the ESBMC output, which contains a stack trace along with the type of error that occurred and its location that you need to fix. Provide the repaired C code as output, as would an Automated Code Repair Tool. Aside from the corrected source code, do not output any other text.",
+            "content": "From now on, act as an Automated Code Repair Tool that repairs C code. You will be shown C code along with structured error information from ESBMC verification. Pay close attention to the error type, error message, and error location provided. Use this information to identify and fix the bug. Provide the repaired C code as output, as would an Automated Code Repair Tool. Aside from the corrected source code, do not output any other text.",
         }
     ]
 
