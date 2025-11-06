@@ -261,7 +261,6 @@ class ESBMCConfig(BaseModel):
             "2",
             "--floatbv",
             "--unlimited-k-steps",
-            "--compact-trace",
             "--context-bound",
             "2",
         ],
