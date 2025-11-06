@@ -213,7 +213,7 @@ Configuration Precedence (highest to lowest):
     if command_name in command_names:
         logger.info(f"Running Command: {command_name}\n")
         command: ChatCommand = cm.commands[command_name]
-        result: CommandResult | None = command.execute(kwargs=vars(config))
+        result: CommandResult | None = command.execute()
         if result:
             if config.use_json:
                 print(vars(result))

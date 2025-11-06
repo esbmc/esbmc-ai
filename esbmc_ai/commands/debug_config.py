@@ -44,9 +44,7 @@ class DebugConfigViewCommand(ChatCommand):
             self._format_value(value, indent + "  ")
 
     @override
-    def execute(self, **kwargs: Any | None) -> CommandResult | None:
-        _ = kwargs
-
+    def execute(self) -> CommandResult | None:
         print("\n" + "=" * 80)
         print("GLOBAL CONFIGURATION")
         print("=" * 80)

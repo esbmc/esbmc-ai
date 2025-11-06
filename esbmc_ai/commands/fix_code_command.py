@@ -122,7 +122,7 @@ class FixCodeCommand(ChatCommand):
         self._config = value
 
     @override
-    def execute(self, **kwargs: Any) -> FixCodeCommandResult:
+    def execute(self) -> FixCodeCommandResult:
         # Handle kwargs
         source_file: SourceFile = SourceFile.load(
             self.global_config.solution.filenames[0],
