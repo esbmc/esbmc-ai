@@ -7,7 +7,7 @@ from pathlib import Path
 from langchain_core.load.serializable import Serializable
 from pydantic import Field
 
-from esbmc_ai.program_trace import ProgramTrace
+from esbmc_ai.program_trace import ProgramTrace, CounterexampleProgramTrace
 
 
 class Issue(Serializable):
@@ -88,7 +88,7 @@ class Issue(Serializable):
         for trace in self.stack_trace:
             func_name = trace.name if trace.name else "<unknown>"
             line_num = trace.line_idx + 1  # Convert to 1-based
-            lines.append(f"  at {func_name} in {trace.path}:{line_num}")
+            lines.append(f"\tat {func_name} in {trace.path}:{line_num}")
         return "\n".join(lines)
 
 
@@ -107,7 +107,7 @@ class VerifierIssue(Issue):
     stack traces). Use this class only when counterexample data is available.
     """
 
-    counterexample: list[ProgramTrace] = Field(
+    counterexample: list[CounterexampleProgramTrace] = Field(
         description="Counterexample demonstrating bug."
     )
     """Counterexample demonstrating bug."""
@@ -116,16 +116,22 @@ class VerifierIssue(Issue):
     def counterexample_formatted(self) -> str:
         """Returns a formatted string representation of the counterexample trace.
 
-        Format: Each trace on a new line showing function name and location.
+        Format: Each trace on a new line showing function name, location, and
+        assignment (if available).
         Example:
             State 0: at main in file.c:15
+              dist = { 0, 0, 0, 0, 0 }
             State 1: at helper in file.c:42
+              dist[0] = 2147483647 (01111111 11111111 11111111 11111111)
         """
         lines = []
         for trace in self.counterexample:
             func_name = trace.name if trace.name else "<unknown>"
             line_num = trace.line_idx + 1  # Convert to 1-based
             lines.append(
-                f"  State {trace.trace_index}: at {func_name} in {trace.path}:{line_num}"
+                f"\tState {trace.trace_index}: at {func_name} in {trace.path}:{line_num}"
             )
+            # Add assignment information if available
+            if trace.assignment:
+                lines.append(f"\t\t{trace.assignment}")
         return "\n".join(lines)
