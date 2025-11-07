@@ -1,33 +1,33 @@
 # Author: Yiannis Charalambous
 
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
-
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from esbmc_ai.solution import SourceFile
+from pydantic import BaseModel, Field
 
 
-@dataclass(kw_only=True)
-class ProgramTrace:
+class ProgramTrace(BaseModel):
     """Contains information about traces in source code."""
 
-    trace_source: Literal["parser", "verifier"]
-    """Is the trace from the parser or from the verifier?"""
-    trace_index: int
+    trace_index: int = Field()
     """The index position of this trace point in the trace stack."""
-    source_file: "SourceFile"
-    """The source file of this trace."""
-    name: str | None = None
-    """The name of the symbol, if applicable."""
-    line_idx: int
-    """The location of the trace."""
-    comment: str | None = None
-    """Used in instances like clang where it outputs per error a comment on what's wrong."""
+    path: Path = Field()
+    """The source file of this trace. May not exist for compilation errors. May
+    not be relative as it may be a system file."""
+    name: str | None = Field(default=None)
+    """The name of the symbol pointed to by the trace, if applicable."""
+    line_idx: int = Field()
+    """The location of the trace (0-based)."""
 
-    @property
-    def filepath(self) -> Path:
-        """The file path of the trace location."""
-        return self.source_file.file_path
+
+class CounterexampleProgramTrace(ProgramTrace):
+    """Program trace with assignment information from counterexample states.
+
+    This class extends ProgramTrace to capture the variable assignments that
+    led to a verification failure. Used by verifiers like ESBMC that provide
+    counterexample traces showing the state of variables at each step.
+    """
+
+    assignment: str | None = Field(default=None)
+    """The assignment statement(s) for this trace state. Contains the variable
+    assignments from the counterexample, e.g., 'dist = { 0, 0, 0, 0, 0 }' or
+    'dist[0] = 2147483647 (01111111 11111111 11111111 11111111)'. May be None
+    if the state has no assignment information."""

@@ -1,0 +1,112 @@
+esbmc --interval-analysis --memory-leak-check --goto-unwind --unlimited-goto-unwind --k-induction --state-hashing --add-symex-value-sets --k-step 2 --floatbv --unlimited-k-steps --context-bound 2 --show-stacktrace samples/bubble_sort.c
+ESBMC version 7.8.0 64-bit x86_64 linux
+Target: 64-bit little-endian x86_64-unknown-linux with esbmclibc
+[PROGRESS] Parsing samples/bubble_sort.c
+[PROGRESS] Converting
+[PROGRESS] Generating GOTO Program
+GOTO program creation time: 0.072s
+Interval Analysis time: 0.002s
+GOTO program processing time: 0.002s
+[PROGRESS] Checking base case, k = 1
+[PROGRESS] Starting Bounded Model Checking
+Not unwinding loop 4 iteration 1   file samples/bubble_sort.c line 5 column 5 function buggy_bubble_sort
+Symex completed in: 0.004s (26 assignments)
+Slicing time: 0.000s (removed 25 assignments)
+Generated 12 VCC(s), 0 remaining after simplification (1 assignments)
+BMC program time: 0.004s
+No bug has been found in the base case
+[PROGRESS] Checking forward condition, k = 1
+[PROGRESS] Starting Bounded Model Checking
+Not unwinding loop 4 iteration 1   file samples/bubble_sort.c line 5 column 5 function buggy_bubble_sort
+Symex completed in: 0.004s (26 assignments)
+Slicing time: 0.000s (removed 25 assignments)
+Generated 13 VCC(s), 1 remaining after simplification (1 assignments)
+No solver specified; defaulting to Boolector
+Encoding remaining VCC(s) using bit-vector/floating-point arithmetic
+Encoding to solver time: 0.000s
+[PROGRESS] Solving with solver Boolector 3.2.3
+Runtime decision procedure: 0.000s
+The forward condition is unable to prove the property
+[PROGRESS] Checking base case, k = 3
+[PROGRESS] Starting Bounded Model Checking
+Unwinding loop 4 iteration 1   file samples/bubble_sort.c line 5 column 5 function buggy_bubble_sort
+Unwinding loop 4 iteration 2   file samples/bubble_sort.c line 5 column 5 function buggy_bubble_sort
+Not unwinding loop 4 iteration 3   file samples/bubble_sort.c line 5 column 5 function buggy_bubble_sort
+Symex completed in: 0.010s (46 assignments)
+Slicing time: 0.000s (removed 45 assignments)
+Generated 36 VCC(s), 0 remaining after simplification (1 assignments)
+BMC program time: 0.010s
+No bug has been found in the base case
+[PROGRESS] Checking forward condition, k = 3
+[PROGRESS] Starting Bounded Model Checking
+Unwinding loop 4 iteration 1   file samples/bubble_sort.c line 5 column 5 function buggy_bubble_sort
+Unwinding loop 4 iteration 2   file samples/bubble_sort.c line 5 column 5 function buggy_bubble_sort
+Not unwinding loop 4 iteration 3   file samples/bubble_sort.c line 5 column 5 function buggy_bubble_sort
+Symex completed in: 0.010s (46 assignments)
+Slicing time: 0.000s (removed 45 assignments)
+Generated 37 VCC(s), 1 remaining after simplification (1 assignments)
+No solver specified; defaulting to Boolector
+Encoding remaining VCC(s) using bit-vector/floating-point arithmetic
+Encoding to solver time: 0.000s
+[PROGRESS] Solving with solver Boolector 3.2.3
+Runtime decision procedure: 0.002s
+The forward condition is unable to prove the property
+[PROGRESS] Checking inductive step, k = 3
+[PROGRESS] Starting Bounded Model Checking
+Unwinding loop 4 iteration 1   file samples/bubble_sort.c line 5 column 5 function buggy_bubble_sort
+Unwinding loop 4 iteration 2   file samples/bubble_sort.c line 5 column 5 function buggy_bubble_sort
+Not unwinding loop 4 iteration 3   file samples/bubble_sort.c line 5 column 5 function buggy_bubble_sort
+Unwinding loop 5 iteration 1   file samples/bubble_sort.c line 4 column 3 function buggy_bubble_sort
+Unwinding loop 4 iteration 1   file samples/bubble_sort.c line 5 column 5 function buggy_bubble_sort
+Unwinding loop 4 iteration 2   file samples/bubble_sort.c line 5 column 5 function buggy_bubble_sort
+Not unwinding loop 4 iteration 3   file samples/bubble_sort.c line 5 column 5 function buggy_bubble_sort
+Unwinding loop 5 iteration 2   file samples/bubble_sort.c line 4 column 3 function buggy_bubble_sort
+Unwinding loop 4 iteration 1   file samples/bubble_sort.c line 5 column 5 function buggy_bubble_sort
+Unwinding loop 4 iteration 2   file samples/bubble_sort.c line 5 column 5 function buggy_bubble_sort
+Not unwinding loop 4 iteration 3   file samples/bubble_sort.c line 5 column 5 function buggy_bubble_sort
+Not unwinding loop 5 iteration 3   file samples/bubble_sort.c line 4 column 3 function buggy_bubble_sort
+Unwinding loop 6 iteration 1   file samples/bubble_sort.c line 20 column 3 function main
+Unwinding loop 6 iteration 2   file samples/bubble_sort.c line 20 column 3 function main
+Not unwinding loop 6 iteration 3   file samples/bubble_sort.c line 20 column 3 function main
+Symex completed in: 0.074s (308 assignments)
+Slicing time: 0.003s (removed 64 assignments)
+Generated 38 VCC(s), 38 remaining after simplification (244 assignments)
+No solver specified; defaulting to Boolector
+Encoding remaining VCC(s) using bit-vector/floating-point arithmetic
+Encoding to solver time: 0.007s
+[PROGRESS] Solving with solver Boolector 3.2.3
+Runtime decision procedure: 0.168s
+The inductive step is unable to prove the property
+[PROGRESS] Checking base case, k = 5
+[PROGRESS] Starting Bounded Model Checking
+Unwinding loop 4 iteration 1   file samples/bubble_sort.c line 5 column 5 function buggy_bubble_sort
+Unwinding loop 4 iteration 2   file samples/bubble_sort.c line 5 column 5 function buggy_bubble_sort
+Unwinding loop 4 iteration 3   file samples/bubble_sort.c line 5 column 5 function buggy_bubble_sort
+Unwinding loop 4 iteration 4   file samples/bubble_sort.c line 5 column 5 function buggy_bubble_sort
+Not unwinding loop 4 iteration 5   file samples/bubble_sort.c line 5 column 5 function buggy_bubble_sort
+Symex completed in: 0.019s (71 assignments)
+Slicing time: 0.000s (removed 66 assignments)
+Generated 60 VCC(s), 3 remaining after simplification (5 assignments)
+No solver specified; defaulting to Boolector
+Encoding remaining VCC(s) using bit-vector/floating-point arithmetic
+Encoding to solver time: 0.000s
+[PROGRESS] Solving with solver Boolector 3.2.3
+Runtime decision procedure: 0.011s
+[PROGRESS] Building error trace
+
+[Counterexample]
+
+
+State 1 file samples/bubble_sort.c line 7 column 7 function buggy_bubble_sort thread 0
+----------------------------------------------------
+Violated property:
+  file samples/bubble_sort.c line 7 column 7 function buggy_bubble_sort
+Stack trace:
+  c:@F@buggy_bubble_sort at file samples/bubble_sort.c line 19 column 3 function main
+  c:@F@main
+  dereference failure: array bounds violated
+
+
+VERIFICATION FAILED
+
+Bug found (k = 5)

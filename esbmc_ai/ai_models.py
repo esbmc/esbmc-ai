@@ -3,7 +3,7 @@
 from typing import Any
 from uuid import UUID
 from langchain_core.messages import BaseMessage
-from langchain_core.outputs import LLMResult
+from langchain_core.outputs import ChatGeneration, Generation, LLMResult
 from typing_extensions import override
 import structlog
 
@@ -27,36 +27,42 @@ class LoggingCallbackHandler(BaseCallbackHandler):
             prefix_name=ai_model,
         )
 
-    @override
-    def on_llm_start(
-        self,
-        serialized: dict[str, Any],
-        prompts: list[str],
-        *,
-        run_id: UUID,
-        parent_run_id: UUID | None = None,
-        tags: list[str] | None = None,
-        metadata: dict[str, Any] | None = None,
-        **kwargs: Any,
-    ) -> Any:
-        """Run when LLM starts running.
+    @staticmethod
+    def _get_msg_formatted(
+        group_idx: int, msg_idx: int, msg: BaseMessage | Generation
+    ) -> str:
+        return f"MSG {group_idx}-{msg_idx} {msg.type.capitalize()}: {msg.text}"
 
-        .. ATTENTION::
-            This method is called for non-chat models (regular LLMs). If you're
-            implementing a handler for a chat model, you should use
-            ``on_chat_model_start`` instead.
+    # @override
+    # def on_llm_start(
+    #     self,
+    #     serialized: dict[str, Any],
+    #     prompts: list[str],
+    #     *,
+    #     run_id: UUID,
+    #     parent_run_id: UUID | None = None,
+    #     tags: list[str] | None = None,
+    #     metadata: dict[str, Any] | None = None,
+    #     **kwargs: Any,
+    # ) -> Any:
+    #     """Run when LLM starts running.
 
-        Args:
-            serialized (dict[str, Any]): The serialized LLM.
-            prompts (list[str]): The prompts.
-            run_id (UUID): The run ID. This is the ID of the current run.
-            parent_run_id (UUID): The parent run ID. This is the ID of the parent run.
-            tags (Optional[list[str]]): The tags.
-            metadata (Optional[dict[str, Any]]): The metadata.
-            kwargs (Any): Additional keyword arguments.
-        """
-        _ = run_id, parent_run_id, tags, metadata, kwargs
-        self.logger.debug("Invoke LLM")
+    #     .. ATTENTION::
+    #         This method is called for non-chat models (regular LLMs). If you're
+    #         implementing a handler for a chat model, you should use
+    #         ``on_chat_model_start`` instead.
+
+    #     Args:
+    #         serialized (dict[str, Any]): The serialized LLM.
+    #         prompts (list[str]): The prompts.
+    #         run_id (UUID): The run ID. This is the ID of the current run.
+    #         parent_run_id (UUID): The parent run ID. This is the ID of the parent run.
+    #         tags (Optional[list[str]]): The tags.
+    #         metadata (Optional[dict[str, Any]]): The metadata.
+    #         kwargs (Any): Additional keyword arguments.
+    #     """
+    #     _ = run_id, parent_run_id, tags, metadata, kwargs
+    #     self.logger.debug("Invoke LLM")
 
     @override
     def on_llm_end(
@@ -68,7 +74,21 @@ class LoggingCallbackHandler(BaseCallbackHandler):
         **kwargs: Any,
     ) -> Any:
         _ = run_id, parent_run_id, kwargs
-        self.logger.debug("LLM End")
+        self.logger.debug("=" * 80)
+        self.logger.debug("LLM Response")
+        for idx, msg_group in enumerate(response.generations):
+            self.logger.debug("=" * 80)
+            for msg_idx, msg in enumerate(msg_group):
+                if isinstance(msg, ChatGeneration):
+                    self.logger.debug(
+                        self._get_msg_formatted(idx, msg_idx, msg.message)
+                    )
+                else:
+                    self.logger.debug(self._get_msg_formatted(idx, msg_idx, msg))
+
+                if msg_idx < len(msg_group) - 1:
+                    self.logger.debug("-" * 80)
+        self.logger.debug("=" * 80)
 
     @override
     def on_llm_error(
@@ -80,7 +100,10 @@ class LoggingCallbackHandler(BaseCallbackHandler):
         **kwargs: Any,
     ) -> Any:
         _ = run_id, parent_run_id, kwargs
+        self.logger.debug("=" * 80)
         self.logger.debug("LLM Error")
+        self.logger.debug(str(error))
+        self.logger.debug("=" * 80)
 
     @override
     def on_chat_model_start(
@@ -109,7 +132,14 @@ class LoggingCallbackHandler(BaseCallbackHandler):
             kwargs (Any): Additional keyword arguments.
         """
         _ = run_id, parent_run_id, tags, metadata, kwargs
+        self.logger.debug("=" * 80)
         self.logger.debug("Invoke Chat Model LLM")
+        for idx, msg_group in enumerate(messages):
+            self.logger.debug("=" * 80)
+            for msg_idx, msg in enumerate(msg_group):
+                self.logger.debug(self._get_msg_formatted(idx, msg_idx, msg))
+                if msg_idx < len(msg_group) - 1:
+                    self.logger.debug("-" * 80)
 
 
 class AIModel:

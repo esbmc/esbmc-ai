@@ -5,6 +5,9 @@
 from abc import ABC, abstractmethod
 from typing import Any, override
 
+from esbmc_ai.verifier_output import VerifierOutput
+from esbmc_ai.verifiers.esbmc import ESBMCOutput
+
 
 class TemplateKeyProvider(ABC):
     """Abstract base class for providing template keys to chat interfaces."""
@@ -15,25 +18,32 @@ class TemplateKeyProvider(ABC):
         raise NotImplementedError()
 
 
-class ESBMCTemplateKeyProvider(TemplateKeyProvider):
-    """Template key provider for ESBMC-specific template variables."""
+class OracleTemplateKeyProvider(TemplateKeyProvider):
+    """Template key provider for oracle-specific template variables."""
 
     @override
     def get_template_keys(
         self,
         *,
         source_code: str,
-        esbmc_output: str,
-        error_line: str,
-        error_type: str,
+        oracle_output: VerifierOutput,
         **kwargs: Any,
     ) -> dict[str, Any]:
-        """Get canonical template keys for ESBMC code repair workflows."""
+        """Get canonical template keys for oracle-based code repair workflows.
+
+        Args:
+            source_code: The source code being repaired
+            oracle_output: VerifierOutput object with structured verification data
+            **kwargs: Additional keys to include
+
+        Returns:
+            Dictionary of template keys including the oracle_output object
+            which provides access to all structured fields like error_type,
+            error_message, stack_trace, etc.
+        """
         keys: dict["str", Any] = {
             "source_code": source_code,
-            "esbmc_output": esbmc_output,
-            "error_line": error_line,
-            "error_type": error_type,
+            "oracle_output": oracle_output,
         }
         # Include any additional keys passed in
         keys.update(kwargs)

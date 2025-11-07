@@ -6,7 +6,7 @@ that provides necessary boilet-plate for implementing an LLM based chat."""
 from .template_key_provider import (
     TemplateKeyProvider,
     GenericTemplateKeyProvider,
-    ESBMCTemplateKeyProvider,
+    OracleTemplateKeyProvider,
 )
 
 from .key_template_renderer import KeyTemplateRenderer
@@ -14,6 +14,6 @@ from .key_template_renderer import KeyTemplateRenderer
 __all__ = [
     "TemplateKeyProvider",
     "GenericTemplateKeyProvider",
-    "ESBMCTemplateKeyProvider",
+    "OracleTemplateKeyProvider",
     "KeyTemplateRenderer",
 ]

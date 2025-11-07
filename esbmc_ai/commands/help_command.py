@@ -22,7 +22,7 @@ class HelpCommand(ChatCommand):
         )
 
     @override
-    def execute(self, **_: Any) -> Any:
+    def execute(self) -> Any:
         print("Commands:")
         for command in ComponentManager().builtin_commands.values():
             print(f"* {command.command_name}: {command.help_message}")

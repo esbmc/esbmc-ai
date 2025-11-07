@@ -1,0 +1,90 @@
+ESBMC version 7.11.0 64-bit x86_64 linux
+Target: 64-bit little-endian x86_64-unknown-linux with esbmclibc
+[PROGRESS] Parsing samples/dijkstra_unsafe.c
+[PROGRESS] Converting
+[PROGRESS] Generating GOTO Program
+GOTO program creation time: 0.119s
+Interval Analysis time: 0.002s
+GOTO program processing time: 0.003s
+[PROGRESS] Checking base case, k = 1
+[PROGRESS] Starting Bounded Model Checking
+Not unwinding loop 3 iteration 1   file samples/dijkstra_unsafe.c line 39 column 3 function dijkstra
+Symex completed in: 0.092s (276 assignments)
+Slicing time: 0.003s (removed 55 assignments)
+Generated 264 VCC(s), 166 remaining after simplification (221 assignments)
+No solver specified; defaulting to Boolector
+Encoding remaining VCC(s) using bit-vector/floating-point arithmetic
+Encoding to solver time: 0.006s
+[PROGRESS] Solving with solver Boolector 3.2.4
+Runtime decision procedure: 0.067s
+[PROGRESS] Building error trace
+
+[Counterexample]
+
+
+State 1 file samples/dijkstra_unsafe.c line 55 column 3 function main thread 0
+----------------------------------------------------
+  graph = { { 0, 10, 0, 30, 100 }, { 10, 0, 50, 0, 0 }, { 0, 50, 0, 20, 10 }, { 30, 0, 20, 0, 60 }, { 100, 0, 10, 60, 0 } }
+
+State 2 file samples/dijkstra_unsafe.c line 28 column 3 function dijkstra thread 0
+----------------------------------------------------
+  dist = { 0, 0, 0, 0, 0 }
+
+State 3 file samples/dijkstra_unsafe.c line 29 column 3 function dijkstra thread 0
+----------------------------------------------------
+  sptSet = { 0, 0, 0, 0, 0 }
+
+State 4 file samples/dijkstra_unsafe.c line 33 column 5 function dijkstra thread 0
+----------------------------------------------------
+  dist[0] = 2147483647 (01111111 11111111 11111111 11111111)
+
+State 5 file samples/dijkstra_unsafe.c line 34 column 5 function dijkstra thread 0
+----------------------------------------------------
+  sptSet[0] = 0 (00000000 00000000 00000000 00000000)
+
+State 6 file samples/dijkstra_unsafe.c line 33 column 5 function dijkstra thread 0
+----------------------------------------------------
+  dist[1] = 2147483647 (01111111 11111111 11111111 11111111)
+
+State 7 file samples/dijkstra_unsafe.c line 34 column 5 function dijkstra thread 0
+----------------------------------------------------
+  sptSet[1] = 0 (00000000 00000000 00000000 00000000)
+
+State 8 file samples/dijkstra_unsafe.c line 33 column 5 function dijkstra thread 0
+----------------------------------------------------
+  dist[2] = 2147483647 (01111111 11111111 11111111 11111111)
+
+State 9 file samples/dijkstra_unsafe.c line 34 column 5 function dijkstra thread 0
+----------------------------------------------------
+  sptSet[2] = 0 (00000000 00000000 00000000 00000000)
+
+State 10 file samples/dijkstra_unsafe.c line 33 column 5 function dijkstra thread 0
+----------------------------------------------------
+  dist[3] = 2147483647 (01111111 11111111 11111111 11111111)
+
+State 11 file samples/dijkstra_unsafe.c line 34 column 5 function dijkstra thread 0
+----------------------------------------------------
+  sptSet[3] = 0 (00000000 00000000 00000000 00000000)
+
+State 12 file samples/dijkstra_unsafe.c line 33 column 5 function dijkstra thread 0
+----------------------------------------------------
+  dist[4] = 2147483647 (01111111 11111111 11111111 11111111)
+
+State 13 file samples/dijkstra_unsafe.c line 34 column 5 function dijkstra thread 0
+----------------------------------------------------
+  sptSet[4] = 0 (00000000 00000000 00000000 00000000)
+
+State 14 file samples/dijkstra_unsafe.c line 33 column 5 function dijkstra thread 0
+----------------------------------------------------
+Violated property:
+  file samples/dijkstra_unsafe.c line 33 column 5 function dijkstra
+Stack trace:
+  c:@F@dijkstra at file samples/dijkstra_unsafe.c line 60 column 3 function main
+  c:@F@main
+  array bounds violated: array `dist' upper bound
+  (signed long int)i < 5
+
+
+VERIFICATION FAILED
+
+Bug found (k = 1)

@@ -139,8 +139,10 @@ class SourceFile:
             cmd = [
                 "diff",
                 "-u",  # Adds context around the diff text.
-                file.name,
-                file_2.name,
+                "--label", str(source_file_2.file_path),  # Label for first file (original)
+                "--label", str(self.file_path),  # Label for second file (modified)
+                file_2.name,  # Original file first
+                file.name,  # Modified file second
             ]
             process: CompletedProcess = run(
                 cmd,
@@ -173,6 +175,13 @@ class SourceFile:
         with open(abs_path, "w") as file:
             file.write(self.content)
             return Path(file.name)
+
+    def save_diff(self, path: Path, source_file: "SourceFile") -> Path:
+        """Saves the source file as a patch of the original."""
+        diff: str = self.get_diff(source_file)
+        with open(path, "w") as file:
+            file.write(diff)
+        return path
 
     def verify_file_integrity(self) -> bool:
         """Verifies that this file matches with the file on disk and does not

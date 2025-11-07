@@ -133,9 +133,7 @@ class HelpConfigCommand(ChatCommand):
             HelpConfigCommand._print_component_config_fields(name, component)
 
     @override
-    def execute(self, **kwargs: Any | None) -> CommandResult | None:
-        _ = kwargs
-
+    def execute(self) -> CommandResult | None:
         print("ESBMC-AI Config Fields:")
         print()
 

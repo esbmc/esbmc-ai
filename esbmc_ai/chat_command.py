@@ -38,7 +38,7 @@ class ChatCommand(BaseComponent):
         return self.name
 
     @abstractmethod
-    def execute(self, **kwargs: Any | None) -> CommandResult | None:
+    def execute(self) -> CommandResult | None:
         """The main entrypoint of the command. This is abstract and will need to
         be implemented."""
         raise NotImplementedError(f"Command {self.command_name} is not implemented.")
