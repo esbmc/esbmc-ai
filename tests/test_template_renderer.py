@@ -5,7 +5,7 @@ from esbmc_ai.chats import KeyTemplateRenderer, OracleTemplateKeyProvider
 
 def test_template_substitution():
     """Test that template variables are correctly substituted."""
-    template_str = "The oracle output is:\n\n```\n{oracle_output}\n```\n\nThe source code is:\n\n```c\n{source_code}\n```"
+    template_str = "The oracle output is:\n\n```\n{{oracle_output}}\n```\n\nThe source code is:\n\n```c\n{{source_code}}\n```"
     messages = [("human", template_str)]
 
     renderer = KeyTemplateRenderer(
@@ -23,13 +23,13 @@ def test_template_substitution():
     assert len(formatted) == 1
     assert "int main() { return 0; }" in formatted[0].content
     assert "VERIFICATION SUCCESSFUL" in formatted[0].content
-    assert "{source_code}" not in formatted[0].content
-    assert "{oracle_output}" not in formatted[0].content
+    assert "{{source_code}}" not in formatted[0].content
+    assert "{{oracle_output}}" not in formatted[0].content
 
 
 def test_template_substitution_with_multiline_code():
     """Test template substitution with multiline source code."""
-    template_str = "Source:\n{source_code}\nError: {error_type}"
+    template_str = "Source:\n{{source_code}}\nError: {{error_type}}"
     messages = [("human", template_str)]
 
     renderer = KeyTemplateRenderer(
