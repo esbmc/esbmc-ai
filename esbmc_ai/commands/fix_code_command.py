@@ -70,12 +70,12 @@ class FixCodeCommandConfig(BaseComponentConfig):
     )
 
     initial: str = Field(
-        default="ESBMC found an error in the code:\n\nError Type: {{oracle_output.error_type}}\nError Message: {{oracle_output.error_message}}\nError Location: {{oracle_output.error_file}}:{{oracle_output.error_line}}\n\nStack Trace:\n{{oracle_output.primary_issue.stack_trace_formatted}}\n\n{% if is_verifier_issue(oracle_output.primary_issue) and oracle_output.primary_issue.counterexample | length > 0 %}Counterexample:\n{{oracle_output.primary_issue.counterexample_formatted}}\n\n{% endif %}The source code is:\n\n```c\n{{source_code}}\n```\n\nUsing the error information above, show the fixed text.",
+        default="ESBMC found an error in the code:\n\nError Type: {{oracle_output.error_type}}\nError Message: {{oracle_output.error_message}}\nError Location: {{oracle_output.error_file}}:{{oracle_output.error_line}}\n\nStack Trace:\n{{oracle_output.primary_issue.stack_trace_formatted}}\n\n{% if is_verifier_issue(oracle_output.primary_issue) and oracle_output.primary_issue.counterexample | length > 0 %}Counterexample:\n{{oracle_output.primary_issue.counterexample_formatted}}\n\n{% endif %}The source code is:\n\n```c\n{{solution.files[0].content}}\n```\n\nUsing the error information above, show the fixed text.",
         description="Initial prompt for the first repair attempt. Uses structured oracle output fields.",
     )
 
     retry_prompt: str = Field(
-        default="The previous attempt failed. ESBMC found an error:\n\nError Type: {{oracle_output.error_type}}\nError Message: {{oracle_output.error_message}}\nError Location: {{oracle_output.error_file}}:{{oracle_output.error_line}}\n\nStack Trace:\n{{oracle_output.primary_issue.stack_trace_formatted}}\n\n{% if is_verifier_issue(oracle_output.primary_issue) and oracle_output.primary_issue.counterexample | length > 0 %}Counterexample:\n{{oracle_output.primary_issue.counterexample_formatted}}\n\n{% endif %}The source code is:\n\n```c\n{{source_code}}\n```\n\nPlease review the conversation history to see what was tried before. Using the error information above and learning from previous failed attempts, show the fixed text.",
+        default="The previous attempt failed. ESBMC found an error:\n\nError Type: {{oracle_output.error_type}}\nError Message: {{oracle_output.error_message}}\nError Location: {{oracle_output.error_file}}:{{oracle_output.error_line}}\n\nStack Trace:\n{{oracle_output.primary_issue.stack_trace_formatted}}\n\n{% if is_verifier_issue(oracle_output.primary_issue) and oracle_output.primary_issue.counterexample | length > 0 %}Counterexample:\n{{oracle_output.primary_issue.counterexample_formatted}}\n\n{% endif %}The source code is:\n\n```c\n{{solution.files[0].content}}\n```\n\nPlease review the conversation history to see what was tried before. Using the error information above and learning from previous failed attempts, show the fixed text.",
         description="Prompt used for retry attempts after the initial attempt fails. Uses structured oracle output fields and can reference conversation history.",
     )
 
@@ -148,11 +148,10 @@ class FixCodeCommand(ChatCommand):
 
         verifier: Any = ComponentManager().get_verifier("esbmc")
         assert isinstance(verifier, ESBMC)
-        verifier_result: VerifierOutput = verifier.verify_source(solution=solution)
-        assert isinstance(verifier_result, ESBMCOutput)
-        source_file.verifier_output = verifier_result
+        verifier_output: VerifierOutput = verifier.verify_source(solution=solution)
+        assert isinstance(verifier_output, ESBMCOutput)
 
-        if verifier_result.successful:
+        if verifier_output.successful:
             self.logger.info("File verified successfully")
             returned_source: str
             if self.global_config.generate_patches:
@@ -196,12 +195,14 @@ class FixCodeCommand(ChatCommand):
             # Use initial prompt for first attempt, retry prompt for subsequent attempts
             prompt = initial_prompt if attempt == 1 else retry_prompt
 
-            result: FixCodeCommandResult | None = self._attempt_repair(
+            result: FixCodeCommandResult | None
+            result, verifier_output = self._attempt_repair(
                 attempt=attempt,
                 solution_generator=solution_generator,
                 prompt=prompt,
                 verifier=verifier,
                 solution=solution,
+                verifier_output=verifier_output,
             )
             if result:
                 if self.global_config.generate_patches:
@@ -220,16 +221,16 @@ class FixCodeCommand(ChatCommand):
         prompt: PromptTemplate,
         solution: Solution,
         verifier: ESBMC,
-    ) -> FixCodeCommandResult | None:
+        verifier_output: ESBMCOutput,
+    ) -> tuple[FixCodeCommandResult | None, ESBMCOutput]:
         source_file: SourceFile = solution.files[0]
 
         # Generate AI solution
         with self.anim("Generating Solution... Please Wait"):
-            assert isinstance(source_file.verifier_output, ESBMCOutput)
             llm_solution = solution_generator.generate_solution(
                 initial_message_prompt=prompt,
-                source_file=source_file,
-                verifier_output=source_file.verifier_output,
+                solution=solution,
+                verifier_output=verifier_output,
             )
 
             # Update the source file state
@@ -240,13 +241,11 @@ class FixCodeCommand(ChatCommand):
         # Pass to ESBMC, a workaround is used where the file is saved
         # to a temporary location since ESBMC needs it in file format.
         with self.anim("Verifying with ESBMC... Please Wait"):
-            verifier_result: VerifierOutput = verifier.verify_source(solution=solution)
-            assert isinstance(verifier_result, ESBMCOutput)
-
-        source_file.verifier_output = verifier_result
+            verifier_output = verifier.verify_source(solution=solution)
+            assert isinstance(verifier_output, ESBMCOutput)
 
         # Solution found
-        if verifier_result.return_code == 0:
+        if verifier_output.return_code == 0:
 
             self.logger.info("Successfully verified code")
 
@@ -260,7 +259,7 @@ class FixCodeCommand(ChatCommand):
                     source_file.save_diff(output_path, self.original_source_file)
                 else:
                     source_file.save_file(output_path)
-            return FixCodeCommandResult(True, attempt, source_file.content)
+            return FixCodeCommandResult(True, attempt, source_file.content), verifier_output
 
         # Failure case
         if attempt != self._config.max_attempts:
@@ -271,3 +270,5 @@ class FixCodeCommand(ChatCommand):
             self.logger.info(
                 f"Failure {attempt}/{self._config.max_attempts}: Exiting..."
             )
+
+        return None, verifier_output

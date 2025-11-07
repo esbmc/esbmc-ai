@@ -6,7 +6,7 @@ from langchain_core.prompts import PromptTemplate
 from langchain_core.messages import BaseMessage
 from langchain_core.language_models import BaseChatModel
 
-from esbmc_ai.solution import SourceFile
+from esbmc_ai.solution import Solution
 from esbmc_ai.chats.template_key_provider import (
     OracleTemplateKeyProvider,
     TemplateKeyProvider,
@@ -36,8 +36,6 @@ class SolutionGenerator:
 
         self.esbmc_output_type: str = esbmc_output_type
 
-        self.source_code: SourceFile | None = None
-        self.esbmc_output: ESBMCOutput | None = None
         self.invokations: int = 0
 
     @staticmethod
@@ -69,14 +67,11 @@ class SolutionGenerator:
     def generate_solution(
         self,
         initial_message_prompt: PromptTemplate,
-        source_file: SourceFile,
+        solution: Solution,
         verifier_output: ESBMCOutput,
     ) -> str:
         """Prompts the LLM to repair the source code using the verifier output.
         Returns the extracted code from the LLM's response."""
-
-        self.source_code = source_file
-        self.esbmc_output = verifier_output
 
         # Add the initial message for this repair attempt
         # Pass the template string to KeyTemplateRenderer which will handle formatting
@@ -85,10 +80,10 @@ class SolutionGenerator:
             key_provider=self.template_key_provider,
         )
 
-        # Format with the current source code and oracle output
+        # Format with the solution and oracle output
         formatted_messages = key_template_renderer.format_messages(
-            source_code=source_file.content,
-            oracle_output=self.esbmc_output,
+            solution=solution,
+            oracle_output=verifier_output,
         )
         self.messages.extend(formatted_messages)
 
@@ -100,6 +95,8 @@ class SolutionGenerator:
         # Add AI response to message history for conversation context
         self.messages.append(response)
 
-        solution = SolutionGenerator.extract_code_from_solution(str(response.content))
+        repaired_code = SolutionGenerator.extract_code_from_solution(
+            str(response.content)
+        )
 
-        return solution
+        return repaired_code

@@ -1,11 +1,14 @@
 # Author: Yiannis Charalambous
 
+from pathlib import Path
+
 from esbmc_ai.chats import KeyTemplateRenderer, OracleTemplateKeyProvider
+from esbmc_ai.solution import Solution, SourceFile
 
 
 def test_template_substitution():
     """Test that template variables are correctly substituted."""
-    template_str = "The oracle output is:\n\n```\n{{oracle_output}}\n```\n\nThe source code is:\n\n```c\n{{source_code}}\n```"
+    template_str = "The oracle output is:\n\n```\n{{oracle_output}}\n```\n\nThe source code is:\n\n```c\n{{solution.files[0].content}}\n```"
     messages = [("human", template_str)]
 
     renderer = KeyTemplateRenderer(
@@ -13,8 +16,16 @@ def test_template_substitution():
         key_provider=OracleTemplateKeyProvider(),
     )
 
+    source_file = SourceFile(
+        file_path=Path("test.c"),
+        base_path=Path("/tmp"),
+        content="int main() { return 0; }",
+    )
+    solution = Solution(base_dir=Path("/tmp"))
+    solution.add_source_file(source_file)
+
     formatted = renderer.format_messages(
-        source_code="int main() { return 0; }",
+        solution=solution,
         oracle_output="VERIFICATION SUCCESSFUL",
         error_line="0",
         error_type="none",
@@ -23,13 +34,13 @@ def test_template_substitution():
     assert len(formatted) == 1
     assert "int main() { return 0; }" in formatted[0].content
     assert "VERIFICATION SUCCESSFUL" in formatted[0].content
-    assert "{{source_code}}" not in formatted[0].content
+    assert "{{solution.files[0].content}}" not in formatted[0].content
     assert "{{oracle_output}}" not in formatted[0].content
 
 
 def test_template_substitution_with_multiline_code():
     """Test template substitution with multiline source code."""
-    template_str = "Source:\n{{source_code}}\nError: {{error_type}}"
+    template_str = "Source:\n{{solution.files[0].content}}\nError: {{error_type}}"
     messages = [("human", template_str)]
 
     renderer = KeyTemplateRenderer(
@@ -42,8 +53,16 @@ def test_template_substitution_with_multiline_code():
     return x / 0;
 }"""
 
+    source_file = SourceFile(
+        file_path=Path("test.c"),
+        base_path=Path("/tmp"),
+        content=source,
+    )
+    solution = Solution(base_dir=Path("/tmp"))
+    solution.add_source_file(source_file)
+
     formatted = renderer.format_messages(
-        source_code=source,
+        solution=solution,
         oracle_output="Division by zero",
         error_line="3",
         error_type="division by zero",

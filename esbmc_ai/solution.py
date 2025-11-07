@@ -2,19 +2,19 @@
 
 """Keeps track of all the source files that ESBMC-AI is targeting."""
 
-from dataclasses import dataclass
 from os import getcwd, walk
 from pathlib import Path
 from subprocess import PIPE, STDOUT, run, CompletedProcess
 from tempfile import NamedTemporaryFile, TemporaryDirectory
 from shutil import copytree
-from typing import override
+from typing import Any, override
 
 from langchain_core.language_models import BaseChatModel
+from langchain_core.load.serializable import Serializable
+from pydantic import Field, PrivateAttr
 import lizard
 
 from esbmc_ai.log_utils import get_log_level, print_horizontal_line
-from esbmc_ai.verifier_output import VerifierOutput
 
 
 class SolutionIntegrityError(Exception):
@@ -40,11 +40,13 @@ class SolutionIntegrityError(Exception):
         )
 
 
-@dataclass
-class SourceFile:
-    """Represents a source file in the Solution. This class also holds the
-    verifier output. Contains methods to manipulate and get information about
-    different versions."""
+class SourceFile(Serializable):
+    """Represents a source file in the Solution. Contains methods to manipulate
+    and get information about different versions."""
+
+    file_path: Path = Field(description="Relative file path")
+    base_path: Path = Field(description="Base directory path")
+    content: str = Field(description="File content")
 
     @staticmethod
     def apply_line_patch(source_code: str, patch: str, start: int, end: int) -> str:
@@ -74,22 +76,24 @@ class SourceFile:
         with open(base_path / file_path, "r") as file:
             return SourceFile(file_path, base_path, file.read())
 
-    def __init__(self, file_path: Path, base_path: Path, content: str) -> None:
+    def __init__(
+        self,
+        file_path: Path,
+        base_path: Path,
+        content: str,
+        **kwargs: Any,
+    ) -> None:
         if file_path.is_absolute():
             raise ValueError(
                 f"SourceFile requires a relative file path, got absolute: {file_path}. "
                 f"Use SourceFile.load() to create from absolute paths."
             )
-        self.file_path: Path = file_path
-        """Relative file path"""
-        self.base_path: Path = base_path
-        self.content: str = content
-        self.verifier_output: VerifierOutput | None = None
-        if not self.verify_file_integrity():
-            raise ValueError(
-                f"File integrity check failed for {self.abs_path}. "
-                f"The file content does not match the provided content or the file does not exist."
-            )
+        super().__init__(
+            file_path=file_path,
+            base_path=base_path,
+            content=content,
+            **kwargs,
+        )
 
     @override
     def __repr__(self) -> str:
@@ -108,6 +112,11 @@ class SourceFile:
     def file_extension(self) -> str:
         """Returns the file extension to the file."""
         return self.file_path.suffix
+
+    @property
+    def line_count(self) -> int:
+        """Returns the total number of lines in the file."""
+        return len(self.content.splitlines())
 
     def get_num_tokens(
         self,
@@ -139,8 +148,10 @@ class SourceFile:
             cmd = [
                 "diff",
                 "-u",  # Adds context around the diff text.
-                "--label", str(source_file_2.file_path),  # Label for first file (original)
-                "--label", str(self.file_path),  # Label for second file (modified)
+                "--label",
+                str(source_file_2.file_path),  # Label for first file (original)
+                "--label",
+                str(self.file_path),  # Label for second file (modified)
                 file_2.name,  # Original file first
                 file.name,  # Modified file second
             ]
@@ -210,10 +221,64 @@ class SourceFile:
         except IOError:
             return None
 
+    @property
+    def formatted(self) -> str:
+        """Default markdown formatting - most common use case for LangChain templates."""
+        return self.format_as()
 
-class Solution:
+    def format_as(
+        self,
+        style: str = "markdown",
+        include_line_numbers: bool = False,
+        max_lines: int | None = None,
+    ) -> str:
+        """Flexible formatting with options for use in LangChain prompts.
+
+        Args:
+            style: Format style - "markdown", "xml", or "plain"
+            include_line_numbers: Add line numbers to the content
+            max_lines: Limit content to first N lines (with truncation notice)
+
+        Returns:
+            Formatted string representation of the source file
+        """
+        lang = self.file_extension.strip(".")
+        content = self.content
+
+        # Truncate if needed
+        if max_lines:
+            lines = content.splitlines()[:max_lines]
+            content = "\n".join(lines)
+            if len(self.content.splitlines()) > max_lines:
+                content += (
+                    f"\n... ({len(self.content.splitlines()) - max_lines} more lines)"
+                )
+
+        # Add line numbers if requested
+        if include_line_numbers:
+            lines = content.splitlines()
+            content = "\n".join(f"{i+1:4d} | {line}" for i, line in enumerate(lines))
+
+        # Format based on style
+        if style == "markdown":
+            result = f"{self.file_path}\n```{lang}\n{content}\n```"
+        elif style == "xml":
+            result = f"<file path='{self.file_path}'>\n{content}\n</file>"
+        elif style == "plain":
+            result = f"File: {self.file_path}\n{content}"
+        else:
+            raise ValueError(f"Unknown style: {style}")
+
+        return result
+
+
+class Solution(Serializable):
     """Represents a solution, that is a collection of all the source files that
     ESBMC-AI will be involved in analyzing."""
+
+    base_dir: Path = Field(description="Base directory path")
+    _files: list[SourceFile] = PrivateAttr(default_factory=list)
+    _include_dirs: dict[Path, list[SourceFile]] = PrivateAttr(default_factory=dict)
 
     @staticmethod
     def from_dir(
@@ -238,19 +303,29 @@ class Solution:
         files: list[Path] | None = None,
         base_dir: Path = Path(getcwd()),
         include_dirs: list[Path] | None = None,
+        **kwargs: Any,
     ) -> None:
         """Creates a new solution with a base directory."""
-        self.base_dir: Path = base_dir
-        self._files: list[SourceFile] = []
+        super().__init__(base_dir=base_dir, **kwargs)
 
-        self._include_dirs: dict[Path, list[SourceFile]] = {}
-        """Used by C based verifiers."""
+        # Initialize private attributes
+        self._files = []
+        self._include_dirs = {}
 
         # If files are loaded
         if files:
             for file_path in files:
                 if not file_path.is_file():
                     raise ValueError(f"Path is not a file: {file_path}")
+                # load_source_file() only accepts relative paths, so we need to
+                # normalize absolute paths to relative ones here
+                if file_path.is_absolute():
+                    if file_path.is_relative_to(self.base_dir):
+                        file_path = file_path.relative_to(self.base_dir)
+                    else:
+                        raise ValueError(
+                            f"File path '{file_path}' is not within base directory '{self.base_dir}'"
+                        )
                 self.load_source_file(file_path)
 
         if include_dirs:
@@ -282,6 +357,44 @@ class Solution:
         """Gets the files that are only specified in the included extensions. File
         extensions that have a . prefix are trimmed so they still work."""
         return [s for s in self.files if s.file_extension.strip(".") in included_ext]
+
+    @property
+    def files_list_formatted(self) -> str:
+        """Bullet point list of all files - useful for LangChain templates."""
+        return "\n".join(f"- {f.file_path}" for f in self.files)
+
+    @property
+    def formatted(self) -> str:
+        """Default: all files formatted with markdown - useful for LangChain templates."""
+        return self.format_as()
+
+    def format_as(
+        self,
+        style: str = "markdown",
+        include_line_numbers: bool = False,
+        max_lines_per_file: int | None = None,
+        separator: str = "\n\n---\n\n",
+    ) -> str:
+        """Format all source files with options for use in LangChain prompts.
+
+        Args:
+            style: Format style - "markdown", "xml", or "plain"
+            include_line_numbers: Add line numbers to the content
+            max_lines_per_file: Limit each file's content to first N lines
+            separator: String to separate files (default: horizontal rule)
+
+        Returns:
+            Formatted string representation of all source files
+        """
+        formatted_files = [
+            f.format_as(
+                style=style,
+                include_line_numbers=include_line_numbers,
+                max_lines=max_lines_per_file,
+            )
+            for f in self.files
+        ]
+        return separator.join(formatted_files)
 
     def save_temp(self) -> "Solution":
         """Saves the solution in a temporary directory it creates while preserving
