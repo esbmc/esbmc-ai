@@ -2,7 +2,6 @@
 
 """Keeps track of all the source files that ESBMC-AI is targeting."""
 
-from dataclasses import dataclass
 from os import getcwd, walk
 from pathlib import Path
 from subprocess import PIPE, STDOUT, run, CompletedProcess
@@ -11,6 +10,7 @@ from shutil import copytree
 from typing import override
 
 from langchain_core.language_models import BaseChatModel
+from langchain_core.load.serializable import Serializable
 import lizard
 
 from esbmc_ai.log_utils import get_log_level, print_horizontal_line
@@ -40,8 +40,7 @@ class SolutionIntegrityError(Exception):
         )
 
 
-@dataclass
-class SourceFile:
+class SourceFile(Serializable):
     """Represents a source file in the Solution. This class also holds the
     verifier output. Contains methods to manipulate and get information about
     different versions."""
@@ -211,7 +210,7 @@ class SourceFile:
             return None
 
 
-class Solution:
+class Solution(Serializable):
     """Represents a solution, that is a collection of all the source files that
     ESBMC-AI will be involved in analyzing."""
 
