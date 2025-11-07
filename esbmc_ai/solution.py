@@ -94,11 +94,6 @@ class SourceFile(Serializable):
             content=content,
             **kwargs,
         )
-        if not self.verify_file_integrity():
-            raise ValueError(
-                f"File integrity check failed for {self.abs_path}. "
-                f"The file content does not match the provided content or the file does not exist."
-            )
 
     @override
     def __repr__(self) -> str:
