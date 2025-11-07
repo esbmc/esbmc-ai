@@ -6,7 +6,7 @@ from functools import cached_property
 from time import perf_counter
 from subprocess import PIPE, STDOUT, run, CompletedProcess
 from pathlib import Path
-from typing import NamedTuple
+from typing import NamedTuple, cast
 from typing_extensions import Any, override
 
 from pydantic import BaseModel
@@ -16,7 +16,7 @@ from esbmc_ai.solution import Solution, SolutionIntegrityError
 from esbmc_ai.verifier_output import VerifierOutput
 from esbmc_ai.verifiers.base_source_verifier import BaseSourceVerifier
 from esbmc_ai.verifiers.clang import ClangOutputParser
-from esbmc_ai.program_trace import ProgramTrace
+from esbmc_ai.program_trace import ProgramTrace, CounterexampleProgramTrace
 from esbmc_ai.issue import Issue, VerifierIssue
 
 # Regex patterns for parsing ESBMC output
@@ -29,6 +29,11 @@ _VIOLATED_PROPERTY_PATTERN = re.compile(
 )
 _TRACE_LINE_BASE_PATTERN = re.compile(
     r"State (\d+) file (\S+) line (\d+)(?:.+) thread (\d+)\n[-]+\n?(.*)?", re.DOTALL
+)
+# Pattern for finding counterexample states in full text (non-greedy, stops at blank lines)
+_COUNTEREXAMPLE_STATE_PATTERN = re.compile(
+    r"State (\d+) file (\S+) line (\d+)(?:.+?) thread (\d+)\n[-]+\n(.*?)(?=\n\n|\nViolated|\Z)",
+    re.DOTALL,
 )
 _TRACE_FUNCTION_PATTERN = re.compile(r" function (\S+)")
 _TRACE_ERROR_LINE_PATTERN = re.compile(r"State (?:.+)\n[-]+\n?(.*)?", re.DOTALL)
@@ -52,6 +57,36 @@ class ESBMCOutputParser:
         state_number: int
         method_name: str
         thread_index: int
+
+    @staticmethod
+    def _extract_indented_lines_after(output: str, marker: str) -> list[str]:
+        """Extract indented lines after a marker.
+
+        This is a shared utility used by both ESBMCOutputParser and ESBMCOutputSections
+        to parse sections of ESBMC output that follow the pattern:
+            Marker:
+              indented line 1
+              indented line 2
+              ...
+
+        Args:
+            output: The text to search
+            marker: The marker line to find (exact match)
+
+        Returns:
+            List of indented lines (stripped) after the marker
+        """
+        lines = output.splitlines()
+        for i, line in enumerate(lines):
+            if line == marker:
+                indented_lines = []
+                for line in lines[i + 1 :]:
+                    if line and line[0].isspace():
+                        indented_lines.append(line.strip())
+                    else:
+                        break
+                return indented_lines
+        return []
 
     @staticmethod
     def parse_output(
@@ -145,6 +180,7 @@ class ESBMCOutputParser:
             ]
 
             # Filter counterexample if it's a VerifierIssue
+            new_issue: Issue
             if isinstance(issue, VerifierIssue):
                 filtered_counterexample = [
                     trace
@@ -152,25 +188,18 @@ class ESBMCOutputParser:
                     if ESBMCOutputParser._should_include_trace(trace, solution)
                 ]
                 # Create new VerifierIssue with filtered traces
-                filtered_issues.append(
-                    VerifierIssue(
-                        error_type=issue.error_type,
-                        message=issue.message,
-                        stack_trace=filtered_stack_trace,
-                        counterexample=filtered_counterexample,
-                        severity=issue.severity,
-                    )
+                new_issue = issue.model_copy(
+                    update={
+                        "stack_trace": filtered_stack_trace,
+                        "counterexample": filtered_counterexample,
+                    },
                 )
             else:
                 # Create new Issue with filtered stack_trace
-                filtered_issues.append(
-                    Issue(
-                        error_type=issue.error_type,
-                        message=issue.message,
-                        stack_trace=filtered_stack_trace,
-                        severity=issue.severity,
-                    )
+                new_issue = issue.model_copy(
+                    update={"stack_trace": filtered_stack_trace}
                 )
+            filtered_issues.append(new_issue)
 
         # Return new ESBMCOutput with filtered issues
         return ESBMCOutput(
@@ -183,14 +212,17 @@ class ESBMCOutputParser:
     @staticmethod
     def _parse_verification_failure(output: str) -> Issue | None:
         """Parse verification failure with counterexample into VerifierIssue."""
-        # Extract error type from violated property
-        error_type = ESBMCOutputParser._extract_error_type(output)
+        # Extract both error type and message in one pass
+        error_type, message = ESBMCOutputParser._extract_error_info(output)
+
+        # Apply fallbacks if extraction failed
         if not error_type:
             error_type = "Unknown verification failure"
 
-        # Extract error message (use violated property as message)
-        violated_prop = ESBMCOutputParser._extract_violated_property_section(output)
-        message = violated_prop or error_type
+        if not message:
+            # Fallback to violated property or error type
+            violated_prop = ESBMCOutputParser._extract_violated_property_section(output)
+            message = violated_prop or error_type
 
         # Parse stack trace (from --show-stacktrace output)
         stack_trace = ESBMCOutputParser._parse_stack_trace(output)
@@ -200,7 +232,7 @@ class ESBMCOutputParser:
 
         # If no explicit stack trace, use only the final counterexample element (error location)
         if not stack_trace and counterexample:
-            stack_trace = [counterexample[-1]]
+            stack_trace = [cast(ProgramTrace, counterexample[-1])]
 
         if stack_trace:
             # Create VerifierIssue with separate stack_trace and counterexample
@@ -215,74 +247,98 @@ class ESBMCOutputParser:
         return None
 
     @staticmethod
-    def _extract_error_type(output: str) -> str | None:
-        """Extract the error type (scenario) from violated property.
+    def _extract_error_info(output: str) -> tuple[str | None, str | None]:
+        """Extract both error type and message from Stack trace section.
 
-        The error type is the last indented line after the "Stack trace:" section.
+        Returns error type (category) and message (details) from the error
+        description lines. Parses once and extracts both pieces of information.
+
+        Returns:
+            Tuple of (error_type, error_message)
+
+        Examples:
+            "dereference failure: array bounds violated":
+                ("dereference failure", "array bounds violated")
+            "array bounds violated: array `dist' upper bound" + "(signed long int)i < 5":
+                ("array bounds violated", "array `dist' upper bound: (signed long int)i < 5")
         """
-        indented_lines = ESBMCOutputSections._extract_indented_lines_after(
+        indented_lines = ESBMCOutputParser._extract_indented_lines_after(
             output, "Stack trace:"
         )
-        # Return the last indented line (the error message)
-        return indented_lines[-1] if indented_lines else None
+
+        if not indented_lines:
+            return None, None
+
+        # Collect all lines that don't start with "c:@" (error description lines)
+        error_lines = [
+            line.strip() for line in indented_lines if not line.startswith("c:@")
+        ]
+
+        if not error_lines:
+            return None, None
+
+        first_line = error_lines[0]
+
+        # Split first line on colon to get type and start of message
+        if ":" in first_line:
+            parts = first_line.split(":", 1)
+            error_type = parts[0].strip()
+
+            # Build full message from remaining first line + additional lines
+            message_parts = [parts[1].strip()] + error_lines[1:]
+            error_message = ": ".join(part for part in message_parts if part)
+        else:
+            # No colon - use whole line as both type and message
+            error_type = first_line
+            error_message = first_line
+
+        return error_type, error_message
 
     @staticmethod
-    def _parse_counterexample_traces(output: str) -> list[ProgramTrace]:
-        """Parse counterexample section into ProgramTrace objects.
-
+    def _parse_counterexample_traces(output: str) -> list[CounterexampleProgramTrace]:
+        """Parse counterexample section into CounterexampleProgramTrace objects.
         Extracts ALL traces without filtering.
         """
-        # Get [Counterexample] string idx
+        # Find counterexample section
         try:
-            ce_idx: int = output.index("[Counterexample]") + len("[Counterexample]")
+            ce_start = output.index("[Counterexample]")
         except ValueError:
             return []
 
-        ce_idx_end: int = ce_idx
-        traces: list[ProgramTrace] = []
-        trace_idx: int = 0
+        counterexample_section = output[ce_start:]
+        traces: list[CounterexampleProgramTrace] = []
 
-        # Parse all state traces
-        while True:
-            # Check if done
-            if output.find("State ", ce_idx) == -1:
-                break
-
-            ce_idx = output.index("State ", ce_idx)
-            # Get the end of state block, which spans 3 lines:
-            # Line 1: "State N file X line Y function Z thread T"
-            # Line 2: "----" (separator)
-            # Line 3: Error details or code line
-            ce_idx_end = ce_idx
-            ce_idx_end = output.index("\n", ce_idx_end) + 1
-            ce_idx_end = output.index("\n", ce_idx_end) + 1
-            ce_idx_end = output.index("\n", ce_idx_end) + 1
-
-            # Parse the state line
+        # Use regex to find all state blocks in the counterexample
+        for trace_idx, match in enumerate(
+            _COUNTEREXAMPLE_STATE_PATTERN.finditer(counterexample_section)
+        ):
             try:
-                trace_results: ESBMCOutputParser._TraceResult | None = (
-                    ESBMCOutputParser._parse_trace_line(output[ce_idx:ce_idx_end])
-                )
+                trace_results = ESBMCOutputParser._parse_trace_line(match.group(0))
             except ValueError:
                 # Skip trace lines that cannot be parsed
-                trace_results = None
+                continue
 
             if trace_results:
-                file_name: Path = trace_results.filename
-                line_number: int = trace_results.line_number
-                method_name: str = trace_results.method_name
-
-                traces.append(
-                    ProgramTrace(
-                        trace_index=trace_idx,
-                        path=Path(file_name),
-                        line_idx=line_number - 1,  # Convert to 0-based
-                        name=method_name if method_name else None,
-                    )
+                # Clean up the assignment string
+                assignment = (
+                    trace_results.error_line.strip()
+                    if trace_results.error_line
+                    else None
                 )
 
-            ce_idx = ce_idx_end + 1
-            trace_idx += 1
+                traces.append(
+                    CounterexampleProgramTrace(
+                        trace_index=trace_idx,
+                        path=trace_results.filename,
+                        line_idx=trace_results.line_number - 1,  # Convert to 0-based
+                        name=(
+                            trace_results.method_name
+                            if trace_results.method_name
+                            else None
+                        ),
+                        assignment=assignment,
+                    )
+                )
 
         return traces
 
@@ -363,12 +419,11 @@ class ESBMCOutputParser:
     @staticmethod
     def _extract_violated_property_section(output: str) -> str | None:
         """Gets the violated property line from ESBMC output string."""
-        # Find "Violated property:" string in ESBMC output
-        lines: list[str] = output.splitlines()
-        for ix, line in enumerate(lines):
-            if "Violated property:" == line:
-                return "\n".join(lines[ix : ix + 3])
-        return None
+        indented_lines = ESBMCOutputParser._extract_indented_lines_after(
+            output, "Violated property:"
+        )
+        # Return the first indented line (the file/line/function info)
+        return indented_lines[0] if indented_lines else None
 
     @staticmethod
     def _parse_trace_line(
@@ -386,43 +441,44 @@ class ESBMCOutputParser:
         Raises:
             ValueError if the line doesn't match the expected format
         """
-
-        method_name: str | None = None
-        error_line: str | None = None
-
         # Get elements that are always present
         match = _TRACE_LINE_BASE_PATTERN.search(line)
-        if match:
-            state_number: int | None = int(match.group(1)) if match.group(1) else None
-            filename: str | None = match.group(2) if match.group(2) else None
-            line_number: int | None = int(match.group(3)) if match.group(3) else None
-
-            thread_index: int | None = int(match.group(4)) if match.group(4) else None
-
-            # Don't return if any of the useful information is missing
-            if any(x is None for x in [filename, line_number]):
-                return None
-            assert filename is not None and line_number is not None
-        else:
+        if not match:
             raise ValueError(f"Could not find a state match:\n{line}\n")
 
-        # Optional elements - extract function name
-        if " function " in line:
-            match = _TRACE_FUNCTION_PATTERN.search(line)
-            method_name = match.group(1) if match else None
+        # Extract base groups
+        filename = match.group(2)
+        line_number_str = match.group(3)
 
-        # If violated property is printed, don't get error line, it's not supported.
+        # Critical fields must be present
+        if not filename or not line_number_str:
+            return None
+
+        state_number = int(match.group(1)) if match.group(1) else -1
+        line_number = int(line_number_str)
+        thread_index = int(match.group(4)) if match.group(4) else -1
+
+        # Optional elements - extract function name
+        method_name = ""
+        if " function " in line:
+            func_match = _TRACE_FUNCTION_PATTERN.search(line)
+            if func_match:
+                method_name = func_match.group(1)
+
+        # Extract error line if not a violated property
+        error_line = ""
         if "Violated property:" not in line:
-            match = _TRACE_ERROR_LINE_PATTERN.search(line)
-            error_line = match.group(1) if match else None
+            error_match = _TRACE_ERROR_LINE_PATTERN.search(line)
+            if error_match:
+                error_line = error_match.group(1) or ""
 
         return ESBMCOutputParser._TraceResult(
-            state_number=state_number if state_number is not None else -1,
+            state_number=state_number,
             filename=Path(filename),
             line_number=line_number,
-            method_name=method_name or "",
-            thread_index=thread_index if thread_index is not None else -1,
-            error_line=error_line or "",
+            method_name=method_name,
+            thread_index=thread_index,
+            error_line=error_line,
         )
 
 
@@ -459,32 +515,9 @@ class ESBMCOutputSections(BaseModel):
         )
 
     @staticmethod
-    def _extract_indented_lines_after(output: str, marker: str) -> list[str]:
-        """Extract indented lines after a marker.
-
-        Args:
-            output: The text to search
-            marker: The marker line to find (exact match)
-
-        Returns:
-            List of indented lines (stripped) after the marker
-        """
-        lines = output.splitlines()
-        for i, line in enumerate(lines):
-            if line == marker:
-                indented_lines = []
-                for line in lines[i + 1 :]:
-                    if line and line[0].isspace():
-                        indented_lines.append(line.strip())
-                    else:
-                        break
-                return indented_lines
-        return []
-
-    @staticmethod
     def _parse_violated_property(output: str) -> str | None:
         """Extract violated property message from output."""
-        indented_lines = ESBMCOutputSections._extract_indented_lines_after(
+        indented_lines = ESBMCOutputParser._extract_indented_lines_after(
             output, "Stack trace:"
         )
         # Return the last indented line (the violated property message)
@@ -502,7 +535,7 @@ class ESBMCOutputSections(BaseModel):
     @staticmethod
     def _parse_stack_trace(output: str) -> str | None:
         """Extract stack trace lines from output."""
-        indented_lines = ESBMCOutputSections._extract_indented_lines_after(
+        indented_lines = ESBMCOutputParser._extract_indented_lines_after(
             output, "Stack trace:"
         )
         # Return all but the last line (which is the violated property message)
@@ -535,6 +568,14 @@ class ESBMCOutput(VerifierOutput):
 class ESBMC(BaseSourceVerifier):
     """Verifier class that uses ESBMC."""
 
+    FORBIDDEN_PARAMS = {
+        "--multi-property": "it is not yet supported!",
+        "--input-file": "",
+        "--timeout": "instead specify it in its own field.",
+        "--function": "instead specify it in its own field.",
+        "--show-stacktrace": "it is added automatically.",
+    }
+
     def __init__(self) -> None:
         super().__init__(verifier_name="esbmc", authors="")
 
@@ -558,14 +599,7 @@ class ESBMC(BaseSourceVerifier):
         timeout = timeout or self.global_config.verifier.esbmc.timeout
 
         # Validate forbidden parameters
-        forbidden_params = {
-            "--multi-property": "it is not yet supported!",
-            "--input-file": "",
-            "--timeout": "instead specify it in its own field.",
-            "--function": "instead specify it in its own field.",
-            "--show-stacktrace": "it is added automatically.",
-        }
-        for param, reason in forbidden_params.items():
+        for param, reason in self.FORBIDDEN_PARAMS.items():
             if param in esbmc_params:
                 msg = f"Do not add {param} to ESBMC parameters"
                 if reason:

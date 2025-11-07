@@ -61,7 +61,9 @@ def clang_parse_error_raw_output() -> str:
 # =============================================================================
 
 
-def test_esbmc_output_successful_property_failure(bubble_sort_output: ESBMCOutput) -> None:
+def test_esbmc_output_successful_property_failure(
+    bubble_sort_output: ESBMCOutput,
+) -> None:
     """Test that verification failure is correctly identified."""
     assert bubble_sort_output.return_code == 1
     assert not bubble_sort_output.successful
@@ -154,15 +156,20 @@ def test_parse_verification_failure_creates_verifier_issue(
 def test_issue_has_error_type(bubble_sort_output: ESBMCOutput) -> None:
     """Test that issue has correct error type."""
     issue = bubble_sort_output.issues[0]
-    assert issue.error_type == "dereference failure: array bounds violated"
+    # Error type should be the base category (before the first colon)
+    assert issue.error_type == "dereference failure"
 
 
 def test_issue_has_message(bubble_sort_output: ESBMCOutput) -> None:
     """Test that issue has a message."""
     issue = bubble_sort_output.issues[0]
     assert issue.message
-    # Message should contain the violated property
-    assert "file samples/bubble_sort.c line 7" in issue.message
+    # Message should be the error details without the error_type prefix
+    assert issue.message == "array bounds violated"
+    # Should NOT contain the "Violated property:" header
+    assert "Violated property:" not in issue.message
+    # Should NOT contain the "Stack trace:" header
+    assert "Stack trace:" not in issue.message
 
 
 def test_issue_has_severity(bubble_sort_output: ESBMCOutput) -> None:
@@ -328,22 +335,31 @@ def test_split_counterexample_sections_multiple() -> None:
 
 
 def test_extract_error_type(bubble_sort_raw_output: str) -> None:
-    """Test error type extraction from violated property."""
-    error_type = ESBMCOutputParser._extract_error_type(bubble_sort_raw_output)
-    assert error_type == "dereference failure: array bounds violated"
+    """Test error type and message extraction from violated property."""
+    error_type, error_message = ESBMCOutputParser._extract_error_info(
+        bubble_sort_raw_output
+    )
+    # Should extract the base category (before the colon)
+    assert error_type == "dereference failure"
+    # Should extract the message (after the colon)
+    assert error_message == "array bounds violated"
 
 
 def test_extract_error_type_not_found() -> None:
-    """Test error type extraction when not found."""
-    error_type = ESBMCOutputParser._extract_error_type("No violated property")
+    """Test error info extraction when not found."""
+    error_type, error_message = ESBMCOutputParser._extract_error_info(
+        "No violated property"
+    )
     assert error_type is None
+    assert error_message is None
 
 
 def test_extract_error_type_incomplete_output() -> None:
-    """Test error type extraction with incomplete output."""
+    """Test error info extraction with incomplete output."""
     output = "Violated property:\n"
-    error_type = ESBMCOutputParser._extract_error_type(output)
+    error_type, error_message = ESBMCOutputParser._extract_error_info(output)
     assert error_type is None
+    assert error_message is None
 
 
 # =============================================================================
@@ -357,8 +373,13 @@ def test_extract_violated_property_section(bubble_sort_raw_output: str) -> None:
         bubble_sort_raw_output
     )
     assert section is not None
-    assert "Violated property:" in section
-    assert "file samples/bubble_sort.c line 7" in section
+    # Should return only the property line (stripped), not the headers
+    assert (
+        section
+        == "file samples/bubble_sort.c line 7 column 7 function buggy_bubble_sort"
+    )
+    assert "Violated property:" not in section
+    assert "Stack trace:" not in section
 
 
 def test_extract_violated_property_section_not_found() -> None:
@@ -507,7 +528,9 @@ def test_clang_parse_error_detected(clang_parse_error_output: ESBMCOutput) -> No
     assert "ERROR: PARSING ERROR" in clang_parse_error_output.output
 
 
-def test_clang_parse_error_creates_issues(clang_parse_error_output: ESBMCOutput) -> None:
+def test_clang_parse_error_creates_issues(
+    clang_parse_error_output: ESBMCOutput,
+) -> None:
     """Test that compilation errors create Issue objects."""
     assert len(clang_parse_error_output.issues) >= 1
 
@@ -553,7 +576,8 @@ def test_full_parsing_workflow_bubble_sort(bubble_sort_raw_output: str) -> None:
     # Verify issue structure
     issue = output.issues[0]
     assert isinstance(issue, VerifierIssue)
-    assert issue.error_type == "dereference failure: array bounds violated"
+    assert issue.error_type == "dereference failure"
+    assert issue.message == "array bounds violated"
     assert issue.line_number == 7
     assert issue.function_name == "buggy_bubble_sort"
 
@@ -651,7 +675,10 @@ def test_esbmc_get_violated_property(bubble_sort_output: ESBMCOutput) -> None:
     assert output.sections.violated_property is not None
 
     # The violated property should contain the error message
-    assert "dereference failure: array bounds violated" in output.sections.violated_property
+    assert (
+        "dereference failure: array bounds violated"
+        in output.sections.violated_property
+    )
 
 
 def test_get_clang_err_line_index(clang_parse_error_output: ESBMCOutput) -> None:
@@ -698,3 +725,180 @@ Bug found (k = 5)"""
     assert bubble_sort_output.sections.stack_trace == stack_trace
     assert bubble_sort_output.sections.violated_property == violated_property
     assert bubble_sort_output.sections.counterexample == counterexample
+
+
+# =============================================================================
+# CounterexampleProgramTrace Tests - dijkstra_unsafe.txt
+# =============================================================================
+
+
+@pytest.fixture(scope="module")
+def dijkstra_unsafe_output() -> ESBMCOutput:
+    """Load the dijkstra_unsafe.txt sample output with counterexample assignments."""
+    with open("./tests/samples/esbmc_output/dijkstra_unsafe.txt") as file:
+        return ESBMCOutputParser.parse_output(
+            return_code=1,
+            output=file.read(),
+        )
+
+
+@pytest.fixture(scope="module")
+def dijkstra_unsafe_raw_output() -> str:
+    """Load raw dijkstra_unsafe.txt output as string."""
+    with open("./tests/samples/esbmc_output/dijkstra_unsafe.txt") as file:
+        return file.read()
+
+
+def test_dijkstra_counterexample_has_assignments(
+    dijkstra_unsafe_output: ESBMCOutput,
+) -> None:
+    """Test that counterexample traces contain assignment information."""
+    assert len(dijkstra_unsafe_output.issues) == 1
+    issue = dijkstra_unsafe_output.issues[0]
+    assert isinstance(issue, VerifierIssue)
+
+    # Verify we have counterexample traces
+    assert len(issue.counterexample) > 0
+
+    # Verify traces with assignments have non-None assignment field
+    traces_with_assignments = [t for t in issue.counterexample if t.assignment]
+    assert (
+        len(traces_with_assignments) > 0
+    ), "Expected at least some traces to have assignments"
+
+
+def test_dijkstra_counterexample_trace_type(
+    dijkstra_unsafe_output: ESBMCOutput,
+) -> None:
+    """Test that counterexample traces are CounterexampleProgramTrace instances."""
+    from esbmc_ai.program_trace import CounterexampleProgramTrace
+
+    issue = dijkstra_unsafe_output.issues[0]
+    assert isinstance(issue, VerifierIssue)
+
+    # Verify all traces are CounterexampleProgramTrace instances
+    for trace in issue.counterexample:
+        assert isinstance(
+            trace, CounterexampleProgramTrace
+        ), f"Expected CounterexampleProgramTrace but got {type(trace)}"
+        # Verify the assignment attribute exists
+        assert hasattr(trace, "assignment")
+
+
+def test_dijkstra_specific_assignments(dijkstra_unsafe_output: ESBMCOutput) -> None:
+    """Test that specific assignments from dijkstra_unsafe.txt are captured correctly."""
+    issue = dijkstra_unsafe_output.issues[0]
+    assert isinstance(issue, VerifierIssue)
+
+    # State 0: graph initialization
+    state_0 = issue.counterexample[0]
+    assert state_0.trace_index == 0
+    assert state_0.assignment is not None
+    assert "graph = { { 0, 10, 0, 30, 100 }" in state_0.assignment
+
+    # State 1: dist initialization
+    state_1 = issue.counterexample[1]
+    assert state_1.trace_index == 1
+    assert state_1.assignment == "dist = { 0, 0, 0, 0, 0 }"
+
+    # State 2: sptSet initialization
+    state_2 = issue.counterexample[2]
+    assert state_2.trace_index == 2
+    assert state_2.assignment == "sptSet = { 0, 0, 0, 0, 0 }"
+
+    # State 3: dist[0] assignment with binary representation
+    state_3 = issue.counterexample[3]
+    assert state_3.trace_index == 3
+    assert state_3.assignment is not None
+    assert "dist[0] = 2147483647" in state_3.assignment
+    assert "01111111 11111111 11111111 11111111" in state_3.assignment
+
+
+def test_dijkstra_counterexample_formatted_with_assignments(
+    dijkstra_unsafe_output: ESBMCOutput,
+) -> None:
+    """Test that formatted counterexample includes assignment information."""
+    issue = dijkstra_unsafe_output.issues[0]
+    assert isinstance(issue, VerifierIssue)
+
+    formatted = issue.counterexample_formatted
+
+    # Verify format includes state information
+    assert "State 0:" in formatted
+    assert "State 1:" in formatted
+
+    # Verify format includes assignments
+    assert "graph = { { 0, 10, 0, 30, 100 }" in formatted
+    assert "dist = { 0, 0, 0, 0, 0 }" in formatted
+    assert "sptSet = { 0, 0, 0, 0, 0 }" in formatted
+    assert "dist[0] = 2147483647" in formatted
+
+    # Verify format includes file locations
+    assert "samples/dijkstra_unsafe.c" in formatted
+
+    # Verify format includes function names
+    assert "at main" in formatted
+    assert "at dijkstra" in formatted
+
+
+def test_dijkstra_assignment_not_in_stack_trace(
+    dijkstra_unsafe_output: ESBMCOutput,
+) -> None:
+    """Test that stack trace does not have assignment information (only counterexample does)."""
+    issue = dijkstra_unsafe_output.issues[0]
+    assert isinstance(issue, VerifierIssue)
+
+    # Stack traces are ProgramTrace, not CounterexampleProgramTrace
+    for trace in issue.stack_trace:
+        # ProgramTrace doesn't have assignment attribute
+        assert not hasattr(trace, "assignment") or (
+            hasattr(trace, "assignment") and trace.assignment is None
+        ), "Stack trace should not have assignment information"
+
+
+def test_dijkstra_all_counterexample_states_have_valid_structure(
+    dijkstra_unsafe_output: ESBMCOutput,
+) -> None:
+    """Test that all counterexample states have valid structure."""
+    from esbmc_ai.program_trace import CounterexampleProgramTrace
+
+    issue = dijkstra_unsafe_output.issues[0]
+    assert isinstance(issue, VerifierIssue)
+
+    # Should have 14 states according to the sample file
+    assert len(issue.counterexample) == 14
+
+    for i, trace in enumerate(issue.counterexample):
+        # Verify type
+        assert isinstance(trace, CounterexampleProgramTrace)
+
+        # Verify index matches position
+        assert trace.trace_index == i
+
+        # Verify required fields
+        assert isinstance(trace.path, Path)
+        assert isinstance(trace.line_idx, int)
+        assert trace.line_idx >= 0
+
+        # Verify assignment field exists (may be None or string)
+        assert trace.assignment is None or isinstance(trace.assignment, str)
+
+
+def test_dijkstra_error_type_and_message(dijkstra_unsafe_output: ESBMCOutput) -> None:
+    """Test that error type and message are correctly parsed."""
+    issue = dijkstra_unsafe_output.issues[0]
+    assert isinstance(issue, VerifierIssue)
+
+    # Verify error type - should be the base category
+    assert issue.error_type == "array bounds violated"
+
+    # Verify the message contains details without the error_type prefix
+    assert issue.message == "array `dist' upper bound: (signed long int)i < 5"
+    # Should NOT contain the "Violated property:" header
+    assert "Violated property:" not in issue.message
+    # Should NOT contain the "Stack trace:" header
+    assert "Stack trace:" not in issue.message
+
+    # Verify the output contains array bounds violation details
+    assert "array bounds violated" in dijkstra_unsafe_output.output
+    assert "array `dist' upper bound" in dijkstra_unsafe_output.output
