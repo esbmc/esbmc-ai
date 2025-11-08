@@ -48,17 +48,29 @@ class LoopAnalysisCommandResult(CommandResult):
             if self.loop_bounds:
                 result = "Loop Analysis Results:\n\n"
                 pairs = []
+                determined_count = 0
                 if self.loops:
                     for loop in self.loops.loops:
                         bound = self.loop_bounds.get(loop.loop_idx, -1)
-                        # Skip loops with -1 (undetermined bounds)
                         if bound != -1:
                             result += (
                                 f"Loop {loop.loop_idx}: {loop.file_name}:{loop.line_number} "
                                 f"in {loop.function_name} -> Max iterations: {bound}\n"
                             )
                             pairs.append(f"{loop.loop_idx}:{bound}")
-                # Add final line with compact format
+                            determined_count += 1
+                        else:
+                            result += (
+                                f"Loop {loop.loop_idx}: {loop.file_name}:{loop.line_number} "
+                                f"in {loop.function_name} -> Max iterations: undetermined\n"
+                            )
+
+                    # Add summary line
+                    total_loops = len(self.loops)
+                    result += f"\nFound {total_loops} loop{'s' if total_loops != 1 else ''}, "
+                    result += f"{determined_count} with determined bounds\n"
+
+                # Add final line with compact format (only determined bounds)
                 if pairs:
                     result += "\n" + ",".join(pairs)
                 return result
