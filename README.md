@@ -35,7 +35,7 @@ For full documentation, see the [ESBMC-AI Wiki](https://esbmc.github.io/esbmc-ai
 
 ## Contributing
 
-See [this page](https://esbmc.github.io/esbmc-ai/contributing).
+See [this page](https://esbmc.github.io/esbmc-ai/docs/contributing).
 
 ## License
 
