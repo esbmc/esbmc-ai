@@ -69,24 +69,19 @@ jobs:
       - name: Generate and set prerelease version
         id: version
         run: |
-          # Get latest release tag (e.g., v0.7.0)
-          LATEST_TAG=$(gh release list --limit 1 --json tagName | jq -r '.[0].tagName')
-          echo "Latest release: $LATEST_TAG"
-
-          # Set version in __about__.py (strip 'v' prefix)
-          sed -i "s/__version__ = \".*\"/__version__ = \"${LATEST_TAG#v}\"/" esbmc_ai/__about__.py
+          # Get current version from __about__.py
+          CURRENT_VERSION=$(hatch version)
+          echo "Current version: $CURRENT_VERSION"
 
           # Increment to dev version
           hatch version dev
 
-          # Get new version and create tag
+          # Get new dev version and create tag
           NEW_VERSION=$(hatch version)
           echo "New prerelease version: v${NEW_VERSION}"
 
           echo "version=v${NEW_VERSION}" >> $GITHUB_OUTPUT
           echo "version_no_v=$NEW_VERSION" >> $GITHUB_OUTPUT
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build package
         run: hatch build
