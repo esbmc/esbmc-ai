@@ -141,3 +141,4 @@ hatch shell
 - Singleton pattern used for global state management (Config, AIModels)
 - All components follow factory pattern for instantiation
 - Error handling with custom exceptions for verification timeouts and integrity issues
+- Prompt templates are configured to use the Jinja2 formatting style when using KeyTemplateRenderer.
