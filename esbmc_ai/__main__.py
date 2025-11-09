@@ -176,7 +176,7 @@ Configuration Precedence (highest to lowest):
     Config.set_singleton(config)
     config: Config = Config()
 
-    print(f"ESBMC-AI {__version__}")
+    print(f"ESBMC-AI v{__version__}")
     print(f"Made by {__author__}")
     print()
 

@@ -9,9 +9,9 @@ Automated LLM Integrated Workflow Platform. Primarily oriented around Automated 
 
 The basic repair implementation passes the output from ESBMC to an AI model with instructions to repair the code. As the output from ESBMC can be quite technical in nature.
 
-![ESBMC-AI Visual Abstract](website/content/docs/images/esbmc-ai_framework.png)
+![ESBMC-AI Visual Abstract](https://raw.githubusercontent.com/esbmc/esbmc-ai/master/website/content/docs/images/esbmc-ai_framework.png)
 
-![ESBMC-AI Platform](website/content/docs/images/platform_diag.png)
+![ESBMC-AI Platform](https://raw.githubusercontent.com/esbmc/esbmc-ai/master/website/content/docs/images/platform_diag.png)
 
 ## Quick Start
 
@@ -27,17 +27,17 @@ More videos can be found on the [ESBMC-AI Youtube Channel](https://www.youtube.c
 
 ## Wiki
 
-For full documentation, see the [ESBMC-AI Wiki](esbmc.github.io/esbmc-ai). Quick Links:
+For full documentation, see the [ESBMC-AI Wiki](https://esbmc.github.io/esbmc-ai). Quick Links:
 
-* [Initial Setup Guide](esbmc.github.io/esbmc-ai/docs/initial-setup/).
-* [Built-in Commands](http://localhost:1313/docs/commands/)
-* [Addons](http://localhost:1313/docs/addons/)
+* [Initial Setup Guide](https://esbmc.github.io/esbmc-ai/docs/initial-setup/)
+* [Built-in Commands](https://esbmc.github.io/esbmc-ai/docs/commands/)
+* [Addons](https://esbmc.github.io/esbmc-ai/docs/addons/)
 
 ## Contributing
 
-See [this page](esbmc.github.io/esbmc-ai/contributing).
+See [this page](https://esbmc.github.io/esbmc-ai/contributing).
 
 ## License
 
 > [!NOTE]
->This project is offered under a [dual-licence](LICENSE) model.
+>This project is offered under a [dual-licence](https://github.com/esbmc/esbmc-ai/blob/master/LICENSE) model.

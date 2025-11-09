@@ -6,6 +6,7 @@ from .help_command import HelpCommand
 from .help_config import HelpConfigCommand
 from .fix_code_command import FixCodeCommand
 from .debug_config import DebugConfigViewCommand
+from .license_command import LicenseCommand
 
 __all__ = [
     "ExitCommand",
@@ -13,4 +14,5 @@ __all__ = [
     "HelpConfigCommand",
     "FixCodeCommand",
     "DebugConfigViewCommand",
+    "LicenseCommand",
 ]
