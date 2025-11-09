@@ -83,6 +83,10 @@ jobs:
           echo "version=v${NEW_VERSION}" >> $GITHUB_OUTPUT
           echo "version_no_v=$NEW_VERSION" >> $GITHUB_OUTPUT
 
+      - name: Get current date
+        id: date
+        run: echo "date=$(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_OUTPUT
+
       - name: Build package
         run: hatch build
 
@@ -103,7 +107,7 @@ jobs:
             This is an automated prerelease build from the master branch.
 
             **Version:** ${{ steps.version.outputs.version }}
-            **Build Date:** ${{ github.run_started_at }}
+            **Build Date:** ${{ steps.date.outputs.date }}
 
             ### Changes since last release:
 
