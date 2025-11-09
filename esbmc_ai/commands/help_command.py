@@ -37,3 +37,7 @@ class HelpCommand(ChatCommand):
             print(f"* {command.command_name}: {command.help_message}")
             if command.authors:
                 print(f"\tAuthors: {command.authors}")
+
+        print("\nLicense:")
+        print("* ESBMC-AI is dual-licensed (AGPL-3.0 / Commercial)")
+        print("* Run 'esbmc-ai license' for full details")
