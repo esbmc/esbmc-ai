@@ -23,7 +23,7 @@ from esbmc_ai.solution import Solution, SourceFile
 from esbmc_ai.verifiers.esbmc import ESBMC
 
 
-class LoopAnalysisCommandResult(CommandResult):
+class ESBMCLoopAnalysisCommandResult(CommandResult):
     """Returned by the LoopAnalysisCommand."""
 
     def __init__(
@@ -67,7 +67,9 @@ class LoopAnalysisCommandResult(CommandResult):
 
                     # Add summary line
                     total_loops = len(self.loops)
-                    result += f"\nFound {total_loops} loop{'s' if total_loops != 1 else ''}, "
+                    result += (
+                        f"\nFound {total_loops} loop{'s' if total_loops != 1 else ''}, "
+                    )
                     result += f"{determined_count} with determined bounds\n"
 
                 # Add final line with compact format (only determined bounds)
@@ -143,7 +145,7 @@ class LoopAnalysisCommand(ChatCommand):
         self._config = value
 
     @override
-    def execute(self) -> LoopAnalysisCommandResult:
+    def execute(self) -> ESBMCLoopAnalysisCommandResult:
         """Execute the loop analysis command."""
         # Load source file
         source_file: SourceFile = SourceFile.load(
@@ -179,7 +181,7 @@ class LoopAnalysisCommand(ChatCommand):
 
         if len(loops) == 0:
             self.logger.info("No loops found in source files")
-            return LoopAnalysisCommandResult(True, loops, {})
+            return ESBMCLoopAnalysisCommandResult(True, loops, {})
 
         # Ask LLM to analyze loop bounds
         with self.anim("Analyzing loop bounds with LLM..."):
@@ -187,7 +189,7 @@ class LoopAnalysisCommand(ChatCommand):
 
         self.logger.info(f"Loop bounds analysis: {loop_bounds}")
 
-        return LoopAnalysisCommandResult(True, loops, loop_bounds)
+        return ESBMCLoopAnalysisCommandResult(True, loops, loop_bounds)
 
     def _run_esbmc_show_loops(self, verifier: ESBMC, solution: Solution) -> str:
         """
