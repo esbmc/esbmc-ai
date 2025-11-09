@@ -1,0 +1,126 @@
+name: Weekly Prerelease
+
+on:
+  schedule:
+    # Run every Sunday at 23:00 UTC (Sunday night)
+    - cron: '0 23 * * 0'
+  # Allow manual triggering for testing
+  workflow_dispatch:
+
+jobs:
+  create-prerelease:
+    name: Create Weekly Prerelease
+    runs-on: ubuntu-latest
+
+    # - workflow_dispatch: only run if ref == master
+    # - schedule: GitHub does NOT populate ref, so allow scheduled runs unconditionally
+    if: github.event_name == 'schedule' || github.ref_name == 'master'
+
+    timeout-minutes: 15
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4.2.2
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5.3.0
+        with:
+          python-version: "3.12.0"
+
+      - name: Install Hatch
+        run: python -m pip install --upgrade hatch
+
+      - name: Cache Hatch environment
+        uses: actions/cache@v4.2.3
+        with:
+          path: |
+            ~/.cache/hatch
+            ~/.local/share/hatch
+          key: ${{ runner.os }}-hatch-prerelease-${{ hashFiles('**/pyproject.toml') }}
+
+      - name: Get commit messages since last tag
+        id: changelog
+        run: |
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+
+          if [ -z "$LAST_TAG" ]; then
+            COMMITS=$(git log --pretty=format:"- %s (%h)" --no-merges -n 50)
+          else
+            COMMITS=$(git log ${LAST_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges)
+          fi
+
+          if [ -z "$COMMITS" ]; then
+            echo "No commits since last release. Skipping prerelease creation."
+            exit 0
+          fi
+
+          {
+            echo 'commits<<EOF'
+            echo "$COMMITS"
+            echo 'EOF'
+          } >> $GITHUB_OUTPUT
+
+      - name: Generate and set prerelease version
+        id: version
+        run: |
+          # Get latest release tag (e.g., v0.7.0)
+          LATEST_TAG=$(gh release list --limit 1 --json tagName | jq -r '.[0].tagName')
+          echo "Latest release: $LATEST_TAG"
+
+          # Set version in __about__.py (strip 'v' prefix)
+          sed -i "s/__version__ = \".*\"/__version__ = \"${LATEST_TAG#v}\"/" esbmc_ai/__about__.py
+
+          # Increment to dev version
+          hatch version dev
+
+          # Get new version and create tag
+          NEW_VERSION=$(hatch version)
+          echo "New prerelease version: v${NEW_VERSION}"
+
+          echo "version=v${NEW_VERSION}" >> $GITHUB_OUTPUT
+          echo "version_no_v=$NEW_VERSION" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build package
+        run: hatch build
+
+      - name: Publish to PyPI
+        run: hatch publish
+        env:
+          HATCH_INDEX_USER: __token__
+          HATCH_INDEX_AUTH: ${{ secrets.PYPI_TOKEN }}
+
+      - name: Create GitHub Prerelease
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: "Weekly ${{ steps.version.outputs.version }}"
+          body: |
+            ## Automated Weekly Prerelease
+
+            This is an automated prerelease build from the master branch.
+
+            **Version:** ${{ steps.version.outputs.version }}
+            **Build Date:** ${{ github.run_started_at }}
+
+            ### Changes since last release:
+
+            ${{ steps.changelog.outputs.commits }}
+
+            ---
+
+            > ⚠️ **Note:** This is a prerelease version and may contain unstable features.
+            > Use at your own risk in production environments.
+          files: |
+            dist/*
+          prerelease: true
+          draft: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
