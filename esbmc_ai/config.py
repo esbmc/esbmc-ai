@@ -80,7 +80,7 @@ class AICustomModelConfig(BaseModel):
 
 
 class LogConfig(BaseModel):
-    output: FilePath | None = Field(
+    output: Path | None = Field(
         default=None,
         description="Save the output logs to a location. Do not add "
         ".log suffix, it will be added automatically.",
@@ -330,12 +330,32 @@ class Config(BaseSettings, metaclass=makecls(SingletonMeta)):
     @classmethod
     def on_set_addon_modules(cls, mods: list[str]) -> list[str]:
         """Validates that a module exists."""
-        for m in mods:
-            if not isinstance(m, str):
-                raise ValueError("Needs to be a string")
-            spec: ModuleSpec | None = find_spec(m)
-            if spec is None:
-                raise ValueError("Could not find specification for module")
+        import sys
+
+        # Temporarily add current directory to sys.path for dev mode addon
+        # discovery. This mirrors what AddonLoader does, but we need it here for
+        # validation. AddonLoader will add the cwd if needed.
+        added_cwd = False
+        if "" not in sys.path:
+            sys.path.insert(0, "")
+            added_cwd = True
+
+        try:
+            for m in mods:
+                if not isinstance(m, str):
+                    raise ValueError("Needs to be a string")
+                spec: ModuleSpec | None = find_spec(m)
+                if spec is None:
+                    raise ValueError(
+                        f"Could not find specification for module '{m}'. "
+                        "Ensure the module is installed or available in the "
+                        "current directory."
+                    )
+        finally:
+            # Clean up: remove the path we added
+            if added_cwd and "" in sys.path:
+                sys.path.remove("")
+
         return mods
 
     verbose_level: int = Field(
