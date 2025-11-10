@@ -315,7 +315,9 @@ class Solution(Serializable):
         # If files are loaded
         if files:
             for file_path in files:
-                if not file_path.is_file():
+                # Check if file exists (handle both absolute and relative paths)
+                full_path = file_path if file_path.is_absolute() else (self.base_dir / file_path)
+                if not full_path.is_file():
                     raise ValueError(f"Path is not a file: {file_path}")
                 # load_source_file() only accepts relative paths, so we need to
                 # normalize absolute paths to relative ones here
