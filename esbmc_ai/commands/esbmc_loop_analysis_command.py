@@ -16,11 +16,9 @@ from esbmc_ai.chats.key_template_renderer import KeyTemplateRenderer
 from esbmc_ai.chats.template_key_provider import GenericTemplateKeyProvider
 from esbmc_ai.command_result import CommandResult
 from esbmc_ai.component_manager import ComponentManager
-from esbmc_ai.esbmc_loop_parser import ESBMCLoopParser
-from esbmc_ai.esbmc_loops import ESBMCLoops
 from esbmc_ai.loading_widget import BaseLoadingWidget, LoadingWidget
 from esbmc_ai.solution import Solution, SourceFile
-from esbmc_ai.verifiers.esbmc import ESBMC
+from esbmc_ai.verifiers.esbmc import ESBMC, ESBMCLoopParser, ESBMCLoops
 
 
 class ESBMCLoopAnalysisCommandResult(CommandResult):
