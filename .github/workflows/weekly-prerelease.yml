@@ -69,15 +69,18 @@ jobs:
       - name: Generate and set prerelease version
         id: version
         run: |
-          # Get current version from __about__.py
           CURRENT_VERSION=$(hatch version)
           echo "Current version: $CURRENT_VERSION"
 
-          # Increment to dev version
-          hatch version dev
+          git fetch --tags
 
-          # Get new dev version and create tag
-          NEW_VERSION=$(hatch version)
+          # Find latest dev version and extract number (defaults to -1 if none found)
+          LATEST_DEV=$(git tag -l "v${CURRENT_VERSION}.dev*" --sort=-version:refname | head -n 1)
+          DEV_NUM=${LATEST_DEV##*.dev}
+          NEW_VERSION="${CURRENT_VERSION}.dev$(( ${DEV_NUM:--1} + 1 ))"
+
+          echo "Old: ${LATEST_DEV:-none}"
+          echo "New: ${NEW_VERSION}"
           echo "New prerelease version: v${NEW_VERSION}"
 
           echo "version=v${NEW_VERSION}" >> $GITHUB_OUTPUT
@@ -86,6 +89,12 @@ jobs:
       - name: Get current date
         id: date
         run: echo "date=$(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_OUTPUT
+
+      - name: Update version in __about__.py for build
+        run: |
+          sed -i 's/__version__ = ".*"/__version__ = "${{ steps.version.outputs.version_no_v }}"/' esbmc_ai/__about__.py
+          echo "Updated __about__.py to version ${{ steps.version.outputs.version_no_v }}"
+          cat esbmc_ai/__about__.py
 
       - name: Build package
         run: hatch build
