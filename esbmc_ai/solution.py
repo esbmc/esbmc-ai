@@ -7,7 +7,7 @@ from pathlib import Path
 from subprocess import PIPE, STDOUT, run, CompletedProcess
 from tempfile import NamedTemporaryFile, TemporaryDirectory
 from shutil import copytree
-from typing import Any, override
+from typing import Any, Literal, override
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.load.serializable import Serializable
@@ -15,6 +15,8 @@ from pydantic import Field, PrivateAttr
 import lizard
 
 from esbmc_ai.log_utils import get_log_level, print_horizontal_line
+
+_SourceFileFormatStyles = Literal["markdown", "xml", "plain"]
 
 
 class SolutionIntegrityError(Exception):
@@ -228,7 +230,7 @@ class SourceFile(Serializable):
 
     def format_as(
         self,
-        style: str = "markdown",
+        style: _SourceFileFormatStyles = "markdown",
         include_line_numbers: bool = False,
         max_lines: int | None = None,
     ) -> str:
@@ -266,8 +268,6 @@ class SourceFile(Serializable):
             result = f"<file path='{self.file_path}'>\n{content}\n</file>"
         elif style == "plain":
             result = f"File: {self.file_path}\n{content}"
-        else:
-            raise ValueError(f"Unknown style: {style}")
 
         return result
 
@@ -316,7 +316,11 @@ class Solution(Serializable):
         if files:
             for file_path in files:
                 # Check if file exists (handle both absolute and relative paths)
-                full_path = file_path if file_path.is_absolute() else (self.base_dir / file_path)
+                full_path = (
+                    file_path
+                    if file_path.is_absolute()
+                    else (self.base_dir / file_path)
+                )
                 if not full_path.is_file():
                     raise ValueError(f"Path is not a file: {file_path}")
                 # load_source_file() only accepts relative paths, so we need to
@@ -350,11 +354,6 @@ class Solution(Serializable):
         """Will return a list of the files. Returns by value."""
         return list(self._files)
 
-    @property
-    def files_mapped(self) -> dict[str, SourceFile]:
-        """Will return the files mapped to their directory. Returns by value."""
-        return {str(source_file.file_path): source_file for source_file in self._files}
-
     def get_files_by_ext(self, included_ext: list[str]) -> list[SourceFile]:
         """Gets the files that are only specified in the included extensions. File
         extensions that have a . prefix are trimmed so they still work."""
@@ -372,7 +371,7 @@ class Solution(Serializable):
 
     def format_as(
         self,
-        style: str = "markdown",
+        style: _SourceFileFormatStyles = "markdown",
         include_line_numbers: bool = False,
         max_lines_per_file: int | None = None,
         separator: str = "\n\n---\n\n",
@@ -517,6 +516,63 @@ class Solution(Serializable):
             )
 
         return process.stdout.decode("utf-8")
+
+    def resolve(self, file: SourceFile | Path) -> SourceFile | None:
+        """Resolve a Path or SourceFile to its corresponding SourceFile in the solution.
+
+        Args:
+            file: Either a SourceFile instance or a Path (absolute or relative)
+
+        Returns:
+            The SourceFile if found, None otherwise
+        """
+        if isinstance(file, SourceFile):
+            # For SourceFile, compare by absolute path
+            for f in self._files:
+                if f.abs_path == file.abs_path:
+                    return f
+            return None
+
+        # For Path, handle both absolute and relative
+        path = Path(file)
+        if path.is_absolute():
+            for f in self._files:
+                if f.abs_path == path:
+                    return f
+        else:
+            for f in self._files:
+                if f.file_path == path:
+                    return f
+
+        return None
+
+    def __contains__(self, file: SourceFile | Path) -> bool:
+        """Check if a file is part of this solution. Enables 'in' operator.
+
+        Args:
+            file: Either a SourceFile instance or a Path (absolute or relative)
+
+        Returns:
+            True if the file is in the solution, False otherwise
+        """
+        return self.resolve(file) is not None
+
+    def get_file(self, path: Path) -> SourceFile:
+        """Get a SourceFile by path, raising KeyError if not found.
+
+        Args:
+            path: Either an absolute or relative Path
+
+        Returns:
+            The SourceFile
+
+        Raises:
+            KeyError: If the path is not in the solution
+        """
+        result = self.resolve(path)
+        if result is None:
+            raise KeyError(f"Path not found in solution: {path}")
+        return result
 
     def patch_solution(self, patch: str) -> None:
         """Patches the solution using the patch command."""

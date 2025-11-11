@@ -151,16 +151,14 @@ class ESBMCOutputParser:
     @staticmethod
     def _should_include_trace(trace: ProgramTrace, solution: Solution) -> bool:
         """Determine if a trace should be included based on solution files."""
-        return (solution.base_dir / trace.path).exists() and str(
-            trace.path
-        ) in solution.files_mapped
+        return (solution.base_dir / trace.path).exists() and trace.path in solution
 
     @staticmethod
     def filter_traces(esbmc_output: "ESBMCOutput", solution: Solution) -> "ESBMCOutput":
         """Filter traces in ESBMCOutput to only include files from the solution.
 
         Creates a new ESBMCOutput object with traces filtered to only include
-        files that exist in the solution's base directory and are in files_mapped.
+        files that exist in the solution's base directory and are in the solution.
 
         Args:
             esbmc_output: The ESBMCOutput to filter
@@ -592,11 +590,12 @@ class ESBMC(BaseSourceVerifier):
         *,
         solution: Solution,
         timeout: int | None = None,
-        entry_function: str = "main",
+        entry_function: str | None = None,
         params: list[str] | None = None,
     ) -> ESBMCOutput:
-        esbmc_params: list[str] = params or self.global_config.verifier.esbmc.params
         timeout = timeout or self.global_config.verifier.esbmc.timeout
+        entry_function = entry_function or self.global_config.solution.entry_function
+        esbmc_params: list[str] = params or self.global_config.verifier.esbmc.params
 
         # Validate forbidden parameters
         for param, reason in self.FORBIDDEN_PARAMS.items():
