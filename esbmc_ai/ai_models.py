@@ -2,7 +2,7 @@
 
 from typing import Any
 from uuid import UUID
-from langchain_core.messages import BaseMessage
+from langchain_core.messages import AIMessage, BaseMessage
 from langchain_core.outputs import ChatGeneration, Generation, LLMResult
 from typing_extensions import override
 import structlog
@@ -26,12 +26,17 @@ class LoggingCallbackHandler(BaseCallbackHandler):
             category=LogCategories.CHAT,
             prefix_name=ai_model,
         )
+        # Track last printed message index per group: {group_idx: last_msg_idx}
+        self._last_printed_idx: dict[int, int] = {}
 
     @staticmethod
     def _get_msg_formatted(
         group_idx: int, msg_idx: int, msg: BaseMessage | Generation
     ) -> str:
-        return f"MSG {group_idx}-{msg_idx} {msg.type.capitalize()}: {msg.text}"
+        base: str = f"MSG {group_idx}-{msg_idx} {msg.type.capitalize()}:"
+        if isinstance(msg, AIMessage) and msg.tool_calls:
+            return f"{base} <message-body>{msg.text}</message-body>\nTool Call: {msg.tool_calls}"
+        return f"{base} <message-body>{msg.text}</message-body>"
 
     # @override
     # def on_llm_start(
@@ -134,12 +139,16 @@ class LoggingCallbackHandler(BaseCallbackHandler):
         _ = run_id, parent_run_id, tags, metadata, kwargs
         self.logger.debug("=" * 80)
         self.logger.debug("Invoke Chat Model LLM")
-        for idx, msg_group in enumerate(messages):
+        for group_idx, msg_group in enumerate(messages):
+            last_printed = self._last_printed_idx.get(group_idx, -1)
             self.logger.debug("=" * 80)
-            for msg_idx, msg in enumerate(msg_group):
-                self.logger.debug(self._get_msg_formatted(idx, msg_idx, msg))
+            for msg_idx, msg in enumerate(
+                msg_group[last_printed + 1 :], start=last_printed + 1
+            ):
+                self.logger.debug(self._get_msg_formatted(group_idx, msg_idx, msg))
                 if msg_idx < len(msg_group) - 1:
                     self.logger.debug("-" * 80)
+            self._last_printed_idx[group_idx] = len(msg_group) - 1
 
 
 class AIModel:
@@ -154,9 +163,7 @@ class AIModel:
         temperature: float | None = None,
         url: str | None = None,
     ) -> BaseChatModel:
-        handler: BaseCallbackHandler = LoggingCallbackHandler(
-            ai_model=f"{provider}:{model}"
-        )
+        handler: BaseCallbackHandler = LoggingCallbackHandler(ai_model=model)
 
         chat_model: BaseChatModel = init_chat_model(
             model=model,
