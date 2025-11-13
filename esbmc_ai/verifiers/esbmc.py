@@ -151,7 +151,7 @@ class ESBMCOutputParser:
     @staticmethod
     def _should_include_trace(trace: ProgramTrace, solution: Solution) -> bool:
         """Determine if a trace should be included based on solution files."""
-        return (solution.base_dir / trace.path).exists() and trace.path in solution
+        return (solution.working_dir / trace.path).exists() and trace.path in solution
 
     @staticmethod
     def filter_traces(esbmc_output: "ESBMCOutput", solution: Solution) -> "ESBMCOutput":
@@ -668,7 +668,7 @@ class ESBMC(BaseSourceVerifier):
             str(file.file_path) for file in solution.get_files_by_ext(["c", "cpp"])
         )
         # Header files/dir
-        esbmc_cmd.extend("-I" + str(d) for d in solution.include_dirs.keys())
+        esbmc_cmd.extend("-I" + str(d) for d in solution.include_dirs)
 
         # Add timeout suffix for parameter.
         if timeout:
@@ -686,12 +686,12 @@ class ESBMC(BaseSourceVerifier):
         # Measure execution time
         start_time = perf_counter()
 
-        # Run ESBMC from solution base_dir and get output
+        # Run ESBMC from solution working_dir and get output
         process: CompletedProcess = run(
             esbmc_cmd,
             stdout=PIPE,
             stderr=STDOUT,
-            cwd=solution.base_dir,
+            cwd=solution.working_dir,
             timeout=process_timeout,
             check=False,
         )
