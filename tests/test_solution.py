@@ -22,7 +22,7 @@ def test_verify_solution_integrity_all_valid():
         file2.write_text("void foo() {}")
 
         # Create solution from files
-        solution = Solution(files=[file1, file2], base_dir=temp_path)
+        solution = Solution(files=[file1, file2])
 
         # Should be valid - all files match disk
         assert solution.verify_solution_integrity() is True
@@ -38,7 +38,7 @@ def test_verify_solution_integrity_modified_file():
         test_file.write_text("int main() { return 0; }")
 
         # Create solution and modify content in memory
-        solution = Solution(files=[test_file], base_dir=temp_path)
+        solution = Solution(files=[test_file])
         solution.files[0].content = "int main() { return 1; }"
 
         # Should be invalid - content doesn't match disk
@@ -57,7 +57,7 @@ def test_verify_solution_integrity_mixed():
         file2.write_text("void foo() {}")
 
         # Create solution and modify one file
-        solution = Solution(files=[file1, file2], base_dir=temp_path)
+        solution = Solution(files=[file1, file2])
         solution.files[1].content = "void foo() { modified }"
 
         # Should be invalid - one file doesn't match
@@ -76,7 +76,7 @@ def test_solution_integrity_error():
         file2.write_text("void foo() {}")
 
         # Create solution and modify files
-        solution = Solution(files=[file1, file2], base_dir=temp_path)
+        solution = Solution(files=[file1, file2])
         solution.files[0].content = "modified1"
         solution.files[1].content = "modified2"
 
@@ -113,7 +113,7 @@ def test_verify_file_integrity_valid():
         test_file.write_text("int main() { return 0; }")
 
         # Load from disk - should be valid
-        source_file = SourceFile.load(test_file, temp_path)
+        source_file = SourceFile.load(test_file)
         assert source_file.verify_file_integrity() is True
 
 
@@ -125,7 +125,7 @@ def test_verify_file_integrity_modified():
         test_file.write_text("int main() { return 0; }")
 
         # Load from disk then modify content
-        source_file = SourceFile.load(test_file, temp_path)
+        source_file = SourceFile.load(test_file)
         source_file.content = "int main() { return 1; }"
 
         # Should be invalid - content doesn't match disk
@@ -147,25 +147,22 @@ def test_verify_file_integrity_no_file():
 
 def test_source_file_in_memory_creation():
     """Test that SourceFile can be created in-memory without physical files."""
-    # This should not raise an error after Option C implementation
+    # SourceFile now uses absolute paths
     source_file = SourceFile(
-        file_path=Path("test.c"),
-        base_path=Path("/tmp"),
+        file_path=Path("/tmp/test.c"),
         content="int main() { return 0; }",
     )
 
     # Should be created successfully
     assert source_file.content == "int main() { return 0; }"
-    assert source_file.file_path == Path("test.c")
-    assert source_file.base_path == Path("/tmp")
+    assert source_file.file_path == Path("/tmp/test.c")
 
 
 def test_source_file_repr_with_invalid_file():
     """Test that __repr__ correctly shows validity status for in-memory files."""
     # Create in-memory file (no physical file exists)
     source_file = SourceFile(
-        file_path=Path("test.c"),
-        base_path=Path("/tmp"),
+        file_path=Path("/tmp/test.c"),
         content="int main() { return 0; }",
     )
 
@@ -181,7 +178,7 @@ def test_source_file_repr_with_valid_file():
         test_file = temp_path / "test.c"
         test_file.write_text("int main() { return 0; }")
 
-        source_file = SourceFile.load(test_file, temp_path)
+        source_file = SourceFile.load(test_file)
         repr_str = repr(source_file)
 
         assert "test.c" in repr_str

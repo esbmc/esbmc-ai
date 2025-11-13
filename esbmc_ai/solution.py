@@ -2,7 +2,8 @@
 
 """Keeps track of all the source files that ESBMC-AI is targeting."""
 
-from os import getcwd, walk
+from os import walk
+from os.path import commonpath
 from pathlib import Path
 from subprocess import PIPE, STDOUT, run, CompletedProcess
 from tempfile import NamedTemporaryFile, TemporaryDirectory
@@ -46,8 +47,7 @@ class SourceFile(Serializable):
     """Represents a source file in the Solution. Contains methods to manipulate
     and get information about different versions."""
 
-    file_path: Path = Field(description="Relative file path")
-    base_path: Path = Field(description="Base directory path")
+    file_path: Path = Field(description="Absolute file path")
     content: str = Field(description="File content")
 
     @staticmethod
@@ -71,28 +71,23 @@ class SourceFile(Serializable):
         return "\n".join(lines)
 
     @staticmethod
-    def load(file_path: Path, base_path: Path) -> "SourceFile":
+    def load(file_path: Path) -> "SourceFile":
         """Creates a new source file by loading the content from disk."""
-        if file_path.is_relative_to(base_path):
-            file_path = file_path.relative_to(base_path)
-        with open(base_path / file_path, "r") as file:
-            return SourceFile(file_path, base_path, file.read())
+        abs_path = file_path.absolute()
+        with open(abs_path, "r") as file:
+            return SourceFile(file_path=abs_path, content=file.read())
 
     def __init__(
         self,
         file_path: Path,
-        base_path: Path,
         content: str,
         **kwargs: Any,
     ) -> None:
-        if file_path.is_absolute():
-            raise ValueError(
-                f"SourceFile requires a relative file path, got absolute: {file_path}. "
-                f"Use SourceFile.load() to create from absolute paths."
-            )
+        # Ensure path is absolute
+        if not file_path.is_absolute():
+            file_path = file_path.absolute()
         super().__init__(
             file_path=file_path,
-            base_path=base_path,
             content=content,
             **kwargs,
         )
@@ -104,11 +99,6 @@ class SourceFile(Serializable):
     @override
     def __str__(self) -> str:
         return f"SourceFile({self.file_path})"
-
-    @property
-    def abs_path(self) -> Path:
-        """Returns the abs path"""
-        return self.base_path / self.file_path
 
     @property
     def file_extension(self) -> str:
@@ -199,10 +189,10 @@ class SourceFile(Serializable):
     def verify_file_integrity(self) -> bool:
         """Verifies that this file matches with the file on disk and does not
         contain any differences."""
-        if not (self.abs_path.exists() and self.abs_path.is_file()):
+        if not (self.file_path.exists() and self.file_path.is_file()):
             return False
 
-        with open(self.abs_path, "r") as file:
+        with open(self.file_path, "r") as file:
             content: str = str(file.read())
 
         return content == self.content
@@ -276,9 +266,8 @@ class Solution(Serializable):
     """Represents a solution, that is a collection of all the source files that
     ESBMC-AI will be involved in analyzing."""
 
-    base_dir: Path = Field(description="Base directory path")
     _files: list[SourceFile] = PrivateAttr(default_factory=list)
-    _include_dirs: dict[Path, list[SourceFile]] = PrivateAttr(default_factory=dict)
+    _include_dirs: list[Path] = PrivateAttr(default_factory=list)
 
     @staticmethod
     def from_dir(
@@ -290,69 +279,66 @@ class Solution(Serializable):
         path = path.absolute()
 
         if file_paths:
-            return Solution(files=file_paths, base_dir=path, include_dirs=include_dirs)
+            return Solution(files=file_paths, include_dirs=include_dirs)
 
         result: list[Path] = []
         for dir_path, _, files in walk(path):
             result.extend(Path(dir_path) / file for file in files)
 
-        return Solution(files=result, base_dir=path, include_dirs=include_dirs)
+        return Solution(files=result, include_dirs=include_dirs)
 
     def __init__(
         self,
         files: list[Path] | None = None,
-        base_dir: Path = Path(getcwd()),
         include_dirs: list[Path] | None = None,
         **kwargs: Any,
     ) -> None:
-        """Creates a new solution with a base directory."""
-        super().__init__(base_dir=base_dir, **kwargs)
+        """Creates a new solution from file paths."""
+        super().__init__(**kwargs)
 
         # Initialize private attributes
         self._files = []
-        self._include_dirs = {}
+        self._include_dirs = []
 
         # If files are loaded
         if files:
             for file_path in files:
-                # Check if file exists (handle both absolute and relative paths)
-                full_path = (
-                    file_path
-                    if file_path.is_absolute()
-                    else (self.base_dir / file_path)
+                # Convert to absolute path
+                abs_path = (
+                    file_path if file_path.is_absolute() else file_path.absolute()
                 )
-                if not full_path.is_file():
+                if not abs_path.is_file():
                     raise ValueError(f"Path is not a file: {file_path}")
-                # load_source_file() only accepts relative paths, so we need to
-                # normalize absolute paths to relative ones here
-                if file_path.is_absolute():
-                    if file_path.is_relative_to(self.base_dir):
-                        file_path = file_path.relative_to(self.base_dir)
-                    else:
-                        raise ValueError(
-                            f"File path '{file_path}' is not within base directory '{self.base_dir}'"
-                        )
-                self.load_source_file(file_path)
+                self._files.append(SourceFile.load(abs_path))
 
         if include_dirs:
             for d in include_dirs:
-                if not d.is_dir():
+                abs_dir = d if d.is_absolute() else d.absolute()
+                if not abs_dir.is_dir():
                     raise ValueError(f"Path is not a directory: {d}")
-                include_files: list[Path] = [p for p in d.rglob("*") if p.is_file()]
-                self._include_dirs[d] = [
-                    SourceFile.load(file_path=p, base_path=self.base_dir)
-                    for p in include_files
-                ]
+                self._include_dirs.append(abs_dir)
 
     @property
-    def include_dirs(self) -> dict[Path, list[SourceFile]]:
-        """Used by C based verifiers."""
-        return self._include_dirs
+    def include_dirs(self) -> list[Path]:
+        """Include directories for C based verifiers."""
+        return list(self._include_dirs)
 
     @property
     def files(self) -> list[SourceFile]:
         """Will return a list of the files. Returns by value."""
         return list(self._files)
+
+    @property
+    def working_dir(self) -> Path:
+        """Computes the common parent directory of all files."""
+        if not self._files:
+            return Path.cwd()
+
+        paths = [str(f.file_path) for f in self._files]
+        common = commonpath(paths)
+
+        # If only one file, commonpath returns the file itself, so use parent
+        return Path(common).parent if len(paths) == 1 else Path(common)
 
     def get_files_by_ext(self, included_ext: list[str]) -> list[SourceFile]:
         """Gets the files that are only specified in the included extensions. File
@@ -401,42 +387,43 @@ class Solution(Serializable):
         """Saves the solution in a temporary directory it creates while preserving
         the file structure."""
         with TemporaryDirectory(
-            prefix="esbmc-ai", suffix=self.base_dir.name, delete=False
+            prefix="esbmc-ai-", suffix="-" + self.working_dir.name, delete=False
         ) as temp_dir:
             return self.save_solution(Path(temp_dir))
 
     def save_solution(self, path: Path) -> "Solution":
-        """Saves the solution to path, and then returns it. The solution's base
-        directory is replaced by the final component of path."""
-        base_dir_path: Path = path
+        """Saves the solution to path, preserving relative structure.
 
-        # Copy individual source files.
+        Files are saved relative to their common parent (working_dir)."""
+        dest_path: Path = path.absolute()
+        dest_path.mkdir(parents=True, exist_ok=True)
+
+        # Get common parent to preserve relative structure
+        common_parent = self.working_dir
+
+        # Copy individual source files preserving structure
         new_file_paths: list[Path] = []
         for source_file in self.files:
-            # Handle absolute paths by flattening to just the filename
-            if source_file.file_path.is_absolute():
-                relative_path = Path(source_file.file_path.name)
-            else:
-                relative_path = source_file.file_path
+            # Get path relative to common parent
+            relative_path = source_file.file_path.relative_to(common_parent)
+            new_path: Path = dest_path / relative_path
 
-            new_file_paths.append(relative_path)
-            new_path: Path = base_dir_path / relative_path
             # Write new file
             new_path.parent.mkdir(parents=True, exist_ok=True)
             source_file.save_file(new_path)
+            new_file_paths.append(new_path)
 
-        # Copy include directories there
+        # Copy include directories
+        new_include_dirs: list[Path] = []
         for d in self.include_dirs:
-            new_dir: Path = base_dir_path / d
+            new_dir: Path = dest_path / d.name
             copytree(src=d, dst=new_dir, symlinks=True, dirs_exist_ok=True)
+            new_include_dirs.append(new_dir)
 
-        sol = Solution(
+        return Solution(
             files=new_file_paths,
-            base_dir=Path(base_dir_path),
-            include_dirs=list(self.include_dirs.keys()),
+            include_dirs=new_include_dirs,
         )
-
-        return sol
 
     def verify_solution_integrity(self) -> bool:
         """Verifies if the content of the solution match with the files on disk.
@@ -467,23 +454,9 @@ class Solution(Serializable):
                 self.load_source_file(f)
 
     def load_source_file(self, file_path: Path) -> None:
-        """Add a source file to the solution. If content is provided then it will
-        not be loaded."""
-        # Get the relative path to the base dir.
-        if file_path.is_absolute():
-            raise ValueError(
-                f"Cannot load absolute path '{file_path}' into Solution. "
-                f"All file paths must be relative to the base directory '{self.base_dir}'. "
-                f"This is an internal error - paths should be normalized before reaching this point."
-            )
-        with open(self.base_dir / file_path, "r") as file:
-            self._files.append(
-                SourceFile(
-                    file_path=file_path,
-                    base_path=self.base_dir,
-                    content=file.read(),
-                )
-            )
+        """Add a source file to the solution by loading it from disk."""
+        abs_path = file_path if file_path.is_absolute() else file_path.absolute()
+        self._files.append(SourceFile.load(abs_path))
 
     def get_diff(self, other: "Solution") -> str:
         """Gets the diff with another solution. The following params are used: -ruN"""
@@ -495,10 +468,10 @@ class Solution(Serializable):
             other.save_temp()
 
         cmd = [
-            "patch",
+            "diff",
             "-ruN",  # (r)ecursive, (u) additional context, (N) treat absent files as empty
-            self.base_dir,
-            other.base_dir,
+            str(self.working_dir),
+            str(other.working_dir),
         ]
 
         process: CompletedProcess = run(
@@ -512,10 +485,17 @@ class Solution(Serializable):
         # https://askubuntu.com/questions/698784/exit-code-of-diff
         if process.returncode == 2:
             raise ValueError(
-                f"Diff for {self.base_dir} and {other.base_dir} failed (exit 2)."
+                f"Diff for {self.working_dir} and {other.working_dir} failed (exit 2)."
             )
 
         return process.stdout.decode("utf-8")
+
+    def save_diff(self, path: Path, solution: "Solution") -> Path:
+        """Saves the solution as a patch of the original."""
+        diff: str = self.get_diff(solution)
+        with open(path, "w") as file:
+            file.write(diff)
+        return path
 
     def resolve(self, file: SourceFile | Path) -> SourceFile | None:
         """Resolve a Path or SourceFile to its corresponding SourceFile in the solution.
@@ -527,23 +507,14 @@ class Solution(Serializable):
             The SourceFile if found, None otherwise
         """
         if isinstance(file, SourceFile):
-            # For SourceFile, compare by absolute path
-            for f in self._files:
-                if f.abs_path == file.abs_path:
-                    return f
-            return None
-
-        # For Path, handle both absolute and relative
-        path = Path(file)
-        if path.is_absolute():
-            for f in self._files:
-                if f.abs_path == path:
-                    return f
+            search_path = file.file_path
         else:
-            for f in self._files:
-                if f.file_path == path:
-                    return f
+            # Convert to absolute path for comparison
+            search_path = Path(file).absolute()
 
+        for f in self._files:
+            if f.file_path == search_path:
+                return f
         return None
 
     def __contains__(self, file: SourceFile | Path) -> bool:
@@ -586,10 +557,10 @@ class Solution(Serializable):
 
             cmd = [
                 "patch",
-                "-d",  # Change to base dir first
-                self.base_dir,
+                "-d",  # Change to working dir first
+                str(self.working_dir),
                 "-i",  # Flag to specify patch file
-                Path(patch_file.name).absolute(),
+                str(Path(patch_file.name).absolute()),
             ]
 
             process: CompletedProcess = run(
@@ -610,7 +581,7 @@ class Solution(Serializable):
                         + process.stdout.decode("utf-8")
                     )
                     raise ValueError(
-                        f"Patch failed for some files in solution {self.base_dir}"
+                        f"Patch failed for some files in solution {self.working_dir}"
                     )
                 case 2:
                     print_horizontal_line(get_log_level(0))
@@ -619,5 +590,5 @@ class Solution(Serializable):
                         + process.stdout.decode("utf-8")
                     )
                     raise ValueError(
-                        f"Patch failed SERIOUSLY in solution {self.base_dir}"
+                        f"Patch failed SERIOUSLY in solution {self.working_dir}"
                     )
