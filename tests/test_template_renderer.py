@@ -17,11 +17,10 @@ def test_template_substitution():
     )
 
     source_file = SourceFile(
-        file_path=Path("test.c"),
-        base_path=Path("/tmp"),
+        file_path=Path("/tmp/test.c"),
         content="int main() { return 0; }",
     )
-    solution = Solution(base_dir=Path("/tmp"))
+    solution = Solution()
     solution.add_source_file(source_file)
 
     formatted = renderer.format_messages(
@@ -54,11 +53,10 @@ def test_template_substitution_with_multiline_code():
 }"""
 
     source_file = SourceFile(
-        file_path=Path("test.c"),
-        base_path=Path("/tmp"),
+        file_path=Path("/tmp/test.c"),
         content=source,
     )
-    solution = Solution(base_dir=Path("/tmp"))
+    solution = Solution()
     solution.add_source_file(source_file)
 
     formatted = renderer.format_messages(

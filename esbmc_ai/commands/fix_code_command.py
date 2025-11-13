@@ -130,11 +130,10 @@ class FixCodeCommand(ChatCommand):
         )
         # Handle kwargs
         source_file: SourceFile = SourceFile.load(
-            self.global_config.solution.filenames[0],
-            Path(os.getcwd()),
+            self.global_config.solution.filenames[0]
         )
         self.original_source_file = SourceFile(
-            source_file.file_path, source_file.base_path, source_file.content
+            file_path=source_file.file_path, content=source_file.content
         )
         self.anim = (
             LoadingWidget() if self.global_config.loading_hints else BaseLoadingWidget()
