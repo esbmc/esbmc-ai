@@ -62,7 +62,7 @@ class CategoryFileHandler(logging.Handler):
         if isinstance(category, Enum):
             category = category.value
 
-        assert isinstance(category, str)
+        assert isinstance(category, str), f"Category is not string: {category}"
 
         # Skip uncategorized if desired
         if (
