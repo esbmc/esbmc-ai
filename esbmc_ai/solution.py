@@ -14,8 +14,9 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.load.serializable import Serializable
 from pydantic import Field, PrivateAttr
 import lizard
+from structlog.stdlib import get_logger
 
-from esbmc_ai.log_utils import get_log_level, print_horizontal_line
+from esbmc_ai.log_utils import LogCategories, get_log_level, print_horizontal_line
 
 _SourceFileFormatStyles = Literal["markdown", "xml", "plain"]
 
@@ -223,6 +224,7 @@ class SourceFile(Serializable):
         style: _SourceFileFormatStyles = "markdown",
         include_line_numbers: bool = False,
         max_lines: int | None = None,
+        working_dir: Path | None = None,
     ) -> str:
         """Flexible formatting with options for use in LangChain prompts.
 
@@ -252,12 +254,15 @@ class SourceFile(Serializable):
             content = "\n".join(f"{i+1:4d} | {line}" for i, line in enumerate(lines))
 
         # Format based on style
+        show_path: Path = (
+            self.file_path.relative_to(working_dir) if working_dir else self.file_path
+        )
         if style == "markdown":
-            result = f"{self.file_path}\n```{lang}\n{content}\n```"
+            result = f"{show_path}\n```{lang}\n{content}\n```"
         elif style == "xml":
-            result = f"<file path='{self.file_path}'>\n{content}\n</file>"
+            result = f"<file path='{show_path}'>\n{content}\n</file>"
         elif style == "plain":
-            result = f"File: {self.file_path}\n{content}"
+            result = f"File: {show_path}\n{content}"
 
         return result
 
@@ -270,20 +275,36 @@ class Solution(Serializable):
     _include_dirs: list[Path] = PrivateAttr(default_factory=list)
 
     @staticmethod
-    def from_dir(
-        path: Path,
-        file_paths: list[Path] | None = None,
+    def from_paths(
+        *paths: Path,
         include_dirs: list[Path] | None = None,
     ) -> "Solution":
-        """Creates a solution from a base directory. Can append with files manually."""
-        path = path.absolute()
+        """Creates a solution from one or more paths (files or directories).
 
-        if file_paths:
-            return Solution(files=file_paths, include_dirs=include_dirs)
+        Directories are scanned recursively for all files.
 
+        Args:
+            *paths: One or more file or directory paths
+            include_dirs: Optional include directories for C/C++ compilation
+
+        Example:
+            Solution.from_paths(Path("file1.c"), Path("file2.c"))
+            Solution.from_paths(Path("/project"))
+            Solution.from_paths(Path("src"), Path("tests/test.c"))
+        """
         result: list[Path] = []
-        for dir_path, _, files in walk(path):
-            result.extend(Path(dir_path) / file for file in files)
+
+        for path in paths:
+            abs_path = path.absolute()
+            if abs_path.is_file():
+                result.append(abs_path)
+            elif abs_path.is_dir():
+                for dir_path, _, files in walk(abs_path):
+                    result.extend(Path(dir_path) / file for file in files)
+            else:
+                raise ValueError(
+                    f"Path does not exist or is neither file nor directory: {path}"
+                )
 
         return Solution(files=result, include_dirs=include_dirs)
 
@@ -395,6 +416,10 @@ class Solution(Serializable):
         """Saves the solution to path, preserving relative structure.
 
         Files are saved relative to their common parent (working_dir)."""
+        get_logger().bind(category=LogCategories.SYSTEM).info(
+            f"Saving solution to {path}"
+        )
+
         dest_path: Path = path.absolute()
         dest_path.mkdir(parents=True, exist_ok=True)
 
@@ -544,6 +569,28 @@ class Solution(Serializable):
         if result is None:
             raise KeyError(f"Path not found in solution: {path}")
         return result
+
+    def __add__(self, other: "Solution") -> "Solution":
+        """Combine two solutions by merging their files and include directories.
+
+        Args:
+            other: Another Solution instance to combine with this one
+
+        Returns:
+            A new Solution containing all files and include_dirs from both solutions
+
+        Example:
+            solution_c = solution_a + solution_b
+        """
+        if not isinstance(other, Solution):
+            return NotImplemented
+
+        return Solution(
+            # Combine files - create new list to avoid modifying originals
+            files=[source_file.file_path for source_file in self._files + other._files],
+            # Combine include_dirs - deduplicate by converting to set and back
+            include_dirs=list(set(self._include_dirs + other._include_dirs)),
+        )
 
     def patch_solution(self, patch: str) -> None:
         """Patches the solution using the patch command."""
