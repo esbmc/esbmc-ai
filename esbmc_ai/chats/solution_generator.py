@@ -95,8 +95,6 @@ class SolutionGenerator:
         # Add AI response to message history for conversation context
         self.messages.append(response)
 
-        repaired_code = SolutionGenerator.extract_code_from_solution(
-            str(response.content)
-        )
+        repaired_code = SolutionGenerator.extract_code_from_solution(response.text)
 
         return repaired_code
