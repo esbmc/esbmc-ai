@@ -34,9 +34,20 @@ class LoggingCallbackHandler(BaseCallbackHandler):
         group_idx: int, msg_idx: int, msg: BaseMessage | Generation
     ) -> str:
         base: str = f"MSG {group_idx}-{msg_idx} {msg.type.capitalize()}:"
+        parts: list[str] = [base]
+
+        # Check for thinking/reasoning blocks in AIMessage
+        if isinstance(msg, AIMessage) and hasattr(msg, "content_blocks"):
+            for block in msg.content_blocks:
+                if thinking := block.get("reasoning") or block.get("thinking"):
+                    parts.append(f"<thinking>{thinking}</thinking>")
+
+        parts.append(f"<message-body>{msg.text}</message-body>")
+
         if isinstance(msg, AIMessage) and msg.tool_calls:
-            return f"{base} <message-body>{msg.text}</message-body>\nTool Call: {msg.tool_calls}"
-        return f"{base} <message-body>{msg.text}</message-body>"
+            parts.append(f"Tool Call: {msg.tool_calls}")
+
+        return "\n".join(parts)
 
     # @override
     # def on_llm_start(
