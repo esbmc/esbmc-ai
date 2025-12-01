@@ -136,19 +136,21 @@ class LoggingCallbackHandler(BaseCallbackHandler):
             metadata (Optional[dict[str, Any]]): The metadata.
             kwargs (Any): Additional keyword arguments.
         """
-        _ = run_id, parent_run_id, tags, metadata, kwargs
-        self.logger.debug("=" * 80)
-        self.logger.debug("Invoke Chat Model LLM")
-        for group_idx, msg_group in enumerate(messages):
-            last_printed = self._last_printed_idx.get(group_idx, -1)
+        _ = run_id, parent_run_id, tags, kwargs
+        # "checkpoint_ns" does not appear on duplicates
+        if metadata and "checkpoint_ns" in metadata:
             self.logger.debug("=" * 80)
-            for msg_idx, msg in enumerate(
-                msg_group[last_printed + 1 :], start=last_printed + 1
-            ):
-                self.logger.debug(self._get_msg_formatted(group_idx, msg_idx, msg))
-                if msg_idx < len(msg_group) - 1:
-                    self.logger.debug("-" * 80)
-            self._last_printed_idx[group_idx] = len(msg_group) - 1
+            self.logger.debug("Invoke Chat Model LLM")
+            for group_idx, msg_group in enumerate(messages):
+                last_printed = self._last_printed_idx.get(group_idx, -1)
+                self.logger.debug("=" * 80)
+                for msg_idx, msg in enumerate(
+                    msg_group[last_printed + 1 :], start=last_printed + 1
+                ):
+                    self.logger.debug(self._get_msg_formatted(group_idx, msg_idx, msg))
+                    if msg_idx < len(msg_group) - 1:
+                        self.logger.debug("-" * 80)
+                self._last_printed_idx[group_idx] = len(msg_group) - 1
 
 
 class AIModel:
@@ -162,6 +164,7 @@ class AIModel:
         provider: str | None = None,
         temperature: float | None = None,
         url: str | None = None,
+        **model_kwargs,
     ) -> BaseChatModel:
         handler: BaseCallbackHandler = LoggingCallbackHandler(ai_model=model)
 
@@ -179,6 +182,7 @@ class AIModel:
                 max_bucket_size=100,
             ),
             callbacks=[handler],
+            model_kwargs=model_kwargs,
         )
 
         return chat_model
