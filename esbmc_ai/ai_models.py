@@ -39,8 +39,10 @@ class LoggingCallbackHandler(BaseCallbackHandler):
         # Check for thinking/reasoning blocks in AIMessage
         if isinstance(msg, AIMessage) and hasattr(msg, "content_blocks"):
             for block in msg.content_blocks:
-                if thinking := block.get("reasoning") or block.get("thinking"):
-                    parts.append(f"<thinking>{thinking}</thinking>")
+                thinking: str = block.get("type", "")
+                if thinking == "reasoning":
+                    summary: str = block.get("reasoning", "")
+                    parts.append(f"<thinking>{summary}</thinking>")
 
         parts.append(f"<message-body>{msg.text}</message-body>")
 
