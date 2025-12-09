@@ -573,6 +573,9 @@ class Solution(Serializable):
     def __add__(self, other: "Solution") -> "Solution":
         """Combine two solutions by merging their files and include directories.
 
+        Warning: This will not save them or change their location! You should
+        save them to a common directory if you are trying to "merge" them...
+
         Args:
             other: Another Solution instance to combine with this one
 

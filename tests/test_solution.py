@@ -136,8 +136,7 @@ def test_verify_file_integrity_no_file():
     """Test that verify_file_integrity returns False when file doesn't exist."""
     # Create in-memory SourceFile without physical file
     source_file = SourceFile(
-        file_path=Path("nonexistent.c"),
-        base_path=Path("/tmp"),
+        file_path=Path("/tmp/nonexistent.c"),
         content="int main() { return 0; }",
     )
 
@@ -183,3 +182,58 @@ def test_source_file_repr_with_valid_file():
 
         assert "test.c" in repr_str
         assert "valid=True" in repr_str
+
+
+def test_solution_add_operator_preserves_structure():
+    """
+    Test that __add__ operator combines solutions while preserving file
+    structure.
+    """
+    # Use the test-add-solution sample
+    sample_dir = Path(__file__).parent / "samples" / "solutions" / "test-add-solution"
+
+    # Load main solution (main.c, src/)
+    main_solution = Solution.from_paths(
+        sample_dir / "main.c",
+        sample_dir / "src",
+    )
+
+    # Load harness solution (harness/)
+    harness_solution = Solution.from_paths(
+        sample_dir / "harness",
+    )
+
+    # Verify working_dir before merge
+    assert (
+        main_solution.working_dir == sample_dir
+    ), f"Main solution working_dir should be {sample_dir}"
+    assert (
+        harness_solution.working_dir == sample_dir / "harness"
+    ), f"Harness solution working_dir should be {sample_dir / 'harness'}"
+
+    # Combine solutions - this should merge in-memory without saving
+    combined = main_solution + harness_solution
+
+    # Assert: Files should retain their original paths (not relocated)
+    assert all(
+        str(f.file_path).startswith(str(sample_dir)) for f in combined.files
+    ), "Combined solution files should retain their original paths"
+
+    # Assert: working_dir should be the common parent (sample_dir)
+    # When merging solutions with different working_dirs, the combined solution's
+    # working_dir becomes the common ancestor of all files
+    assert (
+        combined.working_dir == sample_dir
+    ), f"Combined working_dir should be {sample_dir}, got: {combined.working_dir}"
+    assert (
+        combined.working_dir == main_solution.working_dir
+    ), "Combined working_dir should match main_solution (not harness)"
+    assert (
+        combined.working_dir != harness_solution.working_dir
+    ), "Combined working_dir should differ from harness (moved up to common parent)"
+
+    # Assert: All files from both solutions are present
+    assert len(combined.files) == len(main_solution.files) + len(
+        harness_solution.files
+    ), "Combined should have all files from both solutions"
+    assert len(combined.files) == 4, f"Should have 4 files total"
