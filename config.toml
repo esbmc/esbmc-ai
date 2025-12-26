@@ -1,9 +1,9 @@
 # ESBMC-AI Default Config File.
 # The ESBMC-AI config is loaded in the following order:
 # 1. CLI
-# 2. env
-# 3. dotenv
-# 4. TOML
+# 2. TOML
+# 3. env
+# 4. dotenv
 # 5. file_secret
 # This file is provided as an example, however it should be customized to your
 # needs as it probably contains values that are wrong for your system.
