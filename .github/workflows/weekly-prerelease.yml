@@ -1,5 +1,9 @@
 name: Weekly Prerelease
 
+# This workflow creates automated weekly prereleases when there are commits since the last release.
+# If no commits are detected, the workflow gracefully skips release creation while still passing,
+# avoiding unnecessary failure notifications and keeping the scheduled workflow status green.
+
 on:
   schedule:
     # Run every Sunday at 23:00 UTC (Sunday night)
@@ -44,6 +48,9 @@ jobs:
             ~/.local/share/hatch
           key: ${{ runner.os }}-hatch-prerelease-${{ hashFiles('**/pyproject.toml') }}
 
+      # Check if there are commits since the last release.
+      # If no commits exist, set skip=true to prevent release creation.
+      # This keeps the workflow "green" (passed) while avoiding unnecessary releases.
       - name: Get commit messages since last tag
         id: changelog
         run: |
@@ -57,16 +64,19 @@ jobs:
 
           if [ -z "$COMMITS" ]; then
             echo "No commits since last release. Skipping prerelease creation."
-            exit 0
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+            {
+              echo 'commits<<EOF'
+              echo "$COMMITS"
+              echo 'EOF'
+            } >> $GITHUB_OUTPUT
           fi
 
-          {
-            echo 'commits<<EOF'
-            echo "$COMMITS"
-            echo 'EOF'
-          } >> $GITHUB_OUTPUT
-
+      # Skip all subsequent steps if there are no commits to release
       - name: Generate and set prerelease version
+        if: steps.changelog.outputs.skip != 'true'
         id: version
         run: |
           CURRENT_VERSION=$(hatch version)
@@ -87,25 +97,30 @@ jobs:
           echo "version_no_v=$NEW_VERSION" >> $GITHUB_OUTPUT
 
       - name: Get current date
+        if: steps.changelog.outputs.skip != 'true'
         id: date
         run: echo "date=$(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_OUTPUT
 
       - name: Update version in __about__.py for build
+        if: steps.changelog.outputs.skip != 'true'
         run: |
           sed -i 's/__version__ = ".*"/__version__ = "${{ steps.version.outputs.version_no_v }}"/' esbmc_ai/__about__.py
           echo "Updated __about__.py to version ${{ steps.version.outputs.version_no_v }}"
           cat esbmc_ai/__about__.py
 
       - name: Build package
+        if: steps.changelog.outputs.skip != 'true'
         run: hatch build
 
       - name: Publish to PyPI
+        if: steps.changelog.outputs.skip != 'true'
         run: hatch publish
         env:
           HATCH_INDEX_USER: __token__
           HATCH_INDEX_AUTH: ${{ secrets.PYPI_TOKEN }}
 
       - name: Create GitHub Prerelease
+        if: steps.changelog.outputs.skip != 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.version }}
