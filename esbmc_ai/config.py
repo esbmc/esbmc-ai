@@ -553,18 +553,22 @@ class Config(BaseSettings, metaclass=makecls(SingletonMeta)):
 
         sources: list[PydanticBaseSettingsSource] = [
             init_settings,
-            env_settings,
-            dotenv_settings,
         ]
 
-        # Add TOML config source if config file is specified
+        # Add TOML config source if config file is specified (high priority)
         if config_file_path:
             config_file = Path(config_file_path).expanduser()
             if config_file.exists():
                 sources.append(TomlConfigSettingsSource(settings_cls, config_file))
 
-        # Priority order: init/CLI > env > dotenv > TOML > file_secret
-        sources.append(file_secret_settings)
+        # Add environment-based sources
+        sources.extend([
+            env_settings,
+            dotenv_settings,
+            file_secret_settings,
+        ])
+
+        # Priority order: init/CLI > TOML > env > dotenv > file_secret
         return tuple(sources)
 
     def __init__(self, **kwargs) -> None:
