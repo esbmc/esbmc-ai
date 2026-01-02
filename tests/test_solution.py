@@ -237,3 +237,44 @@ def test_solution_add_operator_preserves_structure():
         harness_solution.files
     ), "Combined should have all files from both solutions"
     assert len(combined.files) == 4, f"Should have 4 files total"
+
+
+def test_save_temp_preserves_nested_include_dirs():
+    """Test that save_temp preserves nested include directory structure."""
+    sample_dir = (
+        Path(__file__).parent / "samples" / "solutions" / "test-nested-includes"
+    )
+
+    # Create solution with nested include dirs
+    solution = Solution(
+        files=[sample_dir / "main.c"],
+        include_dirs=[
+            sample_dir / "additional" / "include",
+            sample_dir / "common" / "include",
+        ],
+    )
+
+    # Save to temp - this should preserve nested structure
+    temp_solution = solution.save_temp()
+
+    try:
+        # Assert: Include directories should preserve nested paths
+        include_paths = [
+            d.relative_to(temp_solution.working_dir) for d in temp_solution.include_dirs
+        ]
+        assert (
+            Path("additional/include") in include_paths
+        ), "Should preserve additional/include"
+        assert Path("common/include") in include_paths, "Should preserve common/include"
+
+        # Assert: Files in include dirs should exist
+        assert (
+            temp_solution.working_dir / "additional" / "include" / "header.h"
+        ).exists()
+        assert (temp_solution.working_dir / "common" / "include" / "common.h").exists()
+    finally:
+        # Cleanup temp directory
+        import shutil
+
+        if temp_solution.working_dir.exists():
+            shutil.rmtree(temp_solution.working_dir)

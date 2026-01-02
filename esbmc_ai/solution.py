@@ -424,7 +424,7 @@ class Solution(Serializable):
         dest_path.mkdir(parents=True, exist_ok=True)
 
         # Get common parent to preserve relative structure
-        common_parent = self.working_dir
+        common_parent: Path = self.working_dir
 
         # Copy individual source files preserving structure
         new_file_paths: list[Path] = []
@@ -441,7 +441,14 @@ class Solution(Serializable):
         # Copy include directories
         new_include_dirs: list[Path] = []
         for d in self.include_dirs:
-            new_dir: Path = dest_path / d.name
+            try:
+                # Preserve relative structure from working_dir for project include dirs
+                relative_path = d.relative_to(common_parent)
+                new_dir: Path = dest_path / relative_path
+            except ValueError:
+                # If include_dir is outside working_dir (e.g., /usr/include),
+                # use basename (this maintains backward compatibility for external includes)
+                new_dir: Path = dest_path / d.name
             copytree(src=d, dst=new_dir, symlinks=True, dirs_exist_ok=True)
             new_include_dirs.append(new_dir)
 
