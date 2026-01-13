@@ -22,27 +22,20 @@ from esbmc_ai.verifiers.esbmc import ESBMC, ESBMCOutput
 
 
 class FixCodeCommandResult(CommandResult):
-    """Returned by the FixCodeCommand"""
+    """Returned by the FixCodeCommand.
 
-    def __init__(
-        self,
-        successful: bool,
-        attempts: int,
-        repaired_source: str | None = None,
-    ) -> None:
-        super().__init__()
-        self._successful: bool = successful
-        self.attempts: int = attempts
-        self.repaired_source: str | None = repaired_source
+    Attributes:
+        successful: Whether the repair was successful
+        attempts: Number of repair attempts made
+        repaired_source: The repaired source code or None if repair failed
+    """
 
-    @property
-    @override
-    def successful(self) -> bool:
-        return self._successful
+    attempts: int
+    repaired_source: str | None = None
 
     @override
     def __str__(self) -> str:
-        if self._successful and self.repaired_source is not None:
+        if self.successful and self.repaired_source is not None:
             return self.repaired_source
 
         return "Failed all attempts..."
@@ -157,7 +150,9 @@ class FixCodeCommand(ChatCommand):
                 returned_source = source_file.get_diff(source_file)
             else:
                 returned_source = source_file.content
-            return FixCodeCommandResult(True, 0, returned_source)
+            return FixCodeCommandResult(
+                successful=True, attempts=0, repaired_source=returned_source
+            )
 
         # Create the AI model with the specified parameters
         ai_model = AIModel.get_model(
@@ -179,8 +174,18 @@ class FixCodeCommand(ChatCommand):
                 system_messages.append(AIMessage(content=content))
 
         # Create the initial and retry message templates
-        initial_prompt = PromptTemplate.from_template(self._config.initial)
-        retry_prompt = PromptTemplate.from_template(self._config.retry_prompt)
+        # Note: These use Jinja2 syntax and will be formatted by KeyTemplateRenderer
+        # We specify template_format="jinja2" to avoid f-string parsing errors
+        initial_prompt = PromptTemplate(
+            template=self._config.initial,
+            input_variables=[],
+            template_format="jinja2",
+        )
+        retry_prompt = PromptTemplate(
+            template=self._config.retry_prompt,
+            input_variables=[],
+            template_format="jinja2",
+        )
 
         solution_generator: SolutionGenerator = SolutionGenerator(
             ai_model=ai_model,
@@ -211,7 +216,11 @@ class FixCodeCommand(ChatCommand):
 
                 return result
 
-        return FixCodeCommandResult(False, self._config.max_attempts, None)
+        return FixCodeCommandResult(
+            successful=False,
+            attempts=self._config.max_attempts,
+            repaired_source=None,
+        )
 
     def _attempt_repair(
         self,
@@ -258,7 +267,14 @@ class FixCodeCommand(ChatCommand):
                     source_file.save_diff(output_path, self.original_source_file)
                 else:
                     source_file.save_file(output_path)
-            return FixCodeCommandResult(True, attempt, source_file.content), verifier_output
+            return (
+                FixCodeCommandResult(
+                    successful=True,
+                    attempts=attempt,
+                    repaired_source=source_file.content,
+                ),
+                verifier_output,
+            )
 
         # Failure case
         if attempt != self._config.max_attempts:

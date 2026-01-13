@@ -207,6 +207,7 @@ class SolutionConfig(BaseModel):
 
     output_dir: Path | None = Field(
         default=None,
+        validation_alias=_alias_choice("output_dir"),
         description="Set the output directory to save successfully repaired "
         "files in. Leave empty to not use. Specifying the same directory will "
         "overwrite the original file.",
@@ -362,10 +363,11 @@ class Config(BaseSettings, metaclass=makecls(SingletonMeta)):
         default=0,
         ge=0,
         le=3,
-        exclude=True,  # Exclude from Pydantic CLI parsing
+        validation_alias=_alias_choice("verbose"),
         description="Show up to 3 levels of verbose output. Level 1: extra information."
         " Level 2: show failed generations, show ESBMC output. Level 3: "
-        "print hidden pushes to the message stack.",
+        "print hidden pushes to the message stack. Can also use -v, -vv, -vvv as "
+        "an argument (overwrites --verbose).",
     )
 
     dev_mode: bool = Field(
@@ -379,6 +381,12 @@ class Config(BaseSettings, metaclass=makecls(SingletonMeta)):
         default=False,
         alias="json",
         description="Print the result of the chat command as a JSON output",
+    )
+
+    json_path: Path | None = Field(
+        default=Path("result.json"),
+        validation_alias=_alias_choice("json_path"),
+        description="The path to save the json output to.",
     )
 
     show_horizontal_lines: bool = Field(
@@ -562,11 +570,13 @@ class Config(BaseSettings, metaclass=makecls(SingletonMeta)):
                 sources.append(TomlConfigSettingsSource(settings_cls, config_file))
 
         # Add environment-based sources
-        sources.extend([
-            env_settings,
-            dotenv_settings,
-            file_secret_settings,
-        ])
+        sources.extend(
+            [
+                env_settings,
+                dotenv_settings,
+                file_secret_settings,
+            ]
+        )
 
         # Priority order: init/CLI > TOML > env > dotenv > file_secret
         return tuple(sources)

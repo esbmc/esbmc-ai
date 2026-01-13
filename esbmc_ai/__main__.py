@@ -40,14 +40,9 @@ def _init_args(parser: argparse.ArgumentParser) -> None:
 
     parser.add_argument(
         "-v",
-        "--verbose",
         action="count",
         default=0,
-        help=(
-            "Show up to 3 levels of verbose output. Level 1: extra information."
-            " Level 2: show failed generations, show ESBMC output. Level 3: "
-            "print hidden pushes to the message stack."
-        ),
+        help=argparse.SUPPRESS,  # Hidden from help, documented in --verbose
     )
 
 
@@ -58,16 +53,14 @@ def _load_config(
     # and let CliApp.run handle the full help display with all Pydantic fields
     help_requested = "--help" in sys.argv or "-h" in sys.argv
 
-    if not help_requested:
-        # Parse args to get verbose level before Pydantic CLI parsing
-        args, _ = parser.parse_known_args()
-        verbose_level: int = min(args.verbose, 3) if hasattr(args, "verbose") else 0
-    else:
-        # No need to parse verbosity.
-        verbose_level: int = 0
+    # Parse -v flag before pydantic to get the count
+    args, _ = parser.parse_known_args()
+    v_count: int | None = min(args.v, 3) if hasattr(args, "v") else None
+
+    # Load the config
 
     # Create custom CLI settings source using our argparse parser
-    # This allows us to use custom arguments like -v/--verbose with action='count'
+    # This allows us to use different arguments for argparse
     cli_settings: CliSettingsSource = CliSettingsSource(
         Config, cli_parse_args=True, root_parser=parser, cli_implicit_flags=True
     )
@@ -107,8 +100,9 @@ def _load_config(
         parser.print_help()
         sys.exit(0)
 
-    # Set argparse config values - These fields have exclude=True
-    config.verbose_level = verbose_level
+    # Override verbose_level if -v flag was used
+    if v_count:
+        config.verbose_level = v_count
 
     return config
 
@@ -215,10 +209,13 @@ Configuration Precedence (highest to lowest):
         command: ChatCommand = cm.commands[command_name]
         result: CommandResult | None = command.execute()
         if result:
+            print(result)
             if config.use_json:
-                print(vars(result))
-            else:
-                print(result)
+                json_result = result.to_json()
+                print(json_result)
+                if config.json_path:
+                    with open(config.json_path, "w", encoding="utf-8") as f:
+                        f.write(json_result)
 
         sys.exit(0)
     else:
