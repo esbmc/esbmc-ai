@@ -1,0 +1,38 @@
+# Exclude build artifacts from container context
+# If local dist/ artifacts are copied into the builder stage, multiple wheel files
+# will exist when pipx tries to install, causing "pipx install *.whl" to fail.
+# Only the wheel built fresh inside the container should be present.
+dist/
+*.egg-info/
+
+# Exclude development artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+.env.example
+.gitignore
+.hugo_build.lock
+.pylintrc
+config_dev.toml
+config.toml
+Containerfile
+
+htmlcov/
+output/
+samples/
+scripts/container/build.sh
+tests/
+
+
+# Exclude git and IDE files
+CLAUDE.md
+.claude/
+.git/
+.github/
+.vscode/
+.idea/
+
+# Exclude documentation build artifacts
+website/
