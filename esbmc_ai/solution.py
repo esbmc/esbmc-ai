@@ -9,6 +9,7 @@ from subprocess import PIPE, STDOUT, run, CompletedProcess
 from tempfile import NamedTemporaryFile, TemporaryDirectory
 from shutil import copytree
 from typing import Any, Literal, override
+from hashlib import sha256
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.load.serializable import Serializable
@@ -100,6 +101,22 @@ class SourceFile(Serializable):
     @override
     def __str__(self) -> str:
         return f"SourceFile({self.file_path})"
+
+    def __hash__(self) -> int:
+        """Stable hash based on file content for caching.
+
+        Uses SHA256 to ensure hash stability across Python processes.
+        Hashes content only (not path) so identical content produces same hash
+        regardless of file location.
+        """
+        content_hash = sha256(self.content.encode("utf-8")).hexdigest()
+        return int(content_hash, 16)
+
+    def __eq__(self, other: object) -> bool:
+        """Compare SourceFiles based on file path and content."""
+        if not isinstance(other, SourceFile):
+            return NotImplemented
+        return self.file_path == other.file_path and self.content == other.content
 
     @property
     def file_extension(self) -> str:
@@ -361,6 +378,70 @@ class Solution(Serializable):
         # If only one file, commonpath returns the file itself, so use parent
         return Path(common).parent if len(paths) == 1 else Path(common)
 
+    @staticmethod
+    def _hash_directory_contents(directory: Path) -> str:
+        """Hash all files in a directory recursively based on content.
+
+        Creates a stable hash by reading all files in the directory,
+        sorting them by relative path, and hashing their contents.
+
+        Args:
+            directory: The directory to hash
+
+        Returns:
+            SHA256 hash of all file contents in the directory
+        """
+        if not directory.exists() or not directory.is_dir():
+            return sha256(b"").hexdigest()
+
+        file_hashes: list[str] = []
+        # Walk directory in sorted order for determinism
+        for file_path in sorted(directory.rglob("*")):
+            if file_path.is_file():
+                # Hash: relative_path + content
+                relative = file_path.relative_to(directory)
+                path_hash = sha256(str(relative).encode("utf-8")).digest()
+                content_hash = sha256(file_path.read_bytes()).digest()
+                combined = sha256(path_hash + content_hash).hexdigest()
+                file_hashes.append(combined)
+
+        # Combine all file hashes
+        return sha256("".join(file_hashes).encode("utf-8")).hexdigest()
+
+    def __hash__(self) -> int:
+        """Stable hash based on solution content for caching.
+
+        Combines hashes of all files and include directories in a deterministic way.
+        Files and directories are sorted to ensure consistent ordering.
+        Include directories are hashed based on their contents.
+        """
+        # Sort files by their hash for deterministic ordering
+        file_hashes = sorted(hash(f) for f in self._files)
+        # Hash include dirs by their contents (not paths)
+        include_dir_hashes = sorted(
+            self._hash_directory_contents(d) for d in self._include_dirs
+        )
+
+        # Combine all hashes into a single string and hash it
+        combined = "".join(str(h) for h in file_hashes) + "".join(include_dir_hashes)
+        combined_hash = sha256(combined.encode("utf-8")).hexdigest()
+        return int(combined_hash, 16)
+
+    def __eq__(self, other: object) -> bool:
+        """Compare Solutions based on files and include directories."""
+        if not isinstance(other, Solution):
+            return NotImplemented
+
+        # Compare sets of files (order-independent)
+        if set(self._files) != set(other._files):
+            return False
+
+        # Compare sets of include dirs (order-independent)
+        if set(self._include_dirs) != set(other._include_dirs):
+            return False
+
+        return True
+
     def get_files_by_ext(self, included_ext: list[str]) -> list[SourceFile]:
         """Gets the files that are only specified in the included extensions. File
         extensions that have a . prefix are trimmed so they still work."""
@@ -447,7 +528,7 @@ class Solution(Serializable):
                 new_dir: Path = dest_path / relative_path
             except ValueError:
                 # If include_dir is outside working_dir (e.g., /usr/include),
-                # use basename (this maintains backward compatibility for external includes)
+                # use basename (this is meant for external includes)
                 new_dir: Path = dest_path / d.name
             copytree(src=d, dst=new_dir, symlinks=True, dirs_exist_ok=True)
             new_include_dirs.append(new_dir)

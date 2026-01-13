@@ -2,11 +2,12 @@
 
 """This module holds the code for the base source code verifier."""
 
+from abc import abstractmethod
 from pathlib import Path
-import re
 from typing import Any, override
-from hashlib import sha512
+from hashlib import sha256
 import pickle
+import zlib
 
 from platformdirs import user_cache_dir
 
@@ -15,7 +16,6 @@ from esbmc_ai.base_component import BaseComponent
 from esbmc_ai.log_utils import LogCategories
 from esbmc_ai.solution import Solution
 from esbmc_ai.verifier_output import VerifierOutput
-from esbmc_ai.program_trace import ProgramTrace
 
 
 class SourceCodeParseError(Exception):
@@ -64,13 +64,49 @@ class BaseSourceVerifier(BaseComponent):
         it only functions in the current version of ESBMC-AI."""
         return [esbmc_ai_version, properties]
 
+    def _compute_cache_id(self, properties: Any) -> str:
+        """Compute a stable cache ID from properties using content-based hashing.
+
+        Uses __hash__ methods of objects (e.g., Solution, SourceFile) to create
+        stable, content-based cache keys that work across different file paths
+        and Python processes.
+
+        Uses zlib.adler32 for deterministic hashing of collections instead of
+        Python's hash() which is randomized across processes.
+        """
+        properties = self._cache_name_pack(properties)
+
+        def deterministic_hash(obj: Any) -> int:
+            """Compute deterministic hash using adler32 and custom __hash__ methods.
+
+            For objects with custom __hash__ (like Solution), uses their hash.
+            For collections and primitives, uses adler32 for deterministic hashing.
+            """
+            if isinstance(obj, (list, tuple)):
+                # Recursively hash elements and combine
+                element_hashes = [str(deterministic_hash(item)) for item in obj]
+                combined = "|".join(element_hashes)
+                return zlib.adler32(combined.encode("utf-8"))
+            elif isinstance(obj, (str, int, float, bool, type(None))):
+                # Primitives: use adler32 for deterministic hashing
+                # (Python's hash() for str is randomized!)
+                return zlib.adler32(str(obj).encode("utf-8"))
+            elif hasattr(obj, "__hash__") and type(obj).__hash__ is not object.__hash__:
+                # Object has custom __hash__ method (e.g., Solution, SourceFile)
+                # These are already content-based and deterministic (SHA256-based)
+                return hash(obj)
+            else:
+                # Fallback: use adler32 of string representation
+                return zlib.adler32(str(obj).encode("utf-8"))
+
+        cache_hash = deterministic_hash(properties)
+        return sha256(str(cache_hash).encode("utf-8")).hexdigest()
+
     def _save_cached(self, properties: Any, result: Any) -> None:
         """Saves the verification results to a cached directory to be loaded
         later. Properties are going to be hashed to form the name of the file,
         they should be anything that defines the file."""
-        properties = self._cache_name_pack(properties)
-        data_dump: bytes = pickle.dumps(obj=properties, protocol=-1)
-        file_id: str = str(sha512(data_dump).hexdigest())
+        file_id: str = self._compute_cache_id(properties)
         self.logger.info("Saving result to cache")
         self.logger.info(f"Cache ID: {file_id}")
 
@@ -81,9 +117,7 @@ class BaseSourceVerifier(BaseComponent):
 
     def _load_cached(self, properties: Any) -> Any:
         """Loads the verification results from a cached directory."""
-        properties = self._cache_name_pack(properties)
-        data_dump: bytes = pickle.dumps(obj=properties, protocol=-1)
-        file_id: str = str(sha512(data_dump).hexdigest())
+        file_id: str = self._compute_cache_id(properties)
         self.logger.info(f"Searching cache ID: {file_id}")
 
         cache: Path = Path(user_cache_dir("esbmc-ai", "Yiannis Charalambous"))
@@ -97,6 +131,7 @@ class BaseSourceVerifier(BaseComponent):
         self.logger.info("Cache not found...")
         return None
 
+    @abstractmethod
     def verify_source(
         self,
         *,

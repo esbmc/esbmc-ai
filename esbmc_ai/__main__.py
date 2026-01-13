@@ -159,7 +159,7 @@ def main() -> None:
         description="""Automated Program Repair platform. To view help on subcommands, run with the subcommand "help".
 
 Configuration Precedence (highest to lowest):
-  * CLI args > Environment variables > .env file > TOML config > Defaults
+  * CLI args > TOML config > Environment variables > .env file > Defaults
   * NOTE: Nested config values can be set via environment variables using double underscores
     (e.g., ESBMCAI_VERIFIER__ESBMC__PATH for verifier.esbmc.path)""",
         epilog=f"Made by {__author__}",
