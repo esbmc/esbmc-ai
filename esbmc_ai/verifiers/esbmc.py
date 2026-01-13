@@ -19,6 +19,9 @@ from esbmc_ai.verifiers.clang import ClangOutputParser
 from esbmc_ai.program_trace import ProgramTrace, CounterexampleProgramTrace
 from esbmc_ai.issue import Issue, VerifierIssue
 
+# Regex pattern for stripping ANSI color codes
+_ANSI_ESCAPE_PATTERN = re.compile(r"\x1b\[[0-9;]*m")
+
 # Regex patterns for parsing ESBMC output
 _STACK_TRACE_PATTERN = re.compile(
     r"\s+.+\s+at file (\S+) line (\d+) column \d+ function (\S+)"
@@ -107,10 +110,12 @@ class ESBMCOutputParser:
         Returns:
             ESBMCOutput with all parsed issues and traces
         """
-        issues = ESBMCOutputParser._parse_issues(output)
+        # Strip ANSI color codes before parsing to ensure regex patterns match correctly
+        clean_output = _ANSI_ESCAPE_PATTERN.sub("", output)
+        issues = ESBMCOutputParser._parse_issues(clean_output)
         return ESBMCOutput(
             return_code=return_code,
-            output=output,
+            output=clean_output,
             issues=issues,
             duration=duration,
         )
@@ -643,6 +648,14 @@ class ESBMC(BaseSourceVerifier):
 
         if enable_cache:
             self._save_cached(cache_properties, result)
+
+        # If it shows timeout and 0 issues, then exit...
+        if not (
+            result.issues or result.successful or ("[ERROR] Timed out" in result.output)
+        ):
+            # Special case: timeout - better quit than waste resources
+            self.logger.error("Timeout has ocurred: [ERROR] Timed out")
+            raise TimeoutError()
 
         return result
 
