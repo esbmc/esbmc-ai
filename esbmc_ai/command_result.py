@@ -2,19 +2,29 @@
 
 """Contains the base class for chat command results."""
 
-from abc import ABC, abstractmethod
+from pydantic import BaseModel, ConfigDict
 
 
-class CommandResult(ABC):
-    """Base class for the return result of chat commands."""
+class CommandResult(BaseModel):
+    """Base class for the return result of chat commands.
 
-    @property
-    @abstractmethod
-    def successful(self) -> bool:
-        """Returns true if the execution of the command was successful. False if
-        otherwise. If false, then it is up to the command to provide a method to
-        access the reason."""
-        raise NotImplementedError()
+    Uses Pydantic BaseModel for automatic serialization to JSON.
+    Subclasses should define their fields as Pydantic model fields.
+    """
+
+    successful: bool
+    """True if the execution of the command was successful, False otherwise."""
+
+    def to_json(self, indent: int = 2) -> str:
+        """Serialize the result to JSON string.
+
+        Args:
+            indent: Number of spaces for indentation (default: 2)
+
+        Returns:
+            JSON string representation of the result
+        """
+        return self.model_dump_json(indent=indent)
 
     def __str__(self) -> str:
         return "Command returned " + (
