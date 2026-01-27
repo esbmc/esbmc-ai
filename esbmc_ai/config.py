@@ -2,6 +2,7 @@
 
 
 from collections import defaultdict
+from enum import Enum
 from importlib.machinery import ModuleSpec
 from importlib.util import find_spec
 import logging
@@ -231,6 +232,49 @@ class SolutionConfig(BaseModel):
         return value
 
 
+class _CommandOracleOutputTypes(Enum):
+    PYTEST = "PYTEST"
+
+
+class CommandOracleConfig(BaseModel):
+    """Configures the command-based verifier."""
+
+    cmd: str = Field(
+        default="",
+        description=(
+            "The command to run to verify the files. The following"
+            "variables are supported:\n"
+            "1. {files} - Represents the source files."
+            "2. {includes} - Represents the include directories."
+        ),
+    )
+
+    exit_success: int = Field(
+        default=0,
+        description=("The exit code expected when the command runs successfully."),
+    )
+
+    parser: _CommandOracleOutputTypes | None = Field(
+        default=None,
+        description=(
+            "The type of verifier output to expect. Current options: "
+            f"{", ".join(t.value for t in _CommandOracleOutputTypes)}"
+        ),
+    )
+
+    @field_validator("parser", mode="before")
+    @classmethod
+    def on_set_parser(cls, value: str | None) -> _CommandOracleOutputTypes | None:
+        if not value:
+            return None
+
+        value_upper: str = value.upper()
+        if value_upper in _CommandOracleOutputTypes:
+            return _CommandOracleOutputTypes(value_upper)
+
+        raise ValueError(f"Invalid parser set: {value}")
+
+
 class ESBMCConfig(BaseModel):
     """ESBMC-specific configuration.
 
@@ -285,6 +329,11 @@ class VerifierConfig(BaseModel):
         default=True,
         description="Cache the results of verification in order to save time. "
         "This is not supported by all verifiers.",
+    )
+
+    command_oracle: CommandOracleConfig = Field(
+        default_factory=CommandOracleConfig,
+        description='Command oracle "command-oracle" specific configuration.',
     )
 
     esbmc: ESBMCConfig = Field(
