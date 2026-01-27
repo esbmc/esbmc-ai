@@ -3,7 +3,7 @@
 from pytest import raises
 from pydantic import ValidationError
 
-from esbmc_ai.config import Config, AICustomModelConfig
+from esbmc_ai.config import AICustomModelConfig
 
 
 def test_load_custom_ai() -> None:
