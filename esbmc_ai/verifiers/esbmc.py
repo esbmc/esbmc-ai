@@ -3,8 +3,7 @@
 import signal
 import re
 from functools import cached_property
-from time import perf_counter
-from subprocess import PIPE, STDOUT, run, CompletedProcess
+from subprocess import CompletedProcess
 from pathlib import Path
 from typing import NamedTuple, cast
 from typing_extensions import Any, override
@@ -674,7 +673,7 @@ class ESBMC(BaseSourceVerifier):
         """
 
         # Build parameters list
-        esbmc_cmd = [str(self.esbmc_path)] + esbmc_params
+        esbmc_cmd: list[str] = [str(self.esbmc_path)] + esbmc_params
         # Source code files (only accept valid ones)
         esbmc_cmd.append("--input-file")
         esbmc_cmd.extend(
@@ -693,23 +692,13 @@ class ESBMC(BaseSourceVerifier):
 
         self._logger.info("Running ESBMC: " + " ".join(esbmc_cmd))
 
-        # Add slack time to process to allow verifier to timeout and end gracefully.
-        process_timeout: float | None = timeout + 5 if timeout else None
-
-        # Measure execution time
-        start_time = perf_counter()
-
-        # Run ESBMC from solution working_dir and get output
-        process: CompletedProcess = run(
-            esbmc_cmd,
-            stdout=PIPE,
-            stderr=STDOUT,
+        process: CompletedProcess
+        duration: float
+        process, duration = self.run_command(
+            cmd=esbmc_cmd,
+            process_timeout=timeout,
             cwd=solution.working_dir,
-            timeout=process_timeout,
-            check=False,
         )
-
-        duration = perf_counter() - start_time
 
         # Check segfault.
         if process.returncode == -signal.SIGSEGV:

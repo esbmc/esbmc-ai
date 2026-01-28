@@ -4,6 +4,8 @@
 
 from abc import abstractmethod
 from pathlib import Path
+from time import perf_counter
+from subprocess import PIPE, STDOUT, run, CompletedProcess
 from typing import Any, override
 from hashlib import sha256
 import pickle
@@ -140,3 +142,30 @@ class BaseSourceVerifier(BaseComponent):
         """Verifies source_file."""
         _ = solution
         raise NotImplementedError()
+
+    def run_command(
+        self,
+        cmd: list[str],
+        cwd: Path,
+        process_timeout: float | None,
+    ) -> tuple[CompletedProcess, float]:
+        """Runs the verifier."""
+
+        # Add slack time to process to allow verifier to timeout and end gracefully.
+        process_timeout = process_timeout + 5 if process_timeout else None
+        # Measure execution time
+        start_time = perf_counter()
+
+        # Run ESBMC from solution working_dir and get output
+        process: CompletedProcess = run(
+            cmd,
+            cwd=cwd,
+            timeout=process_timeout,
+            stdout=PIPE,
+            stderr=STDOUT,
+            check=False,
+        )
+
+        duration: float = perf_counter() - start_time
+
+        return process, duration

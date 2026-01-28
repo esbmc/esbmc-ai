@@ -11,7 +11,7 @@ from esbmc_ai.chats.template_key_provider import (
     OracleTemplateKeyProvider,
     TemplateKeyProvider,
 )
-from esbmc_ai.verifiers.esbmc import ESBMCOutput
+from esbmc_ai.verifier_output import VerifierOutput
 from esbmc_ai.chats import KeyTemplateRenderer
 
 
@@ -68,7 +68,7 @@ class SolutionGenerator:
         self,
         initial_message_prompt: PromptTemplate,
         solution: Solution,
-        verifier_output: ESBMCOutput,
+        verifier_output: VerifierOutput,
     ) -> str:
         """Prompts the LLM to repair the source code using the verifier output.
         Returns the extracted code from the LLM's response."""

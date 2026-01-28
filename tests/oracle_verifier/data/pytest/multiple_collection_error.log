@@ -1,0 +1,35 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.0, pytest-8.4.2, pluggy-1.6.0
+rootdir: /home/yiannis/git/esbmc-ai
+configfile: pyproject.toml
+plugins: anyio-4.11.0, langsmith-0.4.44, xdist-3.8.0, subtests-0.15.0, cov-7.0.0, mock-3.15.1, regtest-2.3.5, rerunfailures-14.0
+collected 86 items / 1 error
+
+==================================== ERRORS ====================================
+___________________ ERROR collecting tests/test_ai_models.py ___________________
+../../.local/share/hatch/env/virtual/esbmc-ai/9ZN5XdZG/hatch-test.py3.12/lib/python3.12/site-packages/_pytest/python.py:498: in importtestmodule
+    mod = import_path(
+../../.local/share/hatch/env/virtual/esbmc-ai/9ZN5XdZG/hatch-test.py3.12/lib/python3.12/site-packages/_pytest/pathlib.py:549: in import_path
+    mod = _import_module_using_spec(
+../../.local/share/hatch/env/virtual/esbmc-ai/9ZN5XdZG/hatch-test.py3.12/lib/python3.12/site-packages/_pytest/pathlib.py:725: in _import_module_using_spec
+    spec.loader.exec_module(mod)  # type: ignore[union-attr]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../.local/share/hatch/env/virtual/esbmc-ai/9ZN5XdZG/hatch-test.py3.12/lib/python3.12/site-packages/_pytest/assertion/rewrite.py:177: in exec_module
+    source_stat, co = _rewrite_test(fn, self.config)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../.local/share/hatch/env/virtual/esbmc-ai/9ZN5XdZG/hatch-test.py3.12/lib/python3.12/site-packages/_pytest/assertion/rewrite.py:357: in _rewrite_test
+    tree = ast.parse(source, filename=strfn)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../.pyenv/versions/3.12.0/lib/python3.12/ast.py:52: in parse
+    return compile(source, filename, mode, flags,
+E     File "/home/yiannis/git/esbmc-ai/tests/test_ai_models.py", line 14
+E       responses: list[str] = field(default_factory=list[str]
+E                                   ^
+E   SyntaxError: '(' was never closed
+---------------------------- pytest-regtest report -----------------------------
+total number of failed regression tests: 0
+total number of failed snapshot tests  : 0
+=========================== short test summary info ============================
+ERROR tests/test_ai_models.py
+!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+=============================== 1 error in 2.03s ===============================

@@ -1,7 +1,6 @@
 # Author: Yiannis Charalambous
 
 from enum import Enum
-import os
 from pathlib import Path
 from typing import Any
 from pydantic import Field, field_validator
@@ -18,7 +17,8 @@ from esbmc_ai.command_result import CommandResult
 from esbmc_ai.verifier_output import VerifierOutput
 from esbmc_ai.chat_command import ChatCommand
 from esbmc_ai.loading_widget import BaseLoadingWidget, LoadingWidget
-from esbmc_ai.verifiers.esbmc import ESBMC, ESBMCOutput
+from esbmc_ai.verifiers.base_source_verifier import BaseSourceVerifier
+from esbmc_ai.verifiers.esbmc import ESBMCOutput
 
 
 class FixCodeCommandResult(CommandResult):
@@ -138,10 +138,8 @@ class FixCodeCommand(ChatCommand):
 
         self._logger.info(f"FixCodeConfig: {self._config}")
 
-        verifier: Any = ComponentManager().get_verifier("esbmc")
-        assert isinstance(verifier, ESBMC)
+        verifier: Any = ComponentManager().verifier
         verifier_output: VerifierOutput = verifier.verify_source(solution=solution)
-        assert isinstance(verifier_output, ESBMCOutput)
 
         if verifier_output.successful:
             self.logger.info("File verified successfully")
@@ -228,8 +226,8 @@ class FixCodeCommand(ChatCommand):
         solution_generator: SolutionGenerator,
         prompt: PromptTemplate,
         solution: Solution,
-        verifier: ESBMC,
-        verifier_output: ESBMCOutput,
+        verifier: BaseSourceVerifier,
+        verifier_output: VerifierOutput,
     ) -> tuple[FixCodeCommandResult | None, ESBMCOutput]:
         source_file: SourceFile = solution.files[0]
 

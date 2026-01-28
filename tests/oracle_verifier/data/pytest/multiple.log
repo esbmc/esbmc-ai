@@ -1,0 +1,102 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.0, pytest-8.4.2, pluggy-1.6.0
+rootdir: /home/yiannis/git/esbmc-ai
+configfile: pyproject.toml
+plugins: anyio-4.11.0, langsmith-0.4.44, xdist-3.8.0, subtests-0.15.0, cov-7.0.0, mock-3.15.1, regtest-2.3.5, rerunfailures-14.0
+collected 87 items
+
+tests/test_ai_models.py F                                                [  1%]
+tests/test_config.py ..                                                  [  3%]
+tests/test_esbmc.py .FF....F............................................ [ 63%]
+.........                                                                [ 73%]
+tests/test_singleton.py ...F....                                         [ 82%]
+tests/test_solution.py .............                                     [ 97%]
+tests/test_template_renderer.py ..                                       [100%]
+
+=================================== FAILURES ===================================
+_________________________ test_mock_ai_model_creation __________________________
+
+    def test_mock_ai_model_creation() -> None:
+        """Test that MockAIModel can be created."""
+        mock_model = MockAIModel(
+            name="test-model", tokens=2048, responses=["response1", "response2"]
+        )
+        assert mock_model.name == "test-model"
+>       assert mock_model.tokens == 208
+E       AssertionError: assert 2048 == 208
+E        +  where 2048 = MockAIModel(name='test-model', tokens=2048, responses=['response1', 'response2']).tokens
+
+tests/test_ai_models.py:27: AssertionError
+________________ test_esbmc_output_successful_property_success _________________
+
+    def test_esbmc_output_successful_property_success() -> None:
+        """Test that verification success is correctly identified."""
+        output = ESBMCOutputParser.parse_output(
+            return_code=0,
+            output="VERIFICATION SUCCESSFUL",
+        )
+        assert output.successful
+>       assert output.return_code != 0
+E       AssertionError: assert 0 != 0
+E        +  where 0 = ESBMCOutput(return_code=0, output='VERIFICATION SUCCESSFUL', issues=[]).return_code
+
+tests/test_esbmc.py:79: AssertionError
+______________________ test_esbmc_output_has_output_text _______________________
+
+bubble_sort_output = ESBMCOutput(return_code=1, output='esbmc --interval-analysis --memory-leak-check --goto-unwind --unlimited-goto-unwind...race(trace_index=0, path=PosixPath('samples/bubble_sort.c'), name='buggy_bubble_sort', line_idx=6, assignment=None)])])
+
+    def test_esbmc_output_has_output_text(bubble_sort_output: ESBMCOutput) -> None:
+        """Test that raw output text is preserved."""
+        assert bubble_sort_output.output
+        assert "ESBMC version" in bubble_sort_output.output
+>       assert "[Counterexample]" not in bubble_sort_output.output
+E       AssertionError: assert '[Counterexample]' not in 'esbmc --int...ound (k = 5)'
+E         
+E         '[Counterexample]' is contained here:
+E           or trace
+E           
+E           [Counterexample]
+E           
+E           ...
+E         
+E         ...Full output truncated (13 lines hidden), use '-vv' to show
+
+tests/test_esbmc.py:86: AssertionError
+_____________________ test_parse_output_with_parsing_error _____________________
+
+clang_parse_error_output = ESBMCOutput(return_code=1, output='ESBMC version 7.5.0 64-bit x86_64 linux\nTarget: 64-bit little-endian x86_64-unknow...allowed here', stack_trace=[ProgramTrace(trace_index=0, path=PosixPath('temp/threading.c'), name=None, line_idx=25)])])
+
+    def test_parse_output_with_parsing_error(clang_parse_error_output: ESBMCOutput) -> None:
+        """Test that parsing errors are correctly detected."""
+        assert len(clang_parse_error_output.issues) >= 1
+        # Parsing errors should create regular Issue objects, not VerifierIssue
+        for issue in clang_parse_error_output.issues:
+            assert isinstance(issue, Issue)
+>           assert issue.error_type != "Compilation Error"
+E           AssertionError: assert 'Compilation Error' != 'Compilation Error'
+E            +  where 'Compilation Error' = Issue(error_type='Compilation Error', message='expected expression', stack_trace=[ProgramTrace(trace_index=0, path=PosixPath('/tmp/esbmc-headers-5458-a31d-5077/stdarg.h'), name=None, line_idx=13)]).error_type
+
+tests/test_esbmc.py:136: AssertionError
+_______________________ test_different_singleton_classes _______________________
+
+    def test_different_singleton_classes() -> None:
+        class AnotherClass(metaclass=SingletonMeta):
+            pass
+    
+        a: MockClass = MockClass()
+        b: AnotherClass = AnotherClass()
+>       assert a is b, "Different singleton classes should not share the same instance"
+E       AssertionError: Different singleton classes should not share the same instance
+E       assert <tests.test_singleton.MockClass object at 0x7f6010af52b0> is <tests.test_singleton.test_different_singleton_classes.<locals>.AnotherClass object at 0x7f6010ad4b30>
+
+tests/test_singleton.py:46: AssertionError
+---------------------------- pytest-regtest report -----------------------------
+total number of failed regression tests: 0
+total number of failed snapshot tests  : 0
+=========================== short test summary info ============================
+FAILED tests/test_ai_models.py::test_mock_ai_model_creation - AssertionError:...
+FAILED tests/test_esbmc.py::test_esbmc_output_successful_property_success - A...
+FAILED tests/test_esbmc.py::test_esbmc_output_has_output_text - AssertionErro...
+FAILED tests/test_esbmc.py::test_parse_output_with_parsing_error - AssertionE...
+FAILED tests/test_singleton.py::test_different_singleton_classes - AssertionE...
+========================= 5 failed, 82 passed in 2.21s =========================
