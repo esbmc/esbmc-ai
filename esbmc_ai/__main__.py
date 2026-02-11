@@ -2,6 +2,7 @@
 
 # Author: Yiannis Charalambous 2023
 
+import json
 import logging
 import sys
 
@@ -201,12 +202,29 @@ Configuration Precedence (highest to lowest):
 
     cm.set_verifier_by_name(config.verifier.name)
 
+    # Show full config at highest verbosity level (-vvv)
+    if config.verbose_level >= 3:
+        logger.debug("Global configuration:")
+        print(json.dumps(config.model_dump(), indent=2, default=str))
+        print()
+
     # Run the command
     command_name = config.command_name
     command_names: list[str] = cm.command_names
     if command_name in command_names:
         logger.info(f"Running Command: {command_name}\n")
         command: ChatCommand = cm.commands[command_name]
+
+        # Show command config at highest verbosity level (-vvv)
+        if config.verbose_level >= 3:
+            try:
+                cmd_config = command.config
+                logger.debug(f"Command '{command_name}' configuration:")
+                print(json.dumps(cmd_config.model_dump(), indent=2, default=str))
+                print()
+            except NotImplementedError:
+                pass
+
         result: CommandResult | None = command.execute()
         if result:
             print(result)
