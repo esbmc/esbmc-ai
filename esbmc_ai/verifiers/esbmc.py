@@ -648,13 +648,18 @@ class ESBMC(BaseSourceVerifier):
         if enable_cache:
             self._save_cached(cache_properties, result)
 
-        # If it shows timeout and 0 issues, then exit...
+        # If ESBMC failed with no parseable issues and no timeout marker,
+        # there's nothing actionable — raise so callers can handle it.
         if not (
             result.issues or result.successful or ("[ERROR] Timed out" in result.output)
         ):
-            # Special case: timeout - better quit than waste resources
-            self.logger.error("Timeout has ocurred: [ERROR] Timed out")
-            raise TimeoutError()
+            self.logger.error(
+                f"ESBMC failed with exit code {return_code} "
+                f"and no parseable issues.\nOutput:\n{result.output}"
+            )
+            raise RuntimeError(
+                f"ESBMC exited with code {return_code} and no parseable issues"
+            )
 
         return result
 
@@ -677,7 +682,10 @@ class ESBMC(BaseSourceVerifier):
         # Source code files (only accept valid ones)
         esbmc_cmd.append("--input-file")
         esbmc_cmd.extend(
-            str(file.file_path) for file in solution.get_files_by_ext(["c", "cpp"])
+            str(file.file_path)
+            for file in solution.get_files_by_ext(
+                ["c", "cpp", "i", "ii", "cc", "cxx", "c++", "h", "hpp", "hxx", "h++"]
+            )
         )
         # Header files/dir
         esbmc_cmd.extend("-I" + str(d) for d in solution.include_dirs)
