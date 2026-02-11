@@ -58,7 +58,7 @@ dependencies = [
 
 pre-install-commands = [
   # Preinstall hook for PyTorch - installs CPU-only version if CPU_ONLY=true
-  '[ -n "$CPU_ONLY" ] && pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu',
+  '[ -n "$CPU_ONLY" ] && pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu || true',
 ]
 
 [tool.hatch.envs.default.scripts]
