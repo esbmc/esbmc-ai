@@ -16,10 +16,10 @@ from structlog.stdlib import BoundLogger
 
 from esbmc_ai import Config, ChatCommand, __author__, __version__
 from esbmc_ai.addon_loader import AddonLoader
+from esbmc_ai.base_component import BaseComponent
 from esbmc_ai.command_result import CommandResult
 from esbmc_ai.log_utils import LogCategories, get_log_level, init_logging
-from esbmc_ai.verifiers.base_source_verifier import BaseSourceVerifier
-from esbmc_ai.verifiers.esbmc import ESBMC
+from esbmc_ai.verifiers import BaseSourceVerifier, ESBMC, CommandOracle
 from esbmc_ai.component_manager import ComponentManager
 import esbmc_ai.commands
 
@@ -110,14 +110,18 @@ def _load_config(
 
 def _init_builtin_components() -> None:
     """Initializes the builtin verifiers and commands."""
-    component_manager = ComponentManager()
+    component_manager: ComponentManager = ComponentManager()
 
     # Built-in verifiers
-    esbmc = ESBMC.create()
+    esbmc: BaseComponent = ESBMC.create()
     assert isinstance(esbmc, BaseSourceVerifier)
     component_manager.add_verifier(esbmc)
-    # Load component-specific configuration
     component_manager.load_component_config(esbmc, builtin=True)
+
+    generic_cmd: BaseComponent = CommandOracle.create()
+    assert isinstance(generic_cmd, BaseSourceVerifier)
+    component_manager.add_verifier(generic_cmd)
+    component_manager.load_component_config(generic_cmd, builtin=True)
 
     # Init built-in commands - Loads everything in the esbmc_ai.commands module.
     commands: list[ChatCommand] = []

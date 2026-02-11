@@ -3,8 +3,7 @@
 import signal
 import re
 from functools import cached_property
-from time import perf_counter
-from subprocess import PIPE, STDOUT, run, CompletedProcess
+from subprocess import CompletedProcess
 from pathlib import Path
 from typing import NamedTuple, cast
 from typing_extensions import Any, override
@@ -649,13 +648,18 @@ class ESBMC(BaseSourceVerifier):
         if enable_cache:
             self._save_cached(cache_properties, result)
 
-        # If it shows timeout and 0 issues, then exit...
+        # If ESBMC failed with no parseable issues and no timeout marker,
+        # there's nothing actionable — raise so callers can handle it.
         if not (
             result.issues or result.successful or ("[ERROR] Timed out" in result.output)
         ):
-            # Special case: timeout - better quit than waste resources
-            self.logger.error("Timeout has ocurred: [ERROR] Timed out")
-            raise TimeoutError()
+            self.logger.error(
+                f"ESBMC failed with exit code {return_code} "
+                f"and no parseable issues.\nOutput:\n{result.output}"
+            )
+            raise RuntimeError(
+                f"ESBMC exited with code {return_code} and no parseable issues"
+            )
 
         return result
 
@@ -674,11 +678,14 @@ class ESBMC(BaseSourceVerifier):
         """
 
         # Build parameters list
-        esbmc_cmd = [str(self.esbmc_path)] + esbmc_params
+        esbmc_cmd: list[str] = [str(self.esbmc_path)] + esbmc_params
         # Source code files (only accept valid ones)
         esbmc_cmd.append("--input-file")
         esbmc_cmd.extend(
-            str(file.file_path) for file in solution.get_files_by_ext(["c", "cpp"])
+            str(file.file_path)
+            for file in solution.get_files_by_ext(
+                ["c", "cpp", "i", "ii", "cc", "cxx", "c++", "h", "hpp", "hxx", "h++"]
+            )
         )
         # Header files/dir
         esbmc_cmd.extend("-I" + str(d) for d in solution.include_dirs)
@@ -693,23 +700,13 @@ class ESBMC(BaseSourceVerifier):
 
         self._logger.info("Running ESBMC: " + " ".join(esbmc_cmd))
 
-        # Add slack time to process to allow verifier to timeout and end gracefully.
-        process_timeout: float | None = timeout + 5 if timeout else None
-
-        # Measure execution time
-        start_time = perf_counter()
-
-        # Run ESBMC from solution working_dir and get output
-        process: CompletedProcess = run(
-            esbmc_cmd,
-            stdout=PIPE,
-            stderr=STDOUT,
+        process: CompletedProcess
+        duration: float
+        process, duration = self.run_command(
+            cmd=esbmc_cmd,
+            process_timeout=timeout,
             cwd=solution.working_dir,
-            timeout=process_timeout,
-            check=False,
         )
-
-        duration = perf_counter() - start_time
 
         # Check segfault.
         if process.returncode == -signal.SIGSEGV:

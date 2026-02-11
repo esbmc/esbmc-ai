@@ -239,7 +239,7 @@ class SourceFile(Serializable):
     def format_as(
         self,
         style: _SourceFileFormatStyles = "markdown",
-        include_line_numbers: bool = False,
+        include_line_numbers: bool = True,
         max_lines: int | None = None,
         working_dir: Path | None = None,
     ) -> str:
