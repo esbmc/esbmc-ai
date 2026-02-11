@@ -136,7 +136,6 @@ class FixCodeCommand(ChatCommand):
         solution: Solution = Solution([])
         solution.add_source_file(source_file)
 
-        self._logger.info(f"FixCodeConfig: {self._config}")
 
         verifier: Any = ComponentManager().get_verifier("esbmc")
         assert isinstance(verifier, ESBMC)
