@@ -433,7 +433,7 @@ class Config(BaseSettings, metaclass=makecls(SingletonMeta)):
     )
 
     json_path: Path | None = Field(
-        default=Path("result.json"),
+        default=None,
         validation_alias=_alias_choice("json_path"),
         description="The path to save the json output to.",
     )
