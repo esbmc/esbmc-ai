@@ -5,6 +5,7 @@
 import json
 import logging
 import sys
+from time import perf_counter
 
 import argparse
 
@@ -229,15 +230,22 @@ Configuration Precedence (highest to lowest):
             except NotImplementedError:
                 pass
 
+        start_time: float = perf_counter()
         result: CommandResult | None = command.execute()
+        time_taken: float = perf_counter() - start_time
+        logger.info(f"Time taken: {time_taken}")
+
         if result:
             print(result)
             if config.use_json:
-                json_result = result.to_json()
-                print(json_result)
+                json_result_str: str = result.to_json()
+                json_result: dict = json.loads(json_result_str)
+                json_result["time_taken_seconds"] = time_taken
+                json_result_str = json.dumps(json_result)
+                print(json_result_str)
                 if config.json_path:
                     with open(config.json_path, "w", encoding="utf-8") as f:
-                        f.write(json_result)
+                        f.write(json_result_str)
 
         sys.exit(0)
     else:
