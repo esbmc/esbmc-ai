@@ -8,6 +8,7 @@ from importlib.util import find_spec
 import logging
 import os
 from pathlib import Path
+import shutil
 
 from pydantic_settings import (
     BaseSettings,
@@ -292,6 +293,10 @@ class ESBMCConfig(BaseModel):
     def on_set_path(cls, value: FilePath | None) -> Path | None:
         if value is None:
             return None
+        # Try resolving the command from $PATH (e.g. "esbmc" without a full path).
+        which_path: str | None = shutil.which(str(value))
+        if which_path:
+            return Path(which_path)
         return Path(value).expanduser()
 
     params: list[str] = Field(
@@ -616,6 +621,7 @@ class Config(BaseSettings, metaclass=makecls(SingletonMeta)):
         if config_file_path:
             config_file = Path(config_file_path).expanduser()
             if config_file.exists():
+                print(f"Loading config file: {config_file}")
                 sources.append(TomlConfigSettingsSource(settings_cls, config_file))
 
         # Add environment-based sources
