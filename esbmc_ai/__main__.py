@@ -24,6 +24,78 @@ from esbmc_ai.verifiers import BaseSourceVerifier, ESBMC, CommandOracle
 from esbmc_ai.component_manager import ComponentManager
 import esbmc_ai.commands
 
+HELP_MESSAGE: str = (
+    "Automated Program Repair platform. To view help on subcommands, run with "
+    'the subcommand "help".'
+)
+
+_default_command_name: str = "help"
+
+
+def _init_builtin_components() -> None:
+    """Initializes the builtin verifiers and commands."""
+    # Built-in verifiers
+    esbmc = ESBMC.create()
+    assert isinstance(esbmc, BaseSourceVerifier)
+    ComponentLoader().add_verifier(esbmc)
+    # Init built-in commands
+    commands: list[ChatCommand] = []
+    for cmd_classname in getattr(esbmc_ai.commands, "__all__"):
+        cmd_type: type = getattr(esbmc_ai.commands, cmd_classname)
+        assert issubclass(cmd_type, ChatCommand), f"{cmd_type} is not a ChatCommand"
+        cmd: object = cmd_type.create()
+        assert isinstance(cmd, ChatCommand)
+        cmd.config = Config()
+        commands.append(cmd)
+    ComponentLoader().set_builtin_commands(commands)
+
+
+def _run_command_mode(command: ChatCommand, args: argparse.Namespace) -> None:
+    # TODO Test before doing this but command.execute(kwargs=vars(args))
+    result: CommandResult | None = command.execute()
+    if result:
+        get_logger().info("\n" + str(result), category=LogCategories.SYSTEM)
+    sys.exit(0)
+
+
+def _init_args(
+    parser: argparse.ArgumentParser,
+    map_field_names: dict[str, list[str]],
+    ignore_fields: dict[str, list[str]],
+) -> None:
+    """Initializes the Config's ConfigFields to be accepted by the argument
+    parser, this allows all ConfigFields to be loaded as arguments. The Config
+    will then use the map_field_names to automatically pre-load values before
+    loading the rest of the config.
+
+    Args:
+        - parser: The parser to add the arguments into.
+        - map_field_names: The parser will map the config fields to use
+        alternative names.
+        - ignore_fields: Dictionary of field names to not encode automatically.
+        This takes precedence over map_fields. The field that matches the key
+        in this dictionary will not be mapped. It is a dictionary because they
+        can optionally be manually initialized and mapped in the Config, so it
+        is worth keeping track of the aliases."""
+
+    parser.add_argument(
+        "command",
+        type=str,
+        nargs="?",
+        default=_default_command_name,
+        help=(
+            "The command to run using the program. To see addon commands "
+            "available: Run with 'help' as the default command."
+        ),
+    )
+
+    parser.add_argument(
+        *ignore_fields["solution.filenames"],
+        type=str,
+        # nargs=argparse.REMAINDER,
+        nargs=argparse.ZERO_OR_MORE,
+        help="The filename(s) to pass to the verifier.",
+    )
 
 def _init_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
