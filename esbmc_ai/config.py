@@ -21,6 +21,7 @@ from pydantic_settings import (
 from typing import Annotated
 from pydantic import (
     AliasChoices,
+    AliasPath,
     BaseModel,
     BeforeValidator,
     DirectoryPath,
@@ -28,12 +29,31 @@ from pydantic import (
     FilePath,
     field_validator,
 )
+from pydantic.fields import FieldInfo
 
 from esbmc_ai.singleton import SingletonMeta, makecls
 from esbmc_ai.log_handlers import (
     CategoryFileHandler,
     NameFileHandler,
 )
+
+
+def get_config_key(field_name: str, field_info: FieldInfo) -> str:
+    """Get the config file key for a field, preferring validation_alias."""
+    alias = field_info.validation_alias
+    if alias is None:
+        return field_info.alias or field_name
+    if isinstance(alias, str):
+        return alias
+    if isinstance(alias, AliasChoices):
+        first = alias.choices[0]
+        if isinstance(first, str):
+            return first
+        if isinstance(first, AliasPath):
+            return ".".join(str(p) for p in first.path)
+    if isinstance(alias, AliasPath):
+        return ".".join(str(p) for p in alias.path)
+    return field_name
 
 
 def _alias_choice(value: str) -> AliasChoices:
@@ -570,14 +590,14 @@ class Config(BaseSettings, metaclass=makecls(SingletonMeta)):
     llm_requests_max_retries: int = Field(
         default=5,
         ge=1,
-        validation_alias="llm_requests.max_retries",
+        validation_alias=AliasPath("llm_requests", "max_retries"),
         description="How many times to query the AI service before giving up.",
     )
 
     llm_requests_timeout: int = Field(
         default=60,
         ge=1,
-        validation_alias="llm_requests.timeout",
+        validation_alias=AliasPath("llm_requests", "timeout"),
         description="The timeout for querying the AI service.",
     )
 

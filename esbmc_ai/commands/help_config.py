@@ -5,7 +5,7 @@ from typing_extensions import override
 from pydantic.fields import FieldInfo
 from pydantic import BaseModel
 
-from esbmc_ai.config import Config
+from esbmc_ai.config import Config, get_config_key
 from esbmc_ai.chat_command import ChatCommand
 from esbmc_ai.command_result import CommandResult
 from esbmc_ai.component_manager import ComponentManager
@@ -34,7 +34,8 @@ class HelpConfigCommand(ChatCommand):
         if isinstance(default_value, str) and len(default_value) > 30:
             default_value = default_value[:30] + "..."
 
-        print(f"{indent}* {field_name}:")
+        config_key = get_config_key(field_name, field_info)
+        print(f"{indent}* {config_key}:")
 
         if field_info.description:
             print(f"{indent}  Description: {field_info.description}")
@@ -65,9 +66,6 @@ class HelpConfigCommand(ChatCommand):
             # Print default value for non-BaseModel fields
             if field_info.default is not None:
                 print(f"{indent}  Default: {default_value}")
-
-            if hasattr(field_info, "alias") and field_info.alias:
-                print(f"{indent}  Alias: {field_info.alias}")
 
         print()
 
