@@ -145,7 +145,10 @@ class HelpConfigCommand(ChatCommand):
 
         from esbmc_ai.log_utils import print_horizontal_line
 
-        print_horizontal_line()
+        config = Config()
+        hl_kwargs = dict(show=config.show_horizontal_lines)
+
+        print_horizontal_line(**hl_kwargs)
 
         # Get component manager to access builtin and addon components
         component_manager = ComponentManager()
@@ -156,7 +159,7 @@ class HelpConfigCommand(ChatCommand):
             dict(component_manager.builtin_components),
         )
 
-        print_horizontal_line()
+        print_horizontal_line(**hl_kwargs)
 
         # Print addon component config fields
         self._print_components_section(

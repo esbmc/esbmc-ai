@@ -135,6 +135,21 @@ class LogConfig(BaseModel):
         "noisy libs.",
     )
 
+    nocolor: bool = Field(
+        default=False,
+        description="Disable color output in the logger.",
+    )
+
+    def init_logging(self, verbose_level: int) -> None:
+        from esbmc_ai.log_utils import get_log_level, init_logging
+
+        init_logging(
+            level=get_log_level(verbose_level),
+            file_handlers=self.logging_handlers,
+            init_basic=self.basic,
+            nocolor=self.nocolor,
+        )
+
     @property
     def logging_handlers(self) -> list[logging.Handler]:
         logging_handlers: list[logging.Handler] = []
@@ -470,13 +485,6 @@ class Config(BaseSettings, metaclass=makecls(SingletonMeta)):
         "Makes it easier to read.",
     )
 
-    horizontal_line_width: int | None = Field(
-        default=None,
-        validation_alias="horizontal_line_width",
-        description="Sets the width of the horizontal lines to draw. "
-        "Don't set a value to use the terminal width. Needs to have "
-        "show_horizontal_lines set to true.",
-    )
 
     ai_custom: dict[str, AICustomModelConfig] = Field(
         default_factory=defaultdict,

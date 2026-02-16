@@ -3,7 +3,6 @@
 # Author: Yiannis Charalambous 2023
 
 import json
-import logging
 import sys
 from time import perf_counter
 
@@ -19,7 +18,7 @@ from esbmc_ai import Config, ChatCommand, __author__, __version__
 from esbmc_ai.addon_loader import AddonLoader
 from esbmc_ai.base_component import BaseComponent
 from esbmc_ai.command_result import CommandResult
-from esbmc_ai.log_utils import LogCategories, get_log_level, init_logging
+from esbmc_ai.log_utils import LogCategories
 from esbmc_ai.verifiers import BaseSourceVerifier, ESBMC, CommandOracle
 from esbmc_ai.component_manager import ComponentManager
 import esbmc_ai.commands
@@ -140,16 +139,8 @@ def _init_builtin_components() -> None:
 
 
 def _init_logging() -> None:
-    # Add logging handlers with config options
     config = Config()
-    logging_handlers: list[logging.Handler] = config.log.logging_handlers
-
-    # Reinit logging
-    init_logging(
-        level=get_log_level(config.verbose_level),
-        file_handlers=logging_handlers,
-        init_basic=config.log.basic,
-    )
+    config.log.init_logging(config.verbose_level)
 
 
 def main() -> None:

@@ -3,7 +3,6 @@
 """Horizontal line logging integrated with Structlog."""
 
 from enum import Enum
-from os import get_terminal_size
 import logging
 import structlog
 from structlog.typing import EventDict
@@ -36,6 +35,7 @@ def _init_logging_basic(
     *,
     level: int,
     logging_format: str = _logging_format,
+    nocolor: bool = False,
 ) -> None:
     """Initializes the logging system in basic mode, good for debugging since
     it can easily change the logging_format."""
@@ -46,7 +46,7 @@ def _init_logging_basic(
             structlog.processors.add_log_level,
             _add_category_field,
             _render_prefix_category_to_event,
-            structlog.dev.ConsoleRenderer(),
+            structlog.dev.ConsoleRenderer(colors=not nocolor),
         ],
         wrapper_class=structlog.stdlib.BoundLogger,
         logger_factory=structlog.stdlib.LoggerFactory(),
@@ -66,6 +66,7 @@ def init_logging(
     level: int,
     file_handlers: list[logging.Handler] = [],
     init_basic: bool = False,
+    nocolor: bool = False,
 ) -> None:
     """Initializes the logging system.
 
@@ -95,7 +96,7 @@ def init_logging(
 
     # Use the basic unformatted logger instead.
     if init_basic:
-        _init_logging_basic(level=level)
+        _init_logging_basic(level=level, nocolor=nocolor)
         return
 
     structlog.configure(
@@ -116,7 +117,7 @@ def init_logging(
         structlog.stdlib.ProcessorFormatter(
             processors=[
                 _filter_keys_processor,
-                structlog.dev.ConsoleRenderer(),
+                structlog.dev.ConsoleRenderer(colors=not nocolor),
             ]
         )
     )
@@ -154,17 +155,17 @@ def print_horizontal_line(
     *,
     char: str = "=",
     category: Enum | str = LogCategories.ALL,
-    width: int | None = None,
+    show: bool = True,
     logger: structlog.stdlib.BoundLogger | None = None,
 ) -> None:
     """
     Print a horizontal line if logging is enabled for the specified level. Both
-    an int of the level or the verbose name could be surprised.
-    """
-    # Import Config locally to avoid circular import
-    from esbmc_ai.config import Config
+    an int of the level or the verbose name could be supplied.
 
-    if not Config().show_horizontal_lines:
+    Args:
+        show: Whether to actually print. Pass Config().show_horizontal_lines.
+    """
+    if not show:
         return
 
     # Convert level name to numeric value (e.g., "info" -> logging.INFO)
@@ -174,26 +175,11 @@ def print_horizontal_line(
         else level
     )
 
-    # Determine line width
-    line_width: int
-    if width is not None:
-        line_width = width
-
-    else:
-        config_hlw: int | None = Config().horizontal_line_width
-        if config_hlw is not None:
-            line_width = config_hlw
-        else:
-            try:
-                line_width = get_terminal_size().columns
-            except OSError:
-                line_width = 80 - _largest_cat_len
-
     if logger is None:
         logger = structlog.get_logger()
         assert logger is not None
 
-    logger.log(level=level_no, event=char * line_width, category=category)
+    logger.log(level=level_no, event=char * 80, category=category)
 
 
 def _render_prefix_category_to_event(
