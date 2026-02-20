@@ -169,7 +169,7 @@ Configuration Precedence (highest to lowest):
 
     print(f"ESBMC-AI v{__version__}")
     print(f"Made by {__author__}")
-    print()
+    print(flush=True)
 
     _init_logging()
 
@@ -200,9 +200,10 @@ Configuration Precedence (highest to lowest):
 
     # Show full config at highest verbosity level (-vvv)
     if config.verbose_level >= 3:
-        logger.debug("Global configuration:")
-        print(json.dumps(config.model_dump(), indent=2, default=str))
-        print()
+        logger.debug(
+            "Global configuration:\n"
+            + json.dumps(config.model_dump(), indent=2, default=str)
+        )
 
     # Run the command
     command_name = config.command_name
@@ -215,9 +216,10 @@ Configuration Precedence (highest to lowest):
         if config.verbose_level >= 3:
             try:
                 cmd_config = command.config
-                logger.debug(f"Command '{command_name}' configuration:")
-                print(json.dumps(cmd_config.model_dump(), indent=2, default=str))
-                print()
+                logger.debug(
+                    f"Command '{command_name}' configuration:\n"
+                    + json.dumps(cmd_config.model_dump(), indent=2, default=str)
+                )
             except NotImplementedError:
                 pass
 
@@ -227,13 +229,13 @@ Configuration Precedence (highest to lowest):
         logger.info(f"Time taken: {time_taken}")
 
         if result:
-            print(result)
+            print(result, flush=True)
             if config.use_json:
                 json_result_str: str = result.to_json()
                 json_result: dict = json.loads(json_result_str)
                 json_result["time_taken_seconds"] = time_taken
                 json_result_str = json.dumps(json_result)
-                print(json_result_str)
+                print(json_result_str, flush=True)
                 if config.json_path:
                     with open(config.json_path, "w", encoding="utf-8") as f:
                         f.write(json_result_str)

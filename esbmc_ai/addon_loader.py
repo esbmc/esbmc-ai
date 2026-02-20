@@ -38,12 +38,12 @@ class AddonLoader(metaclass=SingletonMeta):
 
         # Load the config fields.
         if self._config.addon_modules:
-            print("Loading Addons:")
+            self._logger.info("Loading Addons:")
 
         for m in self._config.addon_modules:
             addons: list[BaseComponent] = self.load_addons_module(m)
             for addon in addons:
-                print(f"\t* {addon.name} by {addon.authors}")
+                self._logger.info(f"\t* {addon.name} by {addon.authors}")
 
     @property
     def chat_command_addons(self) -> dict[str, ChatCommand]:

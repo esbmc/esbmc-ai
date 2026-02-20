@@ -133,7 +133,9 @@ class FixCodeCommand(ChatCommand):
         )
         # End of handle kwargs
 
-        solution: Solution = Solution([])
+        solution: Solution = Solution(
+            [], include_dirs=list(self.global_config.solution.include_dirs)
+        )
         solution.add_source_file(source_file)
 
 

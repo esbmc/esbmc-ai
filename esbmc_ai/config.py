@@ -649,7 +649,7 @@ class Config(BaseSettings, metaclass=makecls(SingletonMeta)):
         if config_file_path:
             config_file = Path(config_file_path).expanduser()
             if config_file.exists():
-                print(f"Loading config file: {config_file}")
+                print(f"Loading config file: {config_file}", flush=True)
                 sources.append(TomlConfigSettingsSource(settings_cls, config_file))
 
         # Add environment-based sources
