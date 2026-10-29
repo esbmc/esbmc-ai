@@ -3,6 +3,12 @@ title: ESBMC-AI
 toc: false
 ---
 
+> [!IMPORTANT] ESBMC-AI has been discontinued.
+>
+> This repository serves as a final archive of ESBMC-AI. ESBMC-AI has been
+> succeeded by [Entoli](https://byterepair.io/products/entoli/). Entoli contains
+> SOTA formal verification-based workflows.
+
 {{< cards >}}
   {{< card link="docs" title="Docs" icon="book-open" >}}
   {{< card link="news" title="News" icon="newspaper" >}}
